@@ -157,8 +157,6 @@ export default function App() {
 
             {/* Sidebar */}
             <div style={{ width: "260px", minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 100 }}>
-
-                {/* Logo */}
                 <div style={{ padding: "28px 24px 20px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <div style={{ width: "36px", height: "36px", backgroundColor: "#16a34a", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", fontWeight: "800" }}>D</div>
@@ -169,7 +167,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Nav */}
                 <div style={{ padding: "8px 12px", flex: 1 }}>
                     <p style={{ color: "#475569", fontSize: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.1em", padding: "0 12px", marginBottom: "8px" }}>Orders</p>
                     {[
@@ -200,7 +197,6 @@ export default function App() {
                     </button>
                 </div>
 
-                {/* User */}
                 <div style={{ padding: "16px", borderTop: "1px solid #1e293b" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                         <div style={{ width: "36px", height: "36px", backgroundColor: "#16a34a", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: "700", fontSize: "14px" }}>
@@ -222,7 +218,6 @@ export default function App() {
             <div style={{ marginLeft: "260px", flex: 1, padding: "32px", minWidth: 0, overflowY: "auto", maxHeight: "100vh" }}>
 
                 {activePage === "menu" ? (
-                    /* ── MENU MANAGER PAGE ── */
                     <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
                             <div>
@@ -231,37 +226,23 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Add new item */}
                         <div style={{ backgroundColor: "white", borderRadius: "16px", padding: "24px", border: "1px solid #e2e8f0", marginBottom: "24px" }}>
                             <h3 style={{ margin: "0 0 20px", fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>Add New Item</h3>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr auto", gap: "12px", alignItems: "end" }}>
                                 <div>
                                     <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Item Name</label>
-                                    <input
-                                        value={newItem.item_name}
-                                        onChange={e => setNewItem({ ...newItem, item_name: e.target.value })}
-                                        placeholder="e.g. Jollof Rice"
-                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }}
-                                    />
+                                    <input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} placeholder="e.g. Jollof Rice"
+                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }} />
                                 </div>
                                 <div>
                                     <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Price (GHS)</label>
-                                    <input
-                                        value={newItem.item_price}
-                                        onChange={e => setNewItem({ ...newItem, item_price: e.target.value })}
-                                        placeholder="e.g. 35"
-                                        type="number"
-                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }}
-                                    />
+                                    <input value={newItem.item_price} onChange={e => setNewItem({ ...newItem, item_price: e.target.value })} placeholder="e.g. 35" type="number"
+                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }} />
                                 </div>
                                 <div>
                                     <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>Description</label>
-                                    <input
-                                        value={newItem.item_description}
-                                        onChange={e => setNewItem({ ...newItem, item_description: e.target.value })}
-                                        placeholder="e.g. Served with chicken and salad"
-                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }}
-                                    />
+                                    <input value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="e.g. Served with chicken and salad"
+                                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box" }} />
                                 </div>
                                 <button onClick={addMenuItem}
                                     style={{ backgroundColor: "#16a34a", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontSize: "14px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
@@ -270,7 +251,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Menu list */}
                         <div style={{ backgroundColor: "white", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                             <div style={{ padding: "20px 24px", borderBottom: "1px solid #f1f5f9" }}>
                                 <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>Current Menu</h3>
@@ -322,7 +302,6 @@ export default function App() {
                     </div>
 
                 ) : (
-                    /* ── ORDERS PAGE ── */
                     <div>
                         {/* Top bar */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
@@ -391,6 +370,9 @@ export default function App() {
                                             </div>
                                             <div style={{ flex: 1, overflow: "hidden" }}>
                                                 <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</p>
+                                                {order.notes && (
+                                                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#d97706", fontWeight: "500" }}>Note: {order.notes}</p>
+                                                )}
                                                 <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#94a3b8" }}>{order.business_name || "DelivaGH"} • {order.customer_phone?.replace("whatsapp:", "")}</p>
                                             </div>
                                             <span style={{ backgroundColor: s.bg, color: s.color, padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: "600", flexShrink: 0 }}>
@@ -424,10 +406,10 @@ export default function App() {
                                 </div>
                             ) : (
                                 <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
                                         <thead>
                                             <tr style={{ backgroundColor: "#f8fafc" }}>
-                                                {["Order", "Business", "Customer", "Items", "Type", "Address", "Status", "Payment", "Time", "Action"].map(h => (
+                                                {["Order", "Business", "Customer", "Items", "Notes", "Type", "Address", "Status", "Payment", "Time", "Action"].map(h => (
                                                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: "700", borderBottom: "1px solid #f1f5f9" }}>{h}</th>
                                                 ))}
                                             </tr>
@@ -448,7 +430,7 @@ export default function App() {
                                                         <>
                                                             {isNewDate && (
                                                                 <tr key={"date-" + orderDate}>
-                                                                    <td colSpan="10" style={{ padding: "16px 16px 8px", backgroundColor: "#f8fafc" }}>
+                                                                    <td colSpan="11" style={{ padding: "16px 16px 8px", backgroundColor: "#f8fafc" }}>
                                                                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                                                             <span style={{ fontSize: "12px", fontWeight: "700", backgroundColor: isToday ? "#dcfce7" : "#f1f5f9", color: isToday ? "#16a34a" : "#64748b", padding: "4px 12px", borderRadius: "999px" }}>
                                                                                 {dateLabel}
@@ -470,6 +452,15 @@ export default function App() {
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151", fontWeight: "500" }}>{order.business_name || "-"}</td>
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#64748b" }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
+                                                                <td style={{ padding: "14px 16px", maxWidth: "150px" }}>
+                                                                    {order.notes ? (
+                                                                        <span style={{ backgroundColor: "#fef3c7", color: "#d97706", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: "600", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                            {order.notes}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span style={{ color: "#94a3b8", fontSize: "12px" }}>-</span>
+                                                                    )}
+                                                                </td>
                                                                 <td style={{ padding: "14px 16px" }}>
                                                                     <span style={{ backgroundColor: d.bg, color: d.color, padding: "4px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: "600" }}>{d.label}</span>
                                                                 </td>
