@@ -15,6 +15,7 @@ export default function App() {
     const [businessName, setBusinessName] = useState("");
     const [menuItems, setMenuItems] = useState([]);
     const [newItem, setNewItem] = useState({ item_name: "", item_price: "", item_description: "" });
+    const [selectedOrder, setSelectedOrder] = useState(null);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -113,6 +114,9 @@ export default function App() {
             });
         } catch (error) { console.log("Notification error:", error); }
         fetchOrders();
+        if (selectedOrder?.id === id) {
+            setSelectedOrder(prev => ({ ...prev, status }));
+        }
     }
 
     async function handleLogout() {
@@ -124,6 +128,7 @@ export default function App() {
         switch (status) {
             case "pending": return { bg: "#fef3c7", color: "#d97706", dot: "#f59e0b" };
             case "confirmed": return { bg: "#dbeafe", color: "#1d4ed8", dot: "#3b82f6" };
+            case "ready": return { bg: "#ede9fe", color: "#6d28d9", dot: "#8b5cf6" };
             case "delivered": return { bg: "#d1fae5", color: "#065f46", dot: "#10b981" };
             default: return { bg: "#f3f4f6", color: "#6b7280", dot: "#9ca3af" };
         }
@@ -134,6 +139,36 @@ export default function App() {
             case "pickup": return { label: "Pickup", bg: "#ede9fe", color: "#6d28d9" };
             case "delivery": return { label: "Delivery", bg: "#e0f2fe", color: "#0369a1" };
             default: return { label: "Pending", bg: "#f3f4f6", color: "#6b7280" };
+        }
+    }
+
+    function getNextAction(order) {
+        switch (order.status) {
+            case "pending":
+                return (
+                    <button onClick={() => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type)}
+                        style={{ backgroundColor: "#3b82f6", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
+                        Confirm
+                    </button>
+                );
+            case "confirmed":
+                return (
+                    <button onClick={() => updateStatus(order.id, "ready", order.customer_phone, order.delivery_type)}
+                        style={{ backgroundColor: "#8b5cf6", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
+                        {order.delivery_type === "delivery" ? "On the way" : "Ready"}
+                    </button>
+                );
+            case "ready":
+                return (
+                    <button onClick={() => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type)}
+                        style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
+                        Delivered
+                    </button>
+                );
+            case "delivered":
+                return <span style={{ color: "#10b981", fontSize: "12px", fontWeight: "600" }}>Done</span>;
+            default:
+                return null;
         }
     }
 
@@ -154,6 +189,97 @@ export default function App() {
 
     return (
         <div style={{ display: "flex", width: "100vw", minHeight: "100vh", backgroundColor: "#f1f5f9", fontFamily: "'Segoe UI', Arial, sans-serif", overflow: "hidden" }}>
+
+            {/* Order Detail Modal */}
+            {selectedOrder && (
+                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+                    onClick={() => setSelectedOrder(null)}>
+                    <div style={{ backgroundColor: "white", borderRadius: "20px", padding: "32px", width: "100%", maxWidth: "500px", boxShadow: "0 25px 50px rgba(0,0,0,0.3)" }}
+                        onClick={e => e.stopPropagation()}>
+
+                        {/* Modal Header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>Order Details</h2>
+                                <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>#{selectedOrder.id.substring(0, 8).toUpperCase()}</p>
+                            </div>
+                            <button onClick={() => setSelectedOrder(null)}
+                                style={{ backgroundColor: "#f1f5f9", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "16px" }}>
+                                X
+                            </button>
+                        </div>
+
+                        {/* Status */}
+                        <div style={{ marginBottom: "20px" }}>
+                            {(() => {
+                                const s = getStatusStyle(selectedOrder.status);
+                                return (
+                                    <span style={{ backgroundColor: s.bg, color: s.color, padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                        <span style={{ width: "8px", height: "8px", backgroundColor: s.dot, borderRadius: "50%" }}></span>
+                                        {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                                    </span>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Details Grid */}
+                        <div style={{ display: "grid", gap: "16px", marginBottom: "24px" }}>
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Business</p>
+                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.business_name || "-"}</p>
+                            </div>
+
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Customer</p>
+                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.customer_phone?.replace("whatsapp:", "")}</p>
+                            </div>
+
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Items Ordered</p>
+                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.items}</p>
+                            </div>
+
+                            {selectedOrder.notes && (
+                                <div style={{ backgroundColor: "#fef3c7", borderRadius: "12px", padding: "16px", border: "1px solid #fcd34d" }}>
+                                    <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#d97706", textTransform: "uppercase" }}>Special Instructions / Notes</p>
+                                    <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#92400e" }}>{selectedOrder.notes}</p>
+                                </div>
+                            )}
+
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Delivery Type</p>
+                                {(() => {
+                                    const d = getDeliveryStyle(selectedOrder.delivery_type);
+                                    return <span style={{ backgroundColor: d.bg, color: d.color, padding: "4px 12px", borderRadius: "999px", fontSize: "13px", fontWeight: "600" }}>{d.label}</span>;
+                                })()}
+                            </div>
+
+                            {selectedOrder.delivery_address && (
+                                <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                    <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Delivery Address</p>
+                                    <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.delivery_address}</p>
+                                </div>
+                            )}
+
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Order Time</p>
+                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>
+                                    {new Date(selectedOrder.created_at).toLocaleString("en-GH", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <div style={{ display: "flex", gap: "12px" }}>
+                            {getNextAction(selectedOrder)}
+                            <button onClick={() => setSelectedOrder(null)}
+                                style={{ flex: 1, backgroundColor: "#f1f5f9", color: "#374151", border: "none", padding: "12px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", fontWeight: "600" }}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Sidebar */}
             <div style={{ width: "260px", minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 100 }}>
@@ -259,7 +385,6 @@ export default function App() {
                                 <div style={{ padding: "64px", textAlign: "center" }}>
                                     <p style={{ fontSize: "40px", margin: "0 0 12px" }}>🍽️</p>
                                     <p style={{ color: "#64748b", fontSize: "15px", fontWeight: "500", margin: 0 }}>No menu items yet</p>
-                                    <p style={{ color: "#94a3b8", fontSize: "13px", margin: "4px 0 0" }}>Add your first item above</p>
                                 </div>
                             ) : (
                                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -303,7 +428,6 @@ export default function App() {
 
                 ) : (
                     <div>
-                        {/* Top bar */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: "26px", fontWeight: "800", color: "#0f172a" }}>
@@ -319,7 +443,6 @@ export default function App() {
                             </button>
                         </div>
 
-                        {/* Stats */}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "28px" }}>
                             {[
                                 { label: "Total Orders", value: stats.total, sub: "All time", bg: "#0f172a", valueColor: "#22c55e", subColor: "#64748b" },
@@ -335,7 +458,6 @@ export default function App() {
                             ))}
                         </div>
 
-                        {/* Today + Recent */}
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "20px", marginBottom: "28px" }}>
                             <div style={{ backgroundColor: "#16a34a", borderRadius: "16px", padding: "24px" }}>
                                 <p style={{ color: "#bbf7d0", margin: "0 0 4px", fontSize: "13px", fontWeight: "500" }}>Today's Orders</p>
@@ -364,14 +486,15 @@ export default function App() {
                                 {orders.slice(0, 5).map(order => {
                                     const s = getStatusStyle(order.status);
                                     return (
-                                        <div key={order.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "8px 0", borderBottom: "1px solid #f8fafc" }}>
+                                        <div key={order.id} onClick={() => setSelectedOrder(order)}
+                                            style={{ display: "flex", alignItems: "center", gap: "12px", padding: "8px 0", borderBottom: "1px solid #f8fafc", cursor: "pointer" }}>
                                             <div style={{ width: "36px", height: "36px", backgroundColor: s.bg, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
                                                 {order.delivery_type === "pickup" ? "🏪" : "🚚"}
                                             </div>
                                             <div style={{ flex: 1, overflow: "hidden" }}>
                                                 <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</p>
                                                 {order.notes && (
-                                                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#d97706", fontWeight: "500" }}>Note: {order.notes}</p>
+                                                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#d97706", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Note: {order.notes}</p>
                                                 )}
                                                 <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#94a3b8" }}>{order.business_name || "DelivaGH"} • {order.customer_phone?.replace("whatsapp:", "")}</p>
                                             </div>
@@ -384,14 +507,13 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Orders Table */}
                         <div style={{ backgroundColor: "white", borderRadius: "16px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                             <div style={{ padding: "20px 24px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
                                         {activeTab === "all" ? "All Orders" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1) + " Orders"}
                                     </h3>
-                                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94a3b8" }}>{filteredOrders.length} orders total</p>
+                                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94a3b8" }}>{filteredOrders.length} orders total • Click any order to view details</p>
                                 </div>
                             </div>
 
@@ -443,8 +565,12 @@ export default function App() {
                                                                     </td>
                                                                 </tr>
                                                             )}
-                                                            <tr key={order.id} style={{ borderBottom: "1px solid #f8fafc", backgroundColor: i % 2 === 0 ? "white" : "#fafafa" }}>
-                                                                <td style={{ padding: "14px 16px" }}>
+                                                            <tr key={order.id}
+                                                                onClick={() => setSelectedOrder(order)}
+                                                                style={{ borderBottom: "1px solid #f8fafc", backgroundColor: i % 2 === 0 ? "white" : "#fafafa", cursor: "pointer" }}
+                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = "#f0fdf4"}
+                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = i % 2 === 0 ? "white" : "#fafafa"}>
+                                                                <td style={{ padding: "14px 16px" }} onClick={e => e.stopPropagation()}>
                                                                     <span style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: "700", color: "#0f172a", backgroundColor: "#f1f5f9", padding: "3px 8px", borderRadius: "6px" }}>
                                                                         #{order.id.substring(0, 8).toUpperCase()}
                                                                     </span>
@@ -452,9 +578,9 @@ export default function App() {
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151", fontWeight: "500" }}>{order.business_name || "-"}</td>
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#64748b" }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                 <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                                <td style={{ padding: "14px 16px", maxWidth: "150px" }}>
+                                                                <td style={{ padding: "14px 16px", maxWidth: "130px" }}>
                                                                     {order.notes ? (
-                                                                        <span style={{ backgroundColor: "#fef3c7", color: "#d97706", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: "600", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                        <span title={order.notes} style={{ backgroundColor: "#fef3c7", color: "#d97706", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: "600", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "help" }}>
                                                                             {order.notes}
                                                                         </span>
                                                                     ) : (
@@ -479,22 +605,8 @@ export default function App() {
                                                                 <td style={{ padding: "14px 16px", fontSize: "12px", color: "#94a3b8", whiteSpace: "nowrap" }}>
                                                                     {new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}
                                                                 </td>
-                                                                <td style={{ padding: "14px 16px" }}>
-                                                                    {order.status === "pending" && (
-                                                                        <button onClick={() => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type)}
-                                                                            style={{ backgroundColor: "#3b82f6", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                                                                            Confirm
-                                                                        </button>
-                                                                    )}
-                                                                    {order.status === "confirmed" && (
-                                                                        <button onClick={() => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type)}
-                                                                            style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                                                                            Delivered
-                                                                        </button>
-                                                                    )}
-                                                                    {order.status === "delivered" && (
-                                                                        <span style={{ color: "#10b981", fontSize: "12px", fontWeight: "600" }}>Done</span>
-                                                                    )}
+                                                                <td style={{ padding: "14px 16px" }} onClick={e => e.stopPropagation()}>
+                                                                    {getNextAction(order)}
                                                                 </td>
                                                             </tr>
                                                         </>
