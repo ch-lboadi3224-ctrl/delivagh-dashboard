@@ -12,24 +12,10 @@ export default function Signup({ onSignup, onLogin }) {
     async function handleSignup() {
         setLoading(true);
         setError("");
-
         const { data, error: authError } = await supabase.auth.signUp({ email, password });
-        if (authError) {
-            setError(authError.message);
-            setLoading(false);
-            return;
-        }
-
-        const { error: bizError } = await supabase
-            .from("businesses")
-            .insert([{ name: businessName, phone: phone, user_id: data.user.id }]);
-
-        if (bizError) {
-            setError(bizError.message);
-            setLoading(false);
-            return;
-        }
-
+        if (authError) { setError(authError.message); setLoading(false); return; }
+        const { error: bizError } = await supabase.from("businesses").insert([{ name: businessName, phone, user_id: data.user.id }]);
+        if (bizError) { setError(bizError.message); setLoading(false); return; }
         onSignup(data.user);
         setLoading(false);
     }
@@ -38,9 +24,8 @@ export default function Signup({ onSignup, onLogin }) {
         <div style={{ minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ backgroundColor: "#1e293b", padding: "48px", borderRadius: "20px", width: "100%", maxWidth: "400px", boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }}>
                 <div style={{ textAlign: "center", marginBottom: "32px" }}>
-                    <div style={{ width: "48px", height: "48px", backgroundColor: "#16a34a", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "24px", color: "white", fontWeight: "800" }}>D</div>
-                    <h1 style={{ color: "white", fontSize: "24px", fontWeight: "800", margin: 0 }}>DelivaGH</h1>
-                    <p style={{ color: "#64748b", marginTop: "8px", fontSize: "14px" }}>Create your business account</p>
+                    <img src="/logo.png" alt="DelivaGH" style={{ height: "40px", marginBottom: "16px", filter: "brightness(0) invert(1)" }} />
+                    <p style={{ color: "#64748b", fontSize: "14px", margin: 0 }}>Create your business account</p>
                 </div>
 
                 {error && (
@@ -57,13 +42,8 @@ export default function Signup({ onSignup, onLogin }) {
                 ].map(field => (
                     <div key={field.label} style={{ marginBottom: "16px" }}>
                         <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#94a3b8", marginBottom: "6px" }}>{field.label}</label>
-                        <input
-                            type={field.type}
-                            value={field.value}
-                            onChange={e => field.set(e.target.value)}
-                            placeholder={field.placeholder}
-                            style={{ width: "100%", padding: "12px 14px", border: "1px solid #334155", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box", backgroundColor: "#0f172a", color: "white" }}
-                        />
+                        <input type={field.type} value={field.value} onChange={e => field.set(e.target.value)} placeholder={field.placeholder}
+                            style={{ width: "100%", padding: "12px 14px", border: "1px solid #334155", borderRadius: "8px", fontSize: "14px", boxSizing: "border-box", backgroundColor: "#0f172a", color: "white" }} />
                     </div>
                 ))}
 
@@ -74,7 +54,7 @@ export default function Signup({ onSignup, onLogin }) {
 
                 <p style={{ textAlign: "center", marginTop: "20px", fontSize: "14px", color: "#64748b" }}>
                     Already have an account?{" "}
-                    <span onClick={onLogin} style={{ color: "#16a34a", fontWeight: "600", cursor: "pointer" }}>Sign in</span>
+                    <span onClick={onLogin} style={{ color: "#ef4444", fontWeight: "600", cursor: "pointer" }}>Sign in</span>
                 </p>
             </div>
         </div>

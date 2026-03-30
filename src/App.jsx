@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Login from "./Login";
 import Signup from "./Signup";
@@ -16,6 +16,29 @@ export default function App() {
     const [menuItems, setMenuItems] = useState([]);
     const [newItem, setNewItem] = useState({ item_name: "", item_price: "", item_description: "" });
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [newOrderAlert, setNewOrderAlert] = useState(false);
+    const ordersRef = useRef([]);
+
+    // Notification sound
+    function playNotification() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+            oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+            oscillator.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.4);
+        } catch (e) {
+            console.log("Sound error:", e);
+        }
+    }
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -61,6 +84,15 @@ export default function App() {
         setLoading(true);
         const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
         if (!error && data) {
+            // Check for new pending orders
+            const prevPending = ordersRef.current.filter(o => o.status === "pending").length;
+            const newPending = data.filter(o => o.status === "pending").length;
+            if (newPending > prevPending && ordersRef.current.length > 0) {
+                playNotification();
+                setNewOrderAlert(true);
+                setTimeout(() => setNewOrderAlert(false), 5000);
+            }
+            ordersRef.current = data;
             setOrders(data);
             setStats({
                 total: data.length,
@@ -178,8 +210,8 @@ export default function App() {
     if (authLoading) return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
             <div style={{ textAlign: "center" }}>
-                <h2 style={{ color: "white", fontSize: "24px", fontWeight: "800" }}>DelivaGH</h2>
-                <p style={{ color: "#64748b", marginTop: "8px" }}>Loading your dashboard...</p>
+                <img src="/logo.png" alt="DelivaGH" style={{ height: "40px", filter: "brightness(0) invert(1)", marginBottom: "16px" }} />
+                <p style={{ color: "#64748b" }}>Loading your dashboard...</p>
             </div>
         </div>
     );
@@ -190,88 +222,76 @@ export default function App() {
     return (
         <div style={{ display: "flex", width: "100vw", minHeight: "100vh", backgroundColor: "#f1f5f9", fontFamily: "'Segoe UI', Arial, sans-serif", overflow: "hidden" }}>
 
+            {/* New Order Alert Banner */}
+            {newOrderAlert && (
+                <div style={{ position: "fixed", top: "20px", right: "20px", backgroundColor: "#16a34a", color: "white", padding: "16px 24px", borderRadius: "12px", boxShadow: "0 10px 30px rgba(22,163,74,0.4)", zIndex: 300, display: "flex", alignItems: "center", gap: "12px", animation: "slideIn 0.3s ease" }}>
+                    <span style={{ fontSize: "20px" }}>🔔</span>
+                    <div>
+                        <p style={{ margin: 0, fontWeight: "700", fontSize: "14px" }}>New Order!</p>
+                        <p style={{ margin: 0, fontSize: "12px", opacity: 0.9 }}>A new order just came in</p>
+                    </div>
+                </div>
+            )}
+
             {/* Order Detail Modal */}
             {selectedOrder && (
                 <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
                     onClick={() => setSelectedOrder(null)}>
                     <div style={{ backgroundColor: "white", borderRadius: "20px", padding: "32px", width: "100%", maxWidth: "500px", boxShadow: "0 25px 50px rgba(0,0,0,0.3)" }}
                         onClick={e => e.stopPropagation()}>
-
-                        {/* Modal Header */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "800", color: "#0f172a" }}>Order Details</h2>
                                 <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>#{selectedOrder.id.substring(0, 8).toUpperCase()}</p>
                             </div>
                             <button onClick={() => setSelectedOrder(null)}
-                                style={{ backgroundColor: "#f1f5f9", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "16px" }}>
-                                X
+                                style={{ backgroundColor: "#f1f5f9", border: "none", borderRadius: "8px", padding: "8px 14px", cursor: "pointer", fontSize: "14px", fontWeight: "600" }}>
+                                Close
                             </button>
                         </div>
 
-                        {/* Status */}
-                        <div style={{ marginBottom: "20px" }}>
-                            {(() => {
-                                const s = getStatusStyle(selectedOrder.status);
-                                return (
-                                    <span style={{ backgroundColor: s.bg, color: s.color, padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                                        <span style={{ width: "8px", height: "8px", backgroundColor: s.dot, borderRadius: "50%" }}></span>
-                                        {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
-                                    </span>
-                                );
-                            })()}
-                        </div>
+                        {(() => {
+                            const s = getStatusStyle(selectedOrder.status);
+                            return (
+                                <span style={{ backgroundColor: s.bg, color: s.color, padding: "6px 14px", borderRadius: "999px", fontSize: "13px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px", marginBottom: "20px" }}>
+                                    <span style={{ width: "8px", height: "8px", backgroundColor: s.dot, borderRadius: "50%" }}></span>
+                                    {selectedOrder.status.charAt(0).toUpperCase() + selectedOrder.status.slice(1)}
+                                </span>
+                            );
+                        })()}
 
-                        {/* Details Grid */}
-                        <div style={{ display: "grid", gap: "16px", marginBottom: "24px" }}>
-                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Business</p>
-                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.business_name || "-"}</p>
-                            </div>
-
-                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Customer</p>
-                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.customer_phone?.replace("whatsapp:", "")}</p>
-                            </div>
-
-                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Items Ordered</p>
-                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.items}</p>
-                            </div>
+                        <div style={{ display: "grid", gap: "12px", marginBottom: "24px" }}>
+                            {[
+                                { label: "Business", value: selectedOrder.business_name || "-" },
+                                { label: "Customer", value: selectedOrder.customer_phone?.replace("whatsapp:", "") },
+                                { label: "Items Ordered", value: selectedOrder.items },
+                                { label: "Delivery Address", value: selectedOrder.delivery_address || "-" },
+                                { label: "Order Time", value: new Date(selectedOrder.created_at).toLocaleString("en-GH", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) },
+                            ].map(item => (
+                                <div key={item.label} style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "14px 16px" }}>
+                                    <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>{item.label}</p>
+                                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "#0f172a" }}>{item.value}</p>
+                                </div>
+                            ))}
 
                             {selectedOrder.notes && (
-                                <div style={{ backgroundColor: "#fef3c7", borderRadius: "12px", padding: "16px", border: "1px solid #fcd34d" }}>
-                                    <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#d97706", textTransform: "uppercase" }}>Special Instructions / Notes</p>
-                                    <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#92400e" }}>{selectedOrder.notes}</p>
+                                <div style={{ backgroundColor: "#fef3c7", borderRadius: "12px", padding: "14px 16px", border: "1px solid #fcd34d" }}>
+                                    <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: "#d97706", textTransform: "uppercase" }}>Special Instructions</p>
+                                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "600", color: "#92400e" }}>{selectedOrder.notes}</p>
                                 </div>
                             )}
 
-                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Delivery Type</p>
+                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "14px 16px" }}>
+                                <p style={{ margin: "0 0 4px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Delivery Type</p>
                                 {(() => {
                                     const d = getDeliveryStyle(selectedOrder.delivery_type);
                                     return <span style={{ backgroundColor: d.bg, color: d.color, padding: "4px 12px", borderRadius: "999px", fontSize: "13px", fontWeight: "600" }}>{d.label}</span>;
                                 })()}
                             </div>
-
-                            {selectedOrder.delivery_address && (
-                                <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                    <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Delivery Address</p>
-                                    <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{selectedOrder.delivery_address}</p>
-                                </div>
-                            )}
-
-                            <div style={{ backgroundColor: "#f8fafc", borderRadius: "12px", padding: "16px" }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase" }}>Order Time</p>
-                                <p style={{ margin: 0, fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>
-                                    {new Date(selectedOrder.created_at).toLocaleString("en-GH", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                </p>
-                            </div>
                         </div>
 
-                        {/* Action Button */}
                         <div style={{ display: "flex", gap: "12px" }}>
-                            {getNextAction(selectedOrder)}
+                            <div style={{ flex: 1 }}>{getNextAction(selectedOrder)}</div>
                             <button onClick={() => setSelectedOrder(null)}
                                 style={{ flex: 1, backgroundColor: "#f1f5f9", color: "#374151", border: "none", padding: "12px", borderRadius: "10px", fontSize: "14px", cursor: "pointer", fontWeight: "600" }}>
                                 Close
@@ -284,13 +304,8 @@ export default function App() {
             {/* Sidebar */}
             <div style={{ width: "260px", minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 100 }}>
                 <div style={{ padding: "28px 24px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "36px", height: "36px", backgroundColor: "#16a34a", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", color: "white", fontWeight: "800" }}>D</div>
-                        <div>
-                            <h1 style={{ color: "white", margin: 0, fontSize: "18px", fontWeight: "800" }}>DelivaGH</h1>
-                            <p style={{ color: "#64748b", margin: 0, fontSize: "11px" }}>Order Management</p>
-                        </div>
-                    </div>
+                    <img src="/logo.png" alt="DelivaGH" style={{ height: "28px", filter: "brightness(0) invert(1)", marginBottom: "4px" }} />
+                    <p style={{ color: "#64748b", margin: "4px 0 0", fontSize: "11px" }}>Order Management</p>
                 </div>
 
                 <div style={{ padding: "8px 12px", flex: 1 }}>
@@ -385,6 +400,7 @@ export default function App() {
                                 <div style={{ padding: "64px", textAlign: "center" }}>
                                     <p style={{ fontSize: "40px", margin: "0 0 12px" }}>🍽️</p>
                                     <p style={{ color: "#64748b", fontSize: "15px", fontWeight: "500", margin: 0 }}>No menu items yet</p>
+                                    <p style={{ color: "#94a3b8", fontSize: "13px", margin: "4px 0 0" }}>Add your first item above</p>
                                 </div>
                             ) : (
                                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -513,7 +529,7 @@ export default function App() {
                                     <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
                                         {activeTab === "all" ? "All Orders" : activeTab.charAt(0).toUpperCase() + activeTab.slice(1) + " Orders"}
                                     </h3>
-                                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94a3b8" }}>{filteredOrders.length} orders total • Click any order to view details</p>
+                                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94a3b8" }}>{filteredOrders.length} orders • Click any row to view details</p>
                                 </div>
                             </div>
 
