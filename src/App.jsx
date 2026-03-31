@@ -82,7 +82,11 @@ export default function App() {
 
     async function fetchOrders() {
         setLoading(true);
-        const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
+        const { data, error } = await supabase
+            .from("orders")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(50);
         if (!error && data) {
             // Check for new pending orders
             const prevPending = ordersRef.current.filter(o => o.status === "pending").length;
@@ -304,7 +308,7 @@ export default function App() {
             {/* Sidebar */}
             <div style={{ width: "260px", minHeight: "100vh", backgroundColor: "#0f172a", display: "flex", flexDirection: "column", position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 100 }}>
                 <div style={{ padding: "28px 24px 20px" }}>
-                    <img src="/logo.png" alt="DelivaGH" style={{ height: "28px", filter: "brightness(0) invert(1)", marginBottom: "4px" }} />
+                    <img src="/logo.png" alt="DelivaGH" style={{ height: "28px", marginBottom: "4px" }} />
                     <p style={{ color: "#64748b", margin: "4px 0 0", fontSize: "11px" }}>Order Management</p>
                 </div>
 
