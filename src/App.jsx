@@ -141,15 +141,40 @@ export default function App() {
     }
 
     async function updateStatus(id, status, customerPhone, deliveryType) {
-        await supabase.from("orders").update({ status }).eq("id", id);
         try {
-            await fetch("https://web-production-a3a4.up.railway.app/whatsapp/notify", {
+            // Update status in Supabase first
+            const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+            if (error) {
+                console.log("Supabase update error:", error);
+                return;
+            }
+
+            // Send notification to customer
+            const response = await fetch("https://web-production-a3a4.up.railway.app/whatsapp/notify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ customerPhone, orderId: id.substring(0, 8).toUpperCase(), status, deliveryType })
+                body: JSON.stringify({
+                    customerPhone,
+                    orderId: id.substring(0, 8).toUpperCase(),
+                    status,
+                    deliveryType
+                })
             });
-        } catch (error) { console.log("Notification error:", error); }
-        fetchOrders();
+
+            if (!response.ok) {
+                console.log("Notification failed:", response.status);
+            } else {
+                console.log("Notification sent successfully for status:", status);
+            }
+
+        } catch (error) {
+            console.log("UpdateStatus error:", error);
+        }
+
+        // Always refresh orders after update
+        await fetchOrders();
+
+        // Update selected order if modal is open
         if (selectedOrder?.id === id) {
             setSelectedOrder(prev => ({ ...prev, status }));
         }
@@ -182,21 +207,39 @@ export default function App() {
         switch (order.status) {
             case "pending":
                 return (
-                    <button onClick={() => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type)}
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            e.currentTarget.disabled = true;
+                            e.currentTarget.textContent = "...";
+                            await updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type);
+                        }}
                         style={{ backgroundColor: "#3b82f6", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
                         Confirm
                     </button>
                 );
             case "confirmed":
                 return (
-                    <button onClick={() => updateStatus(order.id, "ready", order.customer_phone, order.delivery_type)}
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            e.currentTarget.disabled = true;
+                            e.currentTarget.textContent = "...";
+                            await updateStatus(order.id, "ready", order.customer_phone, order.delivery_type);
+                        }}
                         style={{ backgroundColor: "#8b5cf6", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
                         {order.delivery_type === "delivery" ? "On the way" : "Ready"}
                     </button>
                 );
             case "ready":
                 return (
-                    <button onClick={() => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type)}
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            e.currentTarget.disabled = true;
+                            e.currentTarget.textContent = "...";
+                            await updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type);
+                        }}
                         style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
                         Delivered
                     </button>
