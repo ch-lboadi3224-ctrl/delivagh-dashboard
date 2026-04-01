@@ -12,10 +12,26 @@ export default function Signup({ onSignup, onLogin }) {
     async function handleSignup() {
         setLoading(true);
         setError("");
+
         const { data, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) { setError(authError.message); setLoading(false); return; }
-        const { error: bizError } = await supabase.from("businesses").insert([{ name: businessName, phone, user_id: data.user.id }]);
+
+        // Insert into businesses table (for dashboard)
+        const { error: bizError } = await supabase.from("businesses").insert([{
+            name: businessName,
+            phone,
+            user_id: data.user.id
+        }]);
         if (bizError) { setError(bizError.message); setLoading(false); return; }
+
+        // Insert into registered_businesses table (for WhatsApp bot)
+        const { error: regError } = await supabase.from("registered_businesses").insert([{
+            business_name: businessName,
+            phone,
+            description: ""
+        }]);
+        if (regError) { setError(regError.message); setLoading(false); return; }
+
         onSignup(data.user);
         setLoading(false);
     }
