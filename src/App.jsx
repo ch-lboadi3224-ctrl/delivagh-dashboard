@@ -128,17 +128,42 @@ export default function App() {
 
     async function updateStatus(id, status, customerPhone, deliveryType) {
         try {
+            // Update status in Supabase first
             const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-            if (error) { console.log("Supabase update error:", error); return; }
+            if (error) {
+                console.log("Supabase update error:", error);
+                return;
+            }
+
+            // Send notification to customer
             const response = await fetch("https://web-production-a3a4.up.railway.app/whatsapp/notify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ customerPhone, orderId: id.substring(0, 8).toUpperCase(), status, deliveryType })
+                body: JSON.stringify({
+                    customerPhone,
+                    orderId: id.substring(0, 8).toUpperCase(),
+                    status,
+                    deliveryType
+                })
             });
-            if (!response.ok) console.log("Notification failed:", response.status);
-        } catch (error) { console.log("UpdateStatus error:", error); }
+
+            if (!response.ok) {
+                console.log("Notification failed:", response.status);
+            } else {
+                console.log("Notification sent successfully for status:", status);
+            }
+
+        } catch (error) {
+            console.log("UpdateStatus error:", error);
+        }
+
+        // Always refresh orders after update
         await fetchOrders();
-        if (selectedOrder?.id === id) setSelectedOrder(prev => ({ ...prev, status }));
+
+        // Update selected order if modal is open
+        if (selectedOrder?.id === id) {
+            setSelectedOrder(prev => ({ ...prev, status }));
+        }
     }
 
     async function handleLogout() {
