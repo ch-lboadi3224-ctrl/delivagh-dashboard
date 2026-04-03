@@ -141,7 +141,7 @@ export default function App() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     customerPhone,
-                    orderId: id.substring(0, 8).toUpperCase(),
+                    orderId: id,
                     status,
                     deliveryType
                 })
