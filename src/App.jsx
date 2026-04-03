@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Login from "./Login";
 import Signup from "./Signup";
@@ -9,7 +9,7 @@ export default function App() {
     const [page, setPage] = useState("login");
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, delivered: 0 });
+    const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, delivered: 0, revenue: 0, unpaidRevenue: 0 });
     const [activePage, setActivePage] = useState("overview");
     const [activeTab, setActiveTab] = useState("all");
     const [businessName, setBusinessName] = useState("");
@@ -53,13 +53,54 @@ export default function App() {
         if (user) {
             fetchOrders();
             fetchBusinessName();
+            // Real-time subscription - listen for INSERT and UPDATE
             const subscription = supabase
-                .channel("orders")
-                .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => fetchOrders())
+                .channel("orders-realtime")
+                .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+                    setOrders(prev => {
+                        const updated = [payload.new, ...prev];
+                        const prevPending = ordersRef.current.filter(o => o.status === "pending").length;
+                        const newPending = updated.filter(o => o.status === "pending").length;
+                        if (newPending > prevPending) {
+                            playNotification();
+                            setNewOrderAlert(true);
+                            setTimeout(() => setNewOrderAlert(false), 5000);
+                        }
+                        ordersRef.current = updated;
+                        updateStats(updated);
+                        return updated;
+                    });
+                })
+                .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+                    setOrders(prev => {
+                        const updated = prev.map(o => o.id === payload.new.id ? payload.new : o);
+                        ordersRef.current = updated;
+                        updateStats(updated);
+                        // Update selected order if modal is open
+                        setSelectedOrder(sel => sel?.id === payload.new.id ? payload.new : sel);
+                        return updated;
+                    });
+                })
                 .subscribe();
             return () => supabase.removeChannel(subscription);
         }
     }, [user]);
+
+    function updateStats(data) {
+        const paidOrders = data.filter(o => o.payment_status === "paid");
+        const revenue = paidOrders.reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+        const unpaidRevenue = data
+            .filter(o => o.payment_status !== "paid" && o.status !== "pending")
+            .reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+        setStats({
+            total: data.length,
+            pending: data.filter(o => o.status === "pending").length,
+            confirmed: data.filter(o => o.status === "confirmed").length,
+            delivered: data.filter(o => o.status === "delivered").length,
+            revenue,
+            unpaidRevenue,
+        });
+    }
 
     async function fetchBusinessName() {
         const { data } = await supabase.from("businesses").select("name").eq("user_id", user.id).limit(1);
@@ -73,23 +114,11 @@ export default function App() {
 
     async function fetchOrders() {
         setLoading(true);
-        const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50);
+        const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(100);
         if (!error && data) {
-            const prevPending = ordersRef.current.filter(o => o.status === "pending").length;
-            const newPending = data.filter(o => o.status === "pending").length;
-            if (newPending > prevPending && ordersRef.current.length > 0) {
-                playNotification();
-                setNewOrderAlert(true);
-                setTimeout(() => setNewOrderAlert(false), 5000);
-            }
             ordersRef.current = data;
             setOrders(data);
-            setStats({
-                total: data.length,
-                pending: data.filter(o => o.status === "pending").length,
-                confirmed: data.filter(o => o.status === "confirmed").length,
-                delivered: data.filter(o => o.status === "delivered").length,
-            });
+            updateStats(data);
         }
         setLoading(false);
     }
@@ -128,41 +157,17 @@ export default function App() {
 
     async function updateStatus(id, status, customerPhone, deliveryType) {
         try {
-            // Update status in Supabase first
             const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-            if (error) {
-                console.log("Supabase update error:", error);
-                return;
-            }
+            if (error) { console.log("Supabase update error:", error); return; }
 
-            // Send notification to customer
             const response = await fetch("https://web-production-a3a4.up.railway.app/whatsapp/notify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    customerPhone,
-                    orderId: id,
-                    status,
-                    deliveryType
-                })
+                body: JSON.stringify({ customerPhone, orderId: id, status, deliveryType })
             });
-
-            if (!response.ok) {
-                console.log("Notification failed:", response.status);
-            } else {
-                console.log("Notification sent successfully for status:", status);
-            }
-
+            if (!response.ok) console.log("Notification failed:", response.status);
         } catch (error) {
             console.log("UpdateStatus error:", error);
-        }
-
-        // Always refresh orders after update
-        await fetchOrders();
-
-        // Update selected order if modal is open
-        if (selectedOrder?.id === id) {
-            setSelectedOrder(prev => ({ ...prev, status }));
         }
     }
 
@@ -186,6 +191,15 @@ export default function App() {
         );
     }
 
+    function getPaymentBadge(status) {
+        const isPaid = status === "paid";
+        return (
+            <span style={{ backgroundColor: isPaid ? "#d1fae5" : "#fef3c7", color: isPaid ? "#065f46" : "#d97706", padding: "3px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: "800", letterSpacing: "0.05em" }}>
+                {isPaid ? "PAID" : "UNPAID"}
+            </span>
+        );
+    }
+
     function getNextAction(order) {
         const btnStyle = (bg) => ({ backgroundColor: bg, color: "white", border: "none", padding: "6px 14px", borderRadius: "8px", fontSize: "11px", cursor: "pointer", fontWeight: "700", whiteSpace: "nowrap" });
         switch (order.status) {
@@ -200,12 +214,13 @@ export default function App() {
             case "ready": return (
                 <button style={btnStyle("#10b981")} onClick={async (e) => { e.stopPropagation(); e.currentTarget.disabled = true; e.currentTarget.textContent = "..."; await updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type); }}>Delivered</button>
             );
-            case "delivered": return <span style={{ color: "#10b981", fontSize: "11px", fontWeight: "700" }}>Done</span>;
+            case "delivered": return <span style={{ color: "#10b981", fontSize: "11px", fontWeight: "700" }}>✓ Done</span>;
             default: return null;
         }
     }
 
     const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString());
+    const todayRevenue = todayOrders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
     const filteredOrders = orders.filter(o => activeTab === "all" ? true : o.status === activeTab);
     const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => i.category === menuFilter);
 
@@ -231,7 +246,7 @@ export default function App() {
 
                 {/* New Order Alert */}
                 {newOrderAlert && (
-                    <div style={{ position: "fixed", top: "20px", right: "20px", backgroundColor: "#FF4B4B", color: "white", padding: "16px 24px", borderRadius: "16px", boxShadow: "0 10px 30px rgba(255,75,75,0.4)", zIndex: 300, display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ position: "fixed", top: "20px", right: "20px", backgroundColor: "#FF4B4B", color: "white", padding: "16px 24px", borderRadius: "16px", boxShadow: "0 10px 30px rgba(255,75,75,0.4)", zIndex: 300, display: "flex", alignItems: "center", gap: "12px", animation: "slideIn 0.3s ease" }}>
                         <span style={{ fontSize: "20px" }}>🔔</span>
                         <div>
                             <p style={{ margin: 0, fontWeight: "700", fontSize: "14px" }}>New Order!</p>
@@ -257,13 +272,18 @@ export default function App() {
                                 </button>
                             </div>
 
-                            <div style={{ marginBottom: "20px" }}>{getStatusBadge(selectedOrder.status)}</div>
+                            <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+                                {getStatusBadge(selectedOrder.status)}
+                                {getPaymentBadge(selectedOrder.payment_status)}
+                            </div>
 
                             <div style={{ display: "grid", gap: "10px", marginBottom: "24px" }}>
                                 {[
                                     { label: "Business", value: selectedOrder.business_name || "-" },
                                     { label: "Customer", value: selectedOrder.customer_phone?.replace("whatsapp:", "") },
                                     { label: "Items", value: selectedOrder.items },
+                                    { label: "Total", value: selectedOrder.total_amount ? "GHS " + parseFloat(selectedOrder.total_amount).toFixed(2) : "-" },
+                                    { label: "Payment", value: selectedOrder.payment_status === "paid" ? "✅ Paid" : "⏳ Unpaid" },
                                     { label: "Delivery", value: selectedOrder.delivery_type === "pickup" ? "Pickup" : "Delivery" },
                                     { label: "Address", value: selectedOrder.delivery_address || "-" },
                                     { label: "Time", value: new Date(selectedOrder.created_at).toLocaleString("en-GH", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) },
@@ -358,6 +378,13 @@ export default function App() {
                         ))}
                     </nav>
 
+                    {/* Revenue Summary in Sidebar */}
+                    <div style={{ margin: "0 16px 16px", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: "16px", padding: "16px" }}>
+                        <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.1em", color: "#6b7280" }}>Total Revenue</p>
+                        <p style={{ margin: "0 0 4px", fontSize: "22px", fontWeight: "900", fontFamily: "Montserrat, sans-serif", color: "#10b981" }}>GHS {stats.revenue.toFixed(2)}</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280", fontWeight: "600" }}>GHS {stats.unpaidRevenue.toFixed(2)} pending</p>
+                    </div>
+
                     <div style={{ padding: "24px", borderTop: "1px solid #1f2937" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
                             <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#FF4B4B", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "16px" }}>
@@ -409,7 +436,7 @@ export default function App() {
                         {activePage === "overview" && (
                             <div style={{ display: "flex", flexDirection: "column", gap: "32px" }}>
 
-                                {/* Stats */}
+                                {/* Stats Row 1 */}
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px" }}>
                                     {[
                                         { label: "Total Orders", value: stats.total, sub: "All time", bg: "white" },
@@ -427,10 +454,27 @@ export default function App() {
                                     ))}
                                 </div>
 
+                                {/* Revenue Row */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
+                                    {[
+                                        { label: "Total Revenue", value: "GHS " + stats.revenue.toFixed(2), sub: "From paid orders", color: "#10b981", bg: "#f0fdf4", border: "#bbf7d0" },
+                                        { label: "Today's Revenue", value: "GHS " + todayRevenue.toFixed(2), sub: "Paid today", color: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" },
+                                        { label: "Pending Payment", value: "GHS " + stats.unpaidRevenue.toFixed(2), sub: "Awaiting payment", color: "#f59e0b", bg: "#fffbeb", border: "#fde68a" },
+                                    ].map((stat, i) => (
+                                        <div key={i} style={{ backgroundColor: stat.bg, padding: "24px", borderRadius: "20px", border: "1px solid " + stat.border, transition: "transform 0.2s" }}
+                                            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-4px)"}
+                                            onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+                                            <p style={{ margin: "0 0 4px", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.1em", color: stat.color, opacity: 0.7 }}>{stat.label}</p>
+                                            <h3 style={{ margin: "0 0 8px", fontSize: "26px", fontWeight: "900", fontFamily: "Montserrat, sans-serif", color: stat.color }}>{stat.value}</h3>
+                                            <p style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: stat.color, opacity: 0.6 }}>{stat.sub}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
                                 {/* Orders Table + Side Panel */}
                                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }}>
 
-                                    {/* Orders Table */}
+                                    {/* Recent Orders Table */}
                                     <div style={{ backgroundColor: "white", borderRadius: "24px", border: "1px solid #f1f5f9", overflow: "hidden" }}>
                                         <div style={{ padding: "20px 24px", borderBottom: "1px solid #f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                             <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700" }}>Recent Orders</h2>
@@ -440,20 +484,21 @@ export default function App() {
                                             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: "#f8fafc" }}>
-                                                        {["Order ID", "Items", "Location", "Status", "Action"].map(h => (
+                                                        {["Order ID", "Items", "Total", "Payment", "Status", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "12px 20px", textAlign: "left", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.1em", color: "#94a3b8" }}>{h}</th>
                                                         ))}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {orders.slice(0, 6).map((order, i) => (
+                                                    {orders.slice(0, 6).map((order) => (
                                                         <tr key={order.id} onClick={() => setSelectedOrder(order)}
                                                             style={{ borderTop: "1px solid #f8fafc", cursor: "pointer", transition: "background 0.15s" }}
                                                             onMouseEnter={e => e.currentTarget.style.backgroundColor = "#fafafa"}
                                                             onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
                                                             <td style={{ padding: "14px 20px", fontWeight: "700", fontSize: "13px" }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                             <td style={{ padding: "14px 20px", fontSize: "13px", color: "#64748b", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                            <td style={{ padding: "14px 20px", fontSize: "13px", color: "#94a3b8" }}>{order.delivery_address || (order.delivery_type === "pickup" ? "Pickup" : "-")}</td>
+                                                            <td style={{ padding: "14px 20px", fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
+                                                            <td style={{ padding: "14px 20px" }}>{getPaymentBadge(order.payment_status)}</td>
                                                             <td style={{ padding: "14px 20px" }}>{getStatusBadge(order.status)}</td>
                                                             <td style={{ padding: "14px 20px" }} onClick={e => e.stopPropagation()}>{getNextAction(order)}</td>
                                                         </tr>
@@ -478,6 +523,24 @@ export default function App() {
                                                 <div style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: "12px", padding: "12px" }}>
                                                     <p style={{ margin: "0 0 4px", fontSize: "10px", color: "#6b7280", fontWeight: "700" }}>Delivery</p>
                                                     <p style={{ margin: 0, fontSize: "22px", fontWeight: "900", fontFamily: "Montserrat, sans-serif" }}>{todayOrders.filter(o => o.delivery_type === "delivery").length}</p>
+                                                </div>
+                                            </div>
+                                            {/* Payment split */}
+                                            <div style={{ marginTop: "12px", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: "12px", padding: "12px" }}>
+                                                <p style={{ margin: "0 0 8px", fontSize: "10px", color: "#6b7280", fontWeight: "700" }}>Payment Status</p>
+                                                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                    <div>
+                                                        <p style={{ margin: 0, fontSize: "10px", color: "#10b981", fontWeight: "700" }}>PAID</p>
+                                                        <p style={{ margin: 0, fontSize: "18px", fontWeight: "900" }}>{todayOrders.filter(o => o.payment_status === "paid").length}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p style={{ margin: 0, fontSize: "10px", color: "#f59e0b", fontWeight: "700" }}>UNPAID</p>
+                                                        <p style={{ margin: 0, fontSize: "18px", fontWeight: "900" }}>{todayOrders.filter(o => o.payment_status !== "paid").length}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280", fontWeight: "700" }}>REVENUE</p>
+                                                        <p style={{ margin: 0, fontSize: "18px", fontWeight: "900", color: "#10b981" }}>GHS {todayRevenue.toFixed(0)}</p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -511,7 +574,7 @@ export default function App() {
                         {(activePage === "pending" || activePage === "overview-all") && activePage !== "overview" && activePage !== "menu" && (
                             <div>
                                 {/* Tab filters */}
-                                <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
+                                <div style={{ display: "flex", gap: "8px", marginBottom: "24px", flexWrap: "wrap" }}>
                                     {["all", "pending", "confirmed", "ready", "delivered"].map(tab => (
                                         <button key={tab} onClick={() => setActiveTab(tab)}
                                             style={{ padding: "8px 18px", borderRadius: "10px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: "700", textTransform: "capitalize", backgroundColor: activeTab === tab ? "#111827" : "white", color: activeTab === tab ? "white" : "#64748b", boxShadow: activeTab === tab ? "none" : "0 1px 3px rgba(0,0,0,0.05)" }}>
@@ -538,10 +601,10 @@ export default function App() {
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: "auto" }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: "#f8fafc" }}>
-                                                        {["Order", "Customer", "Items", "Notes", "Type", "Address", "Status", "Time", "Action"].map(h => (
+                                                        {["Order", "Customer", "Items", "Total", "Notes", "Type", "Address", "Payment", "Status", "Time", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "10px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>{h}</th>
                                                         ))}
                                                     </tr>
@@ -549,7 +612,7 @@ export default function App() {
                                                 <tbody>
                                                     {(() => {
                                                         let lastDate = null;
-                                                        return filteredOrders.map((order, i) => {
+                                                        return filteredOrders.map((order) => {
                                                             const orderDate = new Date(order.created_at).toDateString();
                                                             const isNewDate = orderDate !== lastDate;
                                                             lastDate = orderDate;
@@ -560,7 +623,7 @@ export default function App() {
                                                                 <>
                                                                     {isNewDate && (
                                                                         <tr key={"date-" + orderDate}>
-                                                                            <td colSpan="9" style={{ padding: "12px 16px 6px", backgroundColor: "#f8fafc" }}>
+                                                                            <td colSpan="11" style={{ padding: "12px 16px 6px", backgroundColor: "#f8fafc" }}>
                                                                                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                                                                     <span style={{ fontSize: "11px", fontWeight: "800", backgroundColor: isToday ? "#fff0f0" : "#f1f5f9", color: isToday ? "#FF4B4B" : "#64748b", padding: "3px 10px", borderRadius: "999px" }}>{dateLabel}</span>
                                                                                     <div style={{ flex: 1, height: "1px", backgroundColor: "#e2e8f0" }}></div>
@@ -575,6 +638,7 @@ export default function App() {
                                                                         <td style={{ padding: "13px 16px", fontWeight: "700", fontSize: "12px", fontFamily: "monospace" }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                         <td style={{ padding: "13px 16px", fontSize: "12px", color: "#64748b" }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                         <td style={{ padding: "13px 16px", fontSize: "12px", color: "#374151", maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
+                                                                        <td style={{ padding: "13px 16px", fontSize: "12px", fontWeight: "700", color: "#0f172a", whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                                         <td style={{ padding: "13px 16px", maxWidth: "120px" }}>
                                                                             {order.notes ? (
                                                                                 <span title={order.notes} style={{ backgroundColor: "#fef3c7", color: "#d97706", padding: "3px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "700", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -588,6 +652,7 @@ export default function App() {
                                                                             </span>
                                                                         </td>
                                                                         <td style={{ padding: "13px 16px", fontSize: "12px", color: "#94a3b8", maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.delivery_address || "—"}</td>
+                                                                        <td style={{ padding: "13px 16px" }}>{getPaymentBadge(order.payment_status)}</td>
                                                                         <td style={{ padding: "13px 16px" }}>{getStatusBadge(order.status)}</td>
                                                                         <td style={{ padding: "13px 16px", fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" }}>
                                                                             {new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}
@@ -609,7 +674,6 @@ export default function App() {
                         {/* ── MENU MANAGER PAGE ── */}
                         {activePage === "menu" && (
                             <div>
-                                {/* Category Filter */}
                                 <div style={{ display: "flex", gap: "8px", marginBottom: "24px", overflowX: "auto", paddingBottom: "4px" }}>
                                     {["All", "Main", "Sides", "Extras"].map(cat => (
                                         <button key={cat} onClick={() => setMenuFilter(cat)}
@@ -619,7 +683,6 @@ export default function App() {
                                     ))}
                                 </div>
 
-                                {/* Menu Grid */}
                                 {filteredMenu.length === 0 ? (
                                     <div style={{ textAlign: "center", padding: "64px" }}>
                                         <p style={{ fontSize: "40px", margin: "0 0 12px" }}>🍽️</p>
@@ -636,7 +699,6 @@ export default function App() {
                                                         <span style={{ fontSize: "9px", fontWeight: "800", textTransform: "uppercase", letterSpacing: "0.15em", color: "#94a3b8" }}>{item.category || "Main"}</span>
                                                         <h3 style={{ margin: "2px 0 0", fontSize: "16px", fontWeight: "700" }}>{item.item_name}</h3>
                                                     </div>
-                                                    {/* Toggle Switch */}
                                                     <div onClick={() => toggleAvailable(item.id, item.available)}
                                                         style={{ width: "40px", height: "22px", backgroundColor: item.available ? "#FF4B4B" : "#e2e8f0", borderRadius: "20px", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
                                                         <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: item.available ? "21px" : "3px", transition: "left 0.3s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}></div>
