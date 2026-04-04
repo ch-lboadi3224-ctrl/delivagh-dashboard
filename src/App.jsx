@@ -38,6 +38,8 @@ export default function App() {
     const audioCtxRef = useRef(null);
     const businessNameRef = useRef("");
     const notifIdRef = useRef(0);
+    const audioBufferRef = useRef(null);
+
 
     // ── THEME ──
     const dm = darkMode;
@@ -65,44 +67,54 @@ export default function App() {
             // auto-dismiss toast after 4s but keep in bell panel
         }, 4000);
     }
-
-    // ── LOUD NOTIFICATION SOUND ──
     function playNotification() {
         try {
-            if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            }
             const ctx = audioCtxRef.current;
-            if (ctx.state === "suspended") ctx.resume();
-
-            function beep(freq, start, dur, vol = 0.7) {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = "square";
-                osc.frequency.value = freq;
-                gain.gain.setValueAtTime(0, ctx.currentTime + start);
-                gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-                osc.start(ctx.currentTime + start);
-                osc.stop(ctx.currentTime + start + dur + 0.05);
+            const buffer = audioBufferRef.current;
+            if (!ctx || !buffer) {
+                // Fallback: try creating sound directly
+                const c = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = c.createOscillator();
+                const g = c.createGain();
+                osc.connect(g); g.connect(c.destination);
+                osc.frequency.value = 880; g.gain.value = 0.5;
+                osc.start(); osc.stop(c.currentTime + 0.3);
+                return;
             }
-
-            beep(523, 0.0, 0.15);
-            beep(659, 0.17, 0.15);
-            beep(784, 0.34, 0.15);
-            beep(1047, 0.51, 0.25, 0.8);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start();
         } catch (e) { console.log("Sound error:", e); }
     }
 
-    // Unlock AudioContext on first click
+    // Pre-generate sound buffer on first user interaction
     useEffect(() => {
-        const unlock = () => {
-            if (!audioCtxRef.current) {
-                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+        const unlock = async () => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtxRef.current = ctx;
+                await ctx.resume();
+
+                // Build a 1.2s buffer with 4 beeps
+                const sr = ctx.sampleRate;
+                const buffer = ctx.createBuffer(1, sr * 1.2, sr);
+                const data = buffer.getChannelData(0);
+                const notes = [{ f: 523, s: 0 }, { f: 659, s: 0.17 }, { f: 784, s: 0.34 }, { f: 1047, s: 0.51 }];
+                for (let i = 0; i < data.length; i++) {
+                    const t = i / sr;
+                    let v = 0;
+                    notes.forEach(({ f, s }) => {
+                        if (t >= s && t < s + 0.18) {
+                            const env = Math.min((t - s) / 0.01, 1) * Math.max(1 - (t - s - 0.12) / 0.06, 0);
+                            v += 0.4 * env * Math.sign(Math.sin(2 * Math.PI * f * t));
+                        }
+                    });
+                    data[i] = v;
+                }
+                audioBufferRef.current = buffer;
+                console.log("Audio ready ✓");
+            } catch (e) { console.log("Audio init error:", e); }
         };
         document.addEventListener("click", unlock, { once: true });
         return () => document.removeEventListener("click", unlock);
@@ -234,20 +246,33 @@ export default function App() {
 
     async function addMenuItem() {
         if (!newItem.item_name || !newItem.item_price) return;
-        const name = businessNameRef.current || businessName;
-        const { error } = await supabase.from("menus").insert([{
+        const name = businessName || businessNameRef.current;
+        if (!name) {
+            alert("Business name not loaded yet. Please wait a moment and try again.");
+            return;
+        }
+        console.log("Adding item to business:", name); // debug
+        const { data, error } = await supabase.from("menus").insert([{
             business_name: name,
-            item_name: newItem.item_name,
+            item_name: newItem.item_name.trim(),
             item_price: parseFloat(newItem.item_price),
-            item_description: newItem.item_description,
+            item_description: newItem.item_description.trim(),
             category: newItem.category,
             available: true
-        }]);
-        if (!error) {
-            setNewItem({ item_name: "", item_price: "", item_description: "", category: "Main" });
-            setShowAddModal(false);
-            await fetchMenuItems(); // FIX: await to ensure state updates
+        }]).select();
+
+        console.log("Insert result:", data, error); // debug
+        if (error) {
+            alert("Error saving item: " + error.message);
+            return;
         }
+        setNewItem({ item_name: "", item_price: "", item_description: "", category: "Main" });
+        setShowAddModal(false);
+        // Optimistic update - add to local state immediately
+        if (data && data.length > 0) {
+            setMenuItems(prev => [data[0], ...prev]);
+        }
+        await fetchMenuItems();
     }
 
     // FIX: Edit menu item
