@@ -38,7 +38,6 @@ export default function App() {
     const audioCtxRef = useRef(null);
     const businessNameRef = useRef("");
     const notifIdRef = useRef(0);
-    const audioBufferRef = useRef(null);
 
 
     // ── THEME ──
@@ -67,57 +66,60 @@ export default function App() {
             // auto-dismiss toast after 4s but keep in bell panel
         }, 4000);
     }
+    // ── AUDIO ──
+    const audioBufferRef = useRef(null);
+    const audioReadyRef = useRef(false);
+
+    async function initAudio() {
+        try {
+            if (audioReadyRef.current) return;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtxRef.current = ctx;
+            await ctx.resume();
+            const sr = ctx.sampleRate;
+            const buffer = ctx.createBuffer(1, sr * 1.5, sr);
+            const data = buffer.getChannelData(0);
+            const notes = [{ f: 523, s: 0 }, { f: 659, s: 0.2 }, { f: 784, s: 0.4 }, { f: 1047, s: 0.6 }];
+            for (let i = 0; i < data.length; i++) {
+                const t = i / sr;
+                let v = 0;
+                notes.forEach(({ f, s }) => {
+                    if (t >= s && t < s + 0.18) {
+                        const env = Math.min((t - s) / 0.01, 1) * Math.max(1 - (t - s - 0.1) / 0.08, 0);
+                        v += 0.5 * env * Math.sign(Math.sin(2 * Math.PI * f * t));
+                    }
+                });
+                data[i] = Math.max(-1, Math.min(1, v));
+            }
+            audioBufferRef.current = buffer;
+            audioReadyRef.current = true;
+            console.log("Audio ready ✓");
+        } catch (e) { console.log("Audio init error:", e); }
+    }
+
     function playNotification() {
         try {
             const ctx = audioCtxRef.current;
             const buffer = audioBufferRef.current;
-            if (!ctx || !buffer) {
-                // Fallback: try creating sound directly
-                const c = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = c.createOscillator();
-                const g = c.createGain();
-                osc.connect(g); g.connect(c.destination);
-                osc.frequency.value = 880; g.gain.value = 0.5;
-                osc.start(); osc.stop(c.currentTime + 0.3);
+            if (!ctx || !buffer || !audioReadyRef.current) {
+                console.log("Audio not ready yet");
                 return;
             }
+            if (ctx.state === "suspended") ctx.resume();
             const source = ctx.createBufferSource();
             source.buffer = buffer;
             source.connect(ctx.destination);
-            source.start();
-        } catch (e) { console.log("Sound error:", e); }
+            source.start(0);
+            console.log("Playing notification sound ✓");
+        } catch (e) { console.log("Sound play error:", e); }
     }
 
-    // Pre-generate sound buffer on first user interaction
+    // Init audio on ANY user interaction
     useEffect(() => {
-        const unlock = async () => {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                audioCtxRef.current = ctx;
-                await ctx.resume();
-
-                // Build a 1.2s buffer with 4 beeps
-                const sr = ctx.sampleRate;
-                const buffer = ctx.createBuffer(1, sr * 1.2, sr);
-                const data = buffer.getChannelData(0);
-                const notes = [{ f: 523, s: 0 }, { f: 659, s: 0.17 }, { f: 784, s: 0.34 }, { f: 1047, s: 0.51 }];
-                for (let i = 0; i < data.length; i++) {
-                    const t = i / sr;
-                    let v = 0;
-                    notes.forEach(({ f, s }) => {
-                        if (t >= s && t < s + 0.18) {
-                            const env = Math.min((t - s) / 0.01, 1) * Math.max(1 - (t - s - 0.12) / 0.06, 0);
-                            v += 0.4 * env * Math.sign(Math.sin(2 * Math.PI * f * t));
-                        }
-                    });
-                    data[i] = v;
-                }
-                audioBufferRef.current = buffer;
-                console.log("Audio ready ✓");
-            } catch (e) { console.log("Audio init error:", e); }
-        };
-        document.addEventListener("click", unlock, { once: true });
-        return () => document.removeEventListener("click", unlock);
+        const events = ["click", "keydown", "touchstart", "mousedown"];
+        const handler = () => { initAudio(); };
+        events.forEach(e => document.addEventListener(e, handler, { once: false, passive: true }));
+        return () => events.forEach(e => document.removeEventListener(e, handler));
     }, []);
 
     useEffect(() => {
@@ -527,17 +529,36 @@ export default function App() {
 
                 {/* ── NEW ORDER TOAST ── */}
                 {newOrderAlert && (
-                    <div style={{ position: "fixed", top: "20px", right: "20px", zIndex: 9999, animation: "slideIn 0.3s ease" }}>
-                        <div style={{ background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", padding: "16px 20px", borderRadius: "14px", boxShadow: "0 16px 48px rgba(220,38,38,0.45)", display: "flex", alignItems: "center", gap: "12px", minWidth: "290px", animation: "pulse 1.5s infinite" }}>
-                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>🔔</div>
-                            <div style={{ flex: 1 }}>
-                                <p style={{ margin: 0, fontWeight: "800", fontSize: "14px" }}>New Order!</p>
-                                <p style={{ margin: "2px 0 0", fontSize: "12px", opacity: 0.9 }}>A customer placed an order</p>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 9999, pointerEvents: "none" }}>
+                        {/* Flashing border around entire screen */}
+                        <div style={{ position: "absolute", inset: 0, border: "4px solid #dc2626", animation: "blink 0.5s infinite", borderRadius: "0" }} />
+
+                        {/* Big centered notification */}
+                        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "all" }}>
+                            <div style={{ background: "linear-gradient(135deg, #dc2626, #b91c1c)", color: "white", padding: "32px 48px", borderRadius: "24px", boxShadow: "0 24px 80px rgba(220,38,38,0.7)", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", minWidth: "360px", animation: "pulse 0.8s infinite", textAlign: "center" }}>
+                                <div style={{ fontSize: "56px", animation: "blink 0.6s infinite" }}>🔔</div>
+                                <div>
+                                    <p style={{ margin: 0, fontWeight: "900", fontSize: "28px", letterSpacing: "-0.5px" }}>NEW ORDER!</p>
+                                    <p style={{ margin: "6px 0 0", fontSize: "15px", opacity: 0.9 }}>A customer just placed an order</p>
+                                </div>
+                                <button onClick={() => { setNewOrderAlert(false); setActivePage("pending"); setActiveTab("pending"); }}
+                                    style={{ background: "white", border: "none", color: "#dc2626", padding: "12px 32px", borderRadius: "12px", cursor: "pointer", fontSize: "15px", fontWeight: "800", width: "100%" }}>
+                                    View Order →
+                                </button>
+                                <button onClick={() => setNewOrderAlert(false)}
+                                    style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "white", padding: "8px 24px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>
+                                    Dismiss
+                                </button>
                             </div>
-                            <button onClick={() => { setNewOrderAlert(false); setActivePage("pending"); setActiveTab("pending"); }}
-                                style={{ background: "rgba(255,255,255,0.25)", border: "none", color: "white", padding: "6px 12px", borderRadius: "7px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}>
-                                View
-                            </button>
+                        </div>
+
+                        {/* Corner toast as well */}
+                        <div style={{ position: "absolute", top: "20px", right: "20px", background: "#dc2626", color: "white", padding: "14px 20px", borderRadius: "12px", boxShadow: "0 8px 32px rgba(220,38,38,0.5)", display: "flex", alignItems: "center", gap: "10px", animation: "slideIn 0.3s ease" }}>
+                            <span style={{ fontSize: "20px" }}>🔔</span>
+                            <div>
+                                <p style={{ margin: 0, fontWeight: "800", fontSize: "13px" }}>New Order!</p>
+                                <p style={{ margin: 0, fontSize: "11px", opacity: 0.85 }}>{stats.pending} pending</p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -911,6 +932,12 @@ export default function App() {
                                             <span style={{ backgroundColor: activeTab === tab.id ? "#2563eb" : d.border, color: activeTab === tab.id ? "white" : d.muted, borderRadius: "999px", padding: "1px 6px", fontSize: "10px", fontWeight: "700" }}>{tab.count}</span>
                                         </button>
                                     ))}
+                                    {!audioReadyRef.current && (
+                                        <button onClick={initAudio}
+                                            style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "5px 10px", borderRadius: "7px", fontSize: "11px", fontWeight: "700", border: "1px solid #fde68a", cursor: "pointer" }}>
+                                            🔔 Enable Sound
+                                        </button>
+                                    )}
                                 </div>
                                 <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
                                     {loading ? (
