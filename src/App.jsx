@@ -210,14 +210,14 @@ export default function App() {
 
     async function saveSettings() {
         try {
-            await fetch(API + "/whatsapp/settings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ businessName, ...settings })
-            });
-            alert("Settings saved!");
+            const { error } = await supabase
+                .from("business_settings")
+                .upsert({ business_name: businessName, ...settings }, { onConflict: "business_name" });
+            if (error) throw error;
+            alert("Settings saved! ✅");
         } catch (e) {
             console.log("Settings save error:", e);
+            alert("Failed to save settings. Try again.");
         }
     }
 
@@ -273,8 +273,12 @@ export default function App() {
 
     function getNextAction(order) {
         const btn = (bg, label, onClick) => (
-            <button style={{ backgroundColor: bg, color: "white", border: "none", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", cursor: "pointer", fontWeight: "700", whiteSpace: "nowrap" }}
-                onClick={async (e) => { e.stopPropagation(); e.currentTarget.disabled = true; e.currentTarget.textContent = "..."; await onClick(); }}>
+            <button
+                style={{ backgroundColor: bg, color: "white", border: "none", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", cursor: "pointer", fontWeight: "700", whiteSpace: "nowrap", width: "100%" }}
+                onClick={async (e) => {
+                    e.stopPropagation();
+                    await onClick();
+                }}>
                 {label}
             </button>
         );
