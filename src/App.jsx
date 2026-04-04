@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 import Login from "./Login";
 import Signup from "./Signup";
@@ -28,8 +28,11 @@ export default function App() {
     const [insights, setInsights] = useState({ topItems: [], totalCustomers: 0, avgOrderValue: 0 });
     const [darkMode, setDarkMode] = useState(() => localStorage.getItem("delivagh_dark") === "true");
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    // Track button loading states per order
+    const [buttonLoading, setButtonLoading] = useState({});
     const ordersRef = useRef([]);
-    const processingOrders = useRef(new Set());
+    const audioCtxRef = useRef(null);
+    const businessNameRef = useRef("");
 
     const d = darkMode ? {
         bg: "#0f1117", bg2: "#161b22", bg3: "#1c2128", card: "#1c2128",
@@ -47,9 +50,14 @@ export default function App() {
         localStorage.setItem("delivagh_dark", String(next));
     }
 
+    // FIX 1: Sound works by reusing AudioContext and playing on user gesture
     function playNotification() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const ctx = audioCtxRef.current;
+            if (ctx.state === "suspended") ctx.resume();
             function beep(freq, start, duration, vol = 0.6) {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -65,12 +73,21 @@ export default function App() {
             }
             beep(880, 0, 0.12, 0.7);
             beep(1100, 0.15, 0.12, 0.7);
-            beep(1320, 0.30, 0.12, 0.7);
-            beep(880, 0.50, 0.12, 0.7);
-            beep(1100, 0.65, 0.12, 0.7);
-            beep(1320, 0.80, 0.25, 0.8);
+            beep(1320, 0.30, 0.20, 0.8);
         } catch (e) { console.log("Sound error:", e); }
     }
+
+    // Initialize AudioContext on first user interaction so sound works
+    useEffect(() => {
+        const unlock = () => {
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            document.removeEventListener("click", unlock);
+        };
+        document.addEventListener("click", unlock);
+        return () => document.removeEventListener("click", unlock);
+    }, []);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,36 +103,50 @@ export default function App() {
         if (user) {
             fetchOrders();
             fetchBusinessName();
-            const subscription = supabase
-                .channel("orders-realtime")
+
+            // FIX 2: Real-time - use a stable channel name and handle reconnection
+            const channel = supabase.channel("orders-v2-" + user.id);
+
+            channel
                 .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
+                    console.log("Real-time INSERT:", payload.new.id);
                     setOrders(prev => {
+                        // Avoid duplicates
+                        if (prev.find(o => o.id === payload.new.id)) return prev;
                         const updated = [payload.new, ...prev];
-                        const prevPending = ordersRef.current.filter(o => o.status === "pending").length;
-                        const newPending = updated.filter(o => o.status === "pending").length;
-                        if (newPending > prevPending) {
-                            playNotification();
-                            setNewOrderAlert(true);
-                            setTimeout(() => setNewOrderAlert(false), 6000);
-                        }
                         ordersRef.current = updated;
                         updateStats(updated);
                         computeInsights(updated);
                         return updated;
                     });
+                    // Show alert and play sound for new pending orders
+                    if (payload.new.status === "pending") {
+                        playNotification();
+                        setNewOrderAlert(true);
+                        setTimeout(() => setNewOrderAlert(false), 8000);
+                    }
                 })
                 .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" }, (payload) => {
+                    console.log("Real-time UPDATE:", payload.new.id, payload.new.status);
                     setOrders(prev => {
-                        const updated = prev.map(o => o.id === payload.new.id ? payload.new : o);
+                        const updated = prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o);
                         ordersRef.current = updated;
                         updateStats(updated);
                         computeInsights(updated);
-                        setSelectedOrder(sel => sel?.id === payload.new.id ? payload.new : sel);
                         return updated;
                     });
+                    // Update selected order if modal is open
+                    setSelectedOrder(sel => sel?.id === payload.new.id ? { ...sel, ...payload.new } : sel);
+                    // Clear button loading for this order
+                    setButtonLoading(prev => ({ ...prev, [payload.new.id]: false }));
                 })
-                .subscribe();
-            return () => supabase.removeChannel(subscription);
+                .subscribe((status) => {
+                    console.log("Realtime status:", status);
+                });
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
         }
     }, [user]);
 
@@ -160,6 +191,7 @@ export default function App() {
         if (data && data.length > 0) {
             const name = data[0].name;
             setBusinessName(name);
+            businessNameRef.current = name;
             const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
             if (menuData) setMenuItems(menuData);
             const { data: settingsData } = await supabase.from("business_settings").select("*").eq("business_name", name).single();
@@ -204,32 +236,82 @@ export default function App() {
         }
     }
 
+    // FIX 3: Button state - optimistically update UI immediately, don't wait for realtime
     async function updateStatus(id, status, customerPhone, deliveryType) {
-        if (processingOrders.current.has(id)) return;
-        processingOrders.current.add(id);
+        setButtonLoading(prev => ({ ...prev, [id]: true }));
+
+        // Optimistic update — update UI immediately
+        setOrders(prev => {
+            const updated = prev.map(o => o.id === id ? { ...o, status } : o);
+            ordersRef.current = updated;
+            updateStats(updated);
+            return updated;
+        });
+        setSelectedOrder(sel => sel?.id === id ? { ...sel, status } : sel);
+
         try {
             const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-            if (error) { console.log("Supabase update error:", error); return; }
-            const response = await fetch(API + "/whatsapp/notify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ customerPhone, orderId: id, status, deliveryType })
-            });
-            if (!response.ok) console.log("Notification failed:", response.status);
+            if (error) {
+                console.log("Supabase update error:", error);
+                // Revert if failed
+                fetchOrders();
+            } else {
+                // Send notification in background — don't await
+                fetch(API + "/whatsapp/notify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ customerPhone, orderId: id, status, deliveryType })
+                }).catch(e => console.log("Notify error:", e));
+            }
         } catch (error) {
             console.log("UpdateStatus error:", error);
+            fetchOrders();
         } finally {
-            setTimeout(() => processingOrders.current.delete(id), 3000);
+            setButtonLoading(prev => ({ ...prev, [id]: false }));
+        }
+    }
+
+    // FIX 4: Mark cash orders as paid
+    async function markAsPaid(id) {
+        setButtonLoading(prev => ({ ...prev, [id + "_pay"]: true }));
+
+        // Optimistic update
+        setOrders(prev => {
+            const updated = prev.map(o => o.id === id ? { ...o, payment_status: "paid" } : o);
+            ordersRef.current = updated;
+            updateStats(updated);
+            return updated;
+        });
+        setSelectedOrder(sel => sel?.id === id ? { ...sel, payment_status: "paid" } : sel);
+
+        try {
+            await supabase.from("orders").update({ payment_status: "paid" }).eq("id", id);
+        } catch (e) {
+            console.log("Mark paid error:", e);
+            fetchOrders();
+        } finally {
+            setButtonLoading(prev => ({ ...prev, [id + "_pay"]: false }));
         }
     }
 
     async function saveSettings() {
         try {
-            const { error } = await supabase.from("business_settings").upsert({ business_name: businessName, ...settings }, { onConflict: "business_name" });
+            const { error } = await supabase.from("business_settings").upsert(
+                { business_name: businessName, ...settings },
+                { onConflict: "business_name" }
+            );
             if (error) throw error;
+
+            // Also save to backend
+            await fetch(API + "/whatsapp/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ businessName, ...settings })
+            }).catch(e => console.log("Settings API error:", e));
+
             alert("Settings saved!");
         } catch (e) {
-            alert("Failed to save. Try again.");
+            alert("Failed to save settings. Try again.");
         }
     }
 
@@ -271,36 +353,54 @@ export default function App() {
         );
     }
 
-    function PaymentBadge({ status }) {
+    function PaymentBadge({ status, paymentMethod, orderId, showMarkPaid = false }) {
         const isPaid = status === "paid";
         return (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: isPaid ? "#dcfce7" : "#fef3c7", color: isPaid ? "#14532d" : "#92400e", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: isPaid ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />
-                {isPaid ? "Paid" : "Unpaid"}
-            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: isPaid ? "#dcfce7" : "#fef3c7", color: isPaid ? "#14532d" : "#92400e", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: isPaid ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />
+                    {isPaid ? "Paid" : "Unpaid"}
+                </span>
+                {/* FIX 4: Show "Mark as Paid" for unpaid cash orders */}
+                {!isPaid && paymentMethod === "cash" && showMarkPaid && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); markAsPaid(orderId); }}
+                        disabled={buttonLoading[orderId + "_pay"]}
+                        style={{ backgroundColor: "#16a34a", color: "white", border: "none", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        {buttonLoading[orderId + "_pay"] ? "..." : "✓ Mark Paid"}
+                    </button>
+                )}
+            </div>
         );
     }
 
-    function getNextAction(order) {
-        const live = orders.find(o => o.id === order.id) || order;
+    // FIX 3: Buttons reflect current order state from live orders array
+    function getNextAction(orderId) {
+        const order = ordersRef.current.find(o => o.id === orderId) || orders.find(o => o.id === orderId);
+        if (!order) return null;
+
+        const isLoading = buttonLoading[orderId];
         const btn = (bg, label, cb) => (
-            <button style={{ backgroundColor: bg, color: "white", border: "none", padding: "6px 12px", borderRadius: "7px", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}
-                onClick={async (e) => { e.stopPropagation(); await cb(); }}>
-                {label}
+            <button
+                disabled={isLoading}
+                style={{ backgroundColor: isLoading ? "#94a3b8" : bg, color: "white", border: "none", padding: "6px 12px", borderRadius: "7px", fontSize: "11px", fontWeight: "600", cursor: isLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap", opacity: isLoading ? 0.7 : 1 }}
+                onClick={async (e) => { e.stopPropagation(); if (!isLoading) await cb(); }}>
+                {isLoading ? "..." : label}
             </button>
         );
-        switch (live.status) {
+
+        switch (order.status) {
             case "pending": return (
                 <div style={{ display: "flex", gap: "5px" }}>
-                    {btn("#2563eb", "Accept", () => updateStatus(live.id, "confirmed", live.customer_phone, live.delivery_type))}
-                    {btn("#dc2626", "Reject", () => updateStatus(live.id, "rejected", live.customer_phone, live.delivery_type))}
+                    {btn("#2563eb", "✓ Accept", () => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type))}
+                    {btn("#dc2626", "✗ Reject", () => updateStatus(order.id, "rejected", order.customer_phone, order.delivery_type))}
                 </div>
             );
-            case "confirmed":  return btn("#db2777", "Preparing", () => updateStatus(live.id, "preparing", live.customer_phone, live.delivery_type));
-            case "preparing":  return btn("#7c3aed", live.delivery_type === "delivery" ? "On the Way" : "Ready", () => updateStatus(live.id, "ready", live.customer_phone, live.delivery_type));
-            case "ready":      return btn("#16a34a", "Delivered", () => updateStatus(live.id, "delivered", live.customer_phone, live.delivery_type));
-            case "delivered":  return <span style={{ color: "#16a34a", fontSize: "11px", fontWeight: "700" }}>Done</span>;
-            case "rejected":   return <span style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700" }}>Rejected</span>;
+            case "confirmed":  return btn("#db2777", "Preparing", () => updateStatus(order.id, "preparing", order.customer_phone, order.delivery_type));
+            case "preparing":  return btn("#7c3aed", order.delivery_type === "delivery" ? "On the Way" : "Ready", () => updateStatus(order.id, "ready", order.customer_phone, order.delivery_type));
+            case "ready":      return btn("#16a34a", "Delivered", () => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type));
+            case "delivered":  return <span style={{ color: "#16a34a", fontSize: "11px", fontWeight: "700" }}>✓ Done</span>;
+            case "rejected":   return <span style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700" }}>✗ Rejected</span>;
             default: return null;
         }
     }
@@ -349,22 +449,23 @@ export default function App() {
                 ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 2px; }
                 @keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
                 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+                @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
             `}</style>
 
             <div style={{ display: "flex", minHeight: "100vh", backgroundColor: d.bg, color: d.text }}>
 
-                {/* NEW ORDER TOAST */}
+                {/* FIX 5: New order toast - more prominent, stays longer */}
                 {newOrderAlert && (
                     <div style={{ position: "fixed", top: "20px", right: "20px", zIndex: 9999, animation: "slideIn 0.3s ease" }}>
-                        <div style={{ background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)", color: "white", padding: "14px 18px", borderRadius: "12px", boxShadow: "0 16px 40px rgba(37,99,235,0.45)", display: "flex", alignItems: "center", gap: "12px", minWidth: "270px" }}>
-                            <div style={{ width: "36px", height: "36px", borderRadius: "9px", backgroundColor: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "17px", animation: "blink 1s infinite", flexShrink: 0 }}>🔔</div>
+                        <div style={{ background: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)", color: "white", padding: "16px 20px", borderRadius: "14px", boxShadow: "0 16px 48px rgba(220,38,38,0.5)", display: "flex", alignItems: "center", gap: "14px", minWidth: "290px", animation: "pulse 1.5s infinite" }}>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>🔔</div>
                             <div style={{ flex: 1 }}>
-                                <p style={{ margin: 0, fontWeight: "700", fontSize: "13px" }}>New Order!</p>
-                                <p style={{ margin: "2px 0 0", fontSize: "11px", opacity: 0.85 }}>Tap to review pending orders</p>
+                                <p style={{ margin: 0, fontWeight: "800", fontSize: "14px" }}>New Order! 🎉</p>
+                                <p style={{ margin: "3px 0 0", fontSize: "12px", opacity: 0.9 }}>A customer placed an order</p>
                             </div>
-                            <button onClick={() => { setNewOrderAlert(false); setActivePage("pending"); }}
-                                style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "white", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: "600", whiteSpace: "nowrap" }}>
-                                View
+                            <button onClick={() => { setNewOrderAlert(false); setActivePage("pending"); setActiveTab("pending"); }}
+                                style={{ background: "rgba(255,255,255,0.25)", border: "none", color: "white", padding: "6px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "700", whiteSpace: "nowrap" }}>
+                                View →
                             </button>
                         </div>
                     </div>
@@ -372,9 +473,9 @@ export default function App() {
 
                 {/* ORDER DETAIL MODAL */}
                 {selectedOrder && (
-                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }}
+                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }}
                         onClick={() => setSelectedOrder(null)}>
-                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "460px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${d.border}` }}
+                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "480px", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${d.border}` }}
                             onClick={e => e.stopPropagation()}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
                                 <div>
@@ -384,12 +485,17 @@ export default function App() {
                                 <button onClick={() => setSelectedOrder(null)} style={{ background: d.hover, border: `1px solid ${d.border}`, borderRadius: "7px", padding: "5px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: d.muted }}>Close</button>
                             </div>
 
-                            <div style={{ display: "flex", gap: "7px", marginBottom: "18px", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", gap: "7px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
                                 <StatusBadge status={selectedOrder.status} />
-                                <PaymentBadge status={selectedOrder.payment_status} />
+                                <PaymentBadge
+                                    status={selectedOrder.payment_status}
+                                    paymentMethod={selectedOrder.payment_method}
+                                    orderId={selectedOrder.id}
+                                    showMarkPaid={true}
+                                />
                                 {selectedOrder.payment_method && (
                                     <span style={{ backgroundColor: d.hover, color: d.muted, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>
-                                        {selectedOrder.payment_method === "momo" ? "MoMo" : "Cash"}
+                                        {selectedOrder.payment_method === "momo" ? "📱 MoMo" : "💵 Cash"}
                                     </span>
                                 )}
                             </div>
@@ -399,7 +505,6 @@ export default function App() {
                                     { label: "Customer", value: selectedOrder.customer_phone?.replace("whatsapp:", "") },
                                     { label: "Items", value: selectedOrder.items },
                                     { label: "Total", value: selectedOrder.total_amount ? "GHS " + parseFloat(selectedOrder.total_amount).toFixed(2) : "-" },
-                                    { label: "Payment", value: selectedOrder.payment_status === "paid" ? "Paid" : "Unpaid" },
                                     ...(selectedOrder.momo_number ? [{ label: "MoMo #", value: selectedOrder.momo_number }] : []),
                                     { label: "Type", value: selectedOrder.delivery_type === "pickup" ? "Pickup" : "Delivery" },
                                     ...(selectedOrder.delivery_address ? [{ label: "Address", value: selectedOrder.delivery_address }] : []),
@@ -419,7 +524,7 @@ export default function App() {
                             </div>
 
                             <div style={{ display: "flex", gap: "9px" }}>
-                                <div style={{ flex: 1 }}>{getNextAction(orders.find(o => o.id === selectedOrder.id) || selectedOrder)}</div>
+                                <div style={{ flex: 1 }}>{getNextAction(selectedOrder.id)}</div>
                                 <button onClick={() => setSelectedOrder(null)}
                                     style={{ flex: 1, backgroundColor: d.hover, color: d.muted, border: `1px solid ${d.border}`, padding: "8px 16px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
                                     Close
@@ -433,25 +538,28 @@ export default function App() {
                 {showAddModal && (
                     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }}
                         onClick={() => setShowAddModal(false)}>
-                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "400px", border: `1px solid ${d.border}` }}
+                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "420px", boxShadow: "0 24px 64px rgba(0,0,0,0.25)", border: `1px solid ${d.border}` }}
                             onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: "0 0 18px", fontSize: "17px", fontWeight: "700", color: d.text }}>Add Menu Item</h2>
+                            <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: "700", color: d.text }}>Add New Item</h2>
                             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} placeholder="Item name (e.g. Jollof Rice)"
-                                    style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none" }} />
+                                <input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })}
+                                    placeholder="Item name (e.g. Jollof Rice)"
+                                    style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none", width: "100%" }} />
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                    <input type="number" value={newItem.item_price} onChange={e => setNewItem({ ...newItem, item_price: e.target.value })} placeholder="Price (GHS)"
+                                    <input value={newItem.item_price} onChange={e => setNewItem({ ...newItem, item_price: e.target.value })}
+                                        placeholder="Price (GHS)" type="number"
                                         style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none" }} />
                                     <select value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })}
                                         style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none" }}>
-                                        <option value="Main">Main Dish</option>
-                                        <option value="Sides">Side</option>
-                                        <option value="Extras">Extra</option>
+                                        <option value="Main">Main</option>
+                                        <option value="Sides">Sides</option>
+                                        <option value="Extras">Extras</option>
                                     </select>
                                 </div>
-                                <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="Description (optional)"
-                                    style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none", height: "76px", resize: "none" }} />
-                                <div style={{ display: "flex", gap: "9px", paddingTop: "4px" }}>
+                                <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })}
+                                    placeholder="Brief description..."
+                                    style={{ padding: "11px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "9px", fontSize: "13px", color: d.text, outline: "none", height: "80px", resize: "none", width: "100%" }} />
+                                <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
                                     <button onClick={() => setShowAddModal(false)}
                                         style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
                                     <button onClick={addMenuItem}
@@ -463,63 +571,58 @@ export default function App() {
                 )}
 
                 {/* SIDEBAR */}
-                <aside style={{ width: sidebarW, backgroundColor: d.sidebar, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100, transition: "width 0.2s ease", overflow: "hidden" }}>
-                    <div style={{ padding: "0 12px", borderBottom: `1px solid ${d.border}`, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "space-between", height: "60px", flexShrink: 0 }}>
-                        {!sidebarCollapsed && <div style={{ fontWeight: "800", fontSize: "16px", color: d.text, letterSpacing: "-0.5px", whiteSpace: "nowrap" }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>}
+                <aside style={{ width: sidebarW, backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100, transition: "width 0.2s ease", overflow: "hidden" }}>
+                    <div style={{ padding: sidebarCollapsed ? "20px 0" : "20px 16px", display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "space-between", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
+                        {!sidebarCollapsed && <div style={{ fontSize: "15px", fontWeight: "800", color: d.text, letterSpacing: "-0.3px" }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>}
                         <button onClick={() => setSidebarCollapsed(c => !c)}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: d.muted, padding: "7px", borderRadius: "7px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = d.hover}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
-                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                {sidebarCollapsed ? <path d="M9 18l6-6-6-6" /> : <path d="M15 18l-6-6 6-6" />}
-                            </svg>
+                            style={{ width: "28px", height: "28px", borderRadius: "6px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.muted, fontSize: "12px", flexShrink: 0 }}>
+                            {sidebarCollapsed ? "»" : "«"}
                         </button>
                     </div>
 
-                    <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px", overflowY: "auto" }}>
-                        {navItems.map(item => (
-                            <button key={item.id}
-                                onClick={() => { setActivePage(item.id); if (item.id === "pending") setActiveTab("all"); }}
-                                title={sidebarCollapsed ? item.label : ""}
-                                style={{ display: "flex", alignItems: "center", gap: "9px", padding: sidebarCollapsed ? "9px" : "9px 11px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "500", fontSize: "13px", transition: "all 0.12s", backgroundColor: activePage === item.id ? (darkMode ? "rgba(37,99,235,0.14)" : "#eff6ff") : "transparent", color: activePage === item.id ? "#2563eb" : d.muted, justifyContent: sidebarCollapsed ? "center" : "flex-start", width: "100%", position: "relative" }}
-                                onMouseEnter={e => { if (activePage !== item.id) e.currentTarget.style.backgroundColor = d.hover; }}
-                                onMouseLeave={e => { if (activePage !== item.id) e.currentTarget.style.backgroundColor = "transparent"; }}>
-                                <span style={{ color: "inherit", flexShrink: 0 }}>{item.icon}</span>
-                                {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
-                                {!sidebarCollapsed && item.badge > 0 && (
-                                    <span style={{ backgroundColor: "#dc2626", color: "white", fontSize: "10px", padding: "1px 6px", borderRadius: "999px", fontWeight: "700" }}>{item.badge}</span>
-                                )}
-                                {sidebarCollapsed && item.badge > 0 && (
-                                    <span style={{ position: "absolute", top: "5px", right: "5px", backgroundColor: "#dc2626", color: "white", fontSize: "9px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700" }}>{item.badge}</span>
-                                )}
-                            </button>
-                        ))}
+                    <nav style={{ flex: 1, padding: sidebarCollapsed ? "12px 8px" : "12px 10px", display: "flex", flexDirection: "column", gap: "3px", overflowY: "auto" }}>
+                        {navItems.map(item => {
+                            const isActive = activePage === item.id;
+                            return (
+                                <button key={item.id} onClick={() => { setActivePage(item.id); if (item.id === "pending") setActiveTab("all"); }}
+                                    title={sidebarCollapsed ? item.label : ""}
+                                    style={{ display: "flex", alignItems: "center", gap: "10px", padding: sidebarCollapsed ? "10px" : "10px 12px", borderRadius: "9px", border: "none", cursor: "pointer", textAlign: "left", fontWeight: "600", fontSize: "13px", transition: "all 0.15s", backgroundColor: isActive ? (darkMode ? "rgba(37,99,235,0.12)" : "#eff6ff") : "transparent", color: isActive ? "#2563eb" : d.muted, justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
+                                    <span style={{ flexShrink: 0, color: isActive ? "#2563eb" : d.muted }}>{item.icon}</span>
+                                    {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                                    {!sidebarCollapsed && item.badge > 0 && (
+                                        <span style={{ backgroundColor: "#dc2626", color: "white", fontSize: "10px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800", animation: "pulse 2s infinite" }}>{item.badge}</span>
+                                    )}
+                                    {sidebarCollapsed && item.badge > 0 && (
+                                        <span style={{ position: "absolute", top: "6px", right: "6px", backgroundColor: "#dc2626", color: "white", fontSize: "9px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800" }}>{item.badge}</span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </nav>
 
                     {!sidebarCollapsed && (
-                        <div style={{ margin: "8px", borderRadius: "10px", padding: "13px", backgroundColor: darkMode ? "rgba(37,99,235,0.07)" : "#eff6ff", border: `1px solid ${darkMode ? "rgba(37,99,235,0.18)" : "#bfdbfe"}` }}>
-                            <p style={{ margin: "0 0 1px", fontSize: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted }}>Revenue</p>
-                            <p style={{ margin: "0 0 1px", fontSize: "19px", fontWeight: "800", color: "#2563eb", lineHeight: 1.2 }}>GHS {stats.revenue.toFixed(2)}</p>
-                            <p style={{ margin: "0 0 8px", fontSize: "11px", color: d.muted }}>GHS {stats.unpaidRevenue.toFixed(2)} pending</p>
-                            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                                <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: settings.is_open ? "#22c55e" : "#ef4444" }} />
-                                <span style={{ fontSize: "11px", fontWeight: "600", color: settings.is_open ? "#16a34a" : "#dc2626" }}>{settings.is_open ? "Open" : "Closed"}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    <div style={{ padding: "10px 8px", borderTop: `1px solid ${d.border}`, flexShrink: 0 }}>
-                        {!sidebarCollapsed && (
-                            <div style={{ display: "flex", alignItems: "center", gap: "9px", padding: "8px 4px", marginBottom: "6px" }}>
-                                <div style={{ width: "30px", height: "30px", borderRadius: "8px", backgroundColor: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "700", fontSize: "12px", color: "white", flexShrink: 0 }}>
-                                    {(businessName?.charAt(0) || user.email?.charAt(0) || "?").toUpperCase()}
+                        <div style={{ padding: "12px", borderTop: `1px solid ${d.border}`, flexShrink: 0 }}>
+                            <div style={{ backgroundColor: d.bg3, borderRadius: "9px", padding: "12px", border: `1px solid ${d.border}`, marginBottom: "10px" }}>
+                                <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Revenue</p>
+                                <p style={{ margin: "0 0 1px", fontSize: "18px", fontWeight: "800", color: "#16a34a", lineHeight: 1 }}>GHS {stats.revenue.toFixed(2)}</p>
+                                <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>GHS {stats.unpaidRevenue.toFixed(2)} pending</p>
+                                <div style={{ marginTop: "6px", display: "flex", alignItems: "center", gap: "5px" }}>
+                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: settings.is_open ? "#22c55e" : "#ef4444" }}></span>
+                                    <span style={{ fontSize: "10px", color: settings.is_open ? "#16a34a" : "#dc2626", fontWeight: "700" }}>{settings.is_open ? "Open" : "Closed"}</span>
                                 </div>
-                                <div style={{ overflow: "hidden", flex: 1 }}>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "9px" }}>
+                                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0 }}>
+                                    {businessName?.charAt(0) || user.email?.charAt(0).toUpperCase()}
+                                </div>
+                                <div style={{ overflow: "hidden" }}>
                                     <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{businessName || user.email?.split("@")[0]}</p>
                                     <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>Vendor</p>
                                 </div>
                             </div>
-                        )}
+                        </div>
+                    )}
+                    <div style={{ padding: sidebarCollapsed ? "10px 8px" : "0 12px 12px", flexShrink: 0 }}>
                         <button onClick={handleLogout} title={sidebarCollapsed ? "Sign Out" : ""}
                             style={{ width: "100%", backgroundColor: d.hover, color: d.muted, border: `1px solid ${d.border}`, padding: "8px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                             onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.borderColor = "#fca5a5"; }}
@@ -546,11 +649,12 @@ export default function App() {
                                     + Add Item
                                 </button>
                             )}
+                            {/* FIX 5: Persistent pending indicator in header */}
                             {stats.pending > 0 && (
-                                <button onClick={() => setActivePage("pending")}
-                                    style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "600", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}>
+                                <button onClick={() => { setActivePage("pending"); setActiveTab("pending"); }}
+                                    style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}>
                                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", animation: "blink 1.2s infinite" }} />
-                                    {stats.pending} pending
+                                    {stats.pending} pending order{stats.pending > 1 ? "s" : ""}
                                 </button>
                             )}
                             <button onClick={toggleDark}
@@ -606,7 +710,7 @@ export default function App() {
                                             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "480px" }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: d.bg3 }}>
-                                                        {["Order", "Items", "Total", "Status", "Action"].map(h => (
+                                                        {["Order", "Items", "Total", "Payment", "Status", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted }}>{h}</th>
                                                         ))}
                                                     </tr>
@@ -620,8 +724,9 @@ export default function App() {
                                                             <td style={{ padding: "11px 14px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                             <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                             <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
+                                                            <td style={{ padding: "11px 14px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
                                                             <td style={{ padding: "11px 14px" }}><StatusBadge status={order.status} /></td>
-                                                            <td style={{ padding: "11px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order)}</td>
+                                                            <td style={{ padding: "11px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -684,6 +789,7 @@ export default function App() {
                                         { id: "preparing", label: "Preparing", count: orders.filter(o => o.status === "preparing").length },
                                         { id: "ready",     label: "Ready",     count: orders.filter(o => o.status === "ready").length },
                                         { id: "delivered", label: "Delivered", count: stats.delivered },
+                                        { id: "rejected",  label: "Rejected",  count: orders.filter(o => o.status === "rejected").length },
                                     ].map(tab => (
                                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                                             style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 12px", borderRadius: "8px", border: `1px solid ${activeTab === tab.id ? "#2563eb" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: activeTab === tab.id ? (darkMode ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.card, color: activeTab === tab.id ? "#2563eb" : d.muted, transition: "all 0.12s" }}>
@@ -699,7 +805,7 @@ export default function App() {
                                         <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>Click any row for details</p>
                                     </div>
                                     {loading ? (
-                                        <div style={{ padding: "48px", textAlign: "center" }}><p style={{ color: d.muted, fontSize: "13px" }}>Loading...</p></div>
+                                        <div style={{ padding: "48px", textAlign: "center" }}><p style={{ color: d.muted }}>Loading...</p></div>
                                     ) : filteredOrders.length === 0 ? (
                                         <div style={{ padding: "64px", textAlign: "center" }}>
                                             <p style={{ fontSize: "32px", margin: "0 0 10px" }}>📭</p>
@@ -707,10 +813,10 @@ export default function App() {
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: "auto" }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "880px" }}>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                                                 <thead>
                                                     <tr style={{ backgroundColor: d.bg3 }}>
-                                                        {["#", "Customer", "Items", "Total", "Notes", "Type", "Address", "Status", "Payment", "Time", "Action"].map(h => (
+                                                        {["#", "Customer", "Items", "Total", "Pay Method", "Notes", "Type", "Address", "Status", "Payment", "Time", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "9px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
                                                         ))}
                                                     </tr>
@@ -729,19 +835,24 @@ export default function App() {
                                                                 <>
                                                                     {isNewDate && (
                                                                         <tr key={"d-" + orderDate}>
-                                                                            <td colSpan="11" style={{ padding: "8px 13px 4px", backgroundColor: d.bg }}>
+                                                                            <td colSpan="12" style={{ padding: "8px 13px 4px", backgroundColor: d.bg }}>
                                                                                 <span style={{ fontSize: "10px", fontWeight: "700", color: isToday ? "#2563eb" : d.muted, backgroundColor: isToday ? (darkMode ? "rgba(37,99,235,0.1)" : "#eff6ff") : d.bg3, padding: "2px 9px", borderRadius: "999px", border: `1px solid ${isToday ? (darkMode ? "rgba(37,99,235,0.2)" : "#bfdbfe") : d.border}` }}>{dateLabel}</span>
                                                                             </td>
                                                                         </tr>
                                                                     )}
                                                                     <tr key={order.id} onClick={() => setSelectedOrder(order)}
-                                                                        style={{ borderTop: `1px solid ${d.border}`, cursor: "pointer", transition: "background 0.1s" }}
+                                                                        style={{ borderTop: `1px solid ${d.border}`, cursor: "pointer", transition: "background 0.1s", backgroundColor: order.status === "pending" ? (darkMode ? "rgba(217,119,6,0.05)" : "#fffbeb") : "" }}
                                                                         onMouseEnter={e => e.currentTarget.style.backgroundColor = d.hover}
-                                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = ""}>
+                                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = order.status === "pending" ? (darkMode ? "rgba(217,119,6,0.05)" : "#fffbeb") : ""}>
                                                                         <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                         <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                         <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "130px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                                         <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
+                                                                        <td style={{ padding: "11px 13px" }}>
+                                                                            <span style={{ fontSize: "11px", fontWeight: "600", color: order.payment_method === "momo" ? "#7c3aed" : d.muted }}>
+                                                                                {order.payment_method === "momo" ? "📱 MoMo" : order.payment_method === "cash" ? "💵 Cash" : "—"}
+                                                                            </span>
+                                                                        </td>
                                                                         <td style={{ padding: "11px 13px", maxWidth: "100px" }}>
                                                                             {order.notes ? <span title={order.notes} style={{ backgroundColor: "#fef3c7", color: "#92400e", padding: "2px 7px", borderRadius: "5px", fontSize: "10px", fontWeight: "600", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.notes}</span> : <span style={{ color: d.border }}>—</span>}
                                                                         </td>
@@ -752,9 +863,16 @@ export default function App() {
                                                                         </td>
                                                                         <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted, maxWidth: "90px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.delivery_address || "—"}</td>
                                                                         <td style={{ padding: "11px 13px" }}><StatusBadge status={order.status} /></td>
-                                                                        <td style={{ padding: "11px 13px" }}><PaymentBadge status={order.payment_status} /></td>
+                                                                        <td style={{ padding: "11px 13px" }}>
+                                                                            <PaymentBadge
+                                                                                status={order.payment_status}
+                                                                                paymentMethod={order.payment_method}
+                                                                                orderId={order.id}
+                                                                                showMarkPaid={order.payment_method === "cash" && order.status !== "pending"}
+                                                                            />
+                                                                        </td>
                                                                         <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}</td>
-                                                                        <td style={{ padding: "11px 13px" }} onClick={e => e.stopPropagation()}>{getNextAction(order)}</td>
+                                                                        <td style={{ padding: "11px 13px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
                                                                     </tr>
                                                                 </>
                                                             );
@@ -798,7 +916,7 @@ export default function App() {
                                                     </div>
                                                     <div onClick={() => toggleAvailable(item.id, item.available)}
                                                         style={{ width: "36px", height: "20px", backgroundColor: item.available ? "#2563eb" : d.border, borderRadius: "10px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                                        <div style={{ position: "absolute", width: "14px", height: "14px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: item.available ? "19px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                                                        <div style={{ position: "absolute", width: "14px", height: "14px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: item.available ? "19px" : "3px", transition: "left 0.2s" }} />
                                                     </div>
                                                 </div>
                                                 <p style={{ fontSize: "12px", color: d.muted, margin: "0 0 14px", lineHeight: "1.5" }}>{item.item_description || "No description"}</p>
@@ -898,7 +1016,7 @@ export default function App() {
 
                                 <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "22px", border: `1px solid ${d.border}` }}>
                                     <h2 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: "700", color: d.text }}>Auto-Accept Orders</h2>
-                                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: d.muted }}>Orders are confirmed and payment link sent automatically</p>
+                                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: d.muted }}>Orders confirmed & payment link sent automatically — no manual review needed</p>
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                         <div>
                                             <p style={{ margin: 0, fontWeight: "600", fontSize: "13px", color: d.text }}>Auto-Accept</p>
@@ -917,7 +1035,7 @@ export default function App() {
                                     onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
                                     Save Settings
                                 </button>
-                            </div>
+            </div>
                         )}
 
                     </div>
