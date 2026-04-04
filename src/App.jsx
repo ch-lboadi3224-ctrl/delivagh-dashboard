@@ -34,8 +34,11 @@ export default function App() {
     const [buttonLoading, setButtonLoading] = useState({});
     const [settingsSaved, setSettingsSaved] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
+    const [audioReady, setAudioReady] = useState(false);
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
+    const audioBufferRef = useRef(null);
+    const audioReadyRef = useRef(false);
     const businessNameRef = useRef("");
     const notifIdRef = useRef(0);
 
@@ -67,9 +70,6 @@ export default function App() {
         }, 4000);
     }
     // ── AUDIO ──
-    const audioBufferRef = useRef(null);
-    const audioReadyRef = useRef(false);
-
     async function initAudio() {
         try {
             if (audioReadyRef.current) return;
@@ -93,6 +93,7 @@ export default function App() {
             }
             audioBufferRef.current = buffer;
             audioReadyRef.current = true;
+            setAudioReady(true);
             console.log("Audio ready ✓");
         } catch (e) { console.log("Audio init error:", e); }
     }
@@ -766,6 +767,13 @@ export default function App() {
                             {activePage === "menu" && (
                                 <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#2563eb", color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>
                                     + Add Item
+                                </button>
+                            )}
+                            {!audioReady && (
+                                <button onClick={initAudio}
+                                    style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}
+                                    title="Click to enable notification sounds">
+                                    🔔 Enable Sound
                                 </button>
                             )}
                             {stats.pending > 0 && (
