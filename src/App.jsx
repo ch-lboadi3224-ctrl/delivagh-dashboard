@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import Admin from "./Admin";
 import Login from "./Login";
 import Signup from "./Signup";
+import Onboarding from "./Onboarding";
 
 const API = "https://web-production-a3a4.up.railway.app";
 
@@ -36,9 +37,7 @@ export default function App() {
     const [settingsSaved, setSettingsSaved] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     // ── ONBOARDING ──
-    const [onboardingStep, setOnboardingStep] = useState(0); // 0 = check, 1-3 = steps, 4 = done
     const [onboardingDone, setOnboardingDone] = useState(false);
-    const [whatsappNumber, setWhatsappNumber] = useState("");
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -198,7 +197,6 @@ export default function App() {
             const name = biz.name;
             setBusinessName(name);
             businessNameRef.current = name;
-            setWhatsappNumber(biz.phone || "");
 
             const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
             if (menuData) setMenuItems(menuData);
@@ -209,13 +207,11 @@ export default function App() {
             // ── ONBOARDING CHECK ──
             const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
             if (!done) {
-                // Check if they have menu items — if so, skip onboarding
                 if (menuData && menuData.length > 0) {
                     localStorage.setItem("onboarding_done_" + user.id, "true");
                     setOnboardingDone(true);
-                } else {
-                    setOnboardingStep(1); // Start onboarding
                 }
+                // else onboardingDone stays false → Onboarding component shows
             } else {
                 setOnboardingDone(true);
             }
@@ -262,9 +258,6 @@ export default function App() {
         setShowAddModal(false);
         if (data && data.length > 0) setMenuItems(prev => [data[0], ...prev]);
         await fetchMenuItems();
-
-        // If in onboarding, advance to next step
-        if (onboardingStep === 1) setOnboardingStep(2);
     }
 
     async function saveEditItem() {
@@ -346,12 +339,6 @@ export default function App() {
     }
 
     async function handleLogout() { await supabase.auth.signOut(); setUser(null); }
-
-    function completeOnboarding() {
-        localStorage.setItem("onboarding_done_" + user.id, "true");
-        setOnboardingDone(true);
-        setOnboardingStep(0);
-    }
 
     function StatusBadge({ status }) {
         const cfg = {
@@ -439,14 +426,20 @@ export default function App() {
     if (!user) return <Login onLogin={u => setUser(u)} onSignup={() => setPage("signup")} />;
 
     // ── ONBOARDING SCREEN ──
-    if (user && businessName && !onboardingDone && onboardingStep > 0) {
-        const steps = [
-            { num: 1, title: "Add your first menu item", desc: "Add at least one item so customers can start ordering", action: true },
-            { num: 2, title: "Share your WhatsApp link", desc: "Customers message this number to order from you", action: false },
-            { num: 3, title: "You're ready to receive orders!", desc: "Your bot is live. Start sharing your number with customers", action: false },
-        ];
-        const currentStep = steps[onboardingStep - 1];
+    if (user && businessName && !onboardingDone) {
+        return <Onboarding
+            user={user}
+            businessName={businessName}
+            menuItems={menuItems}
+            onComplete={() => {
+                localStorage.setItem("onboarding_done_" + user.id, "true");
+                setOnboardingDone(true);
+            }}
+        />;
+    }
 
+    // DEAD CODE BELOW — kept for reference, never reached
+    if (false) {
         return (
             <>
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -582,7 +575,7 @@ export default function App() {
                 </div>
             </>
         );
-    }
+    } // end dead code
 
     return (
         <>
