@@ -487,7 +487,7 @@ export default function Admin() {
                                             </div>
                                             <HealthDot status={s.status} />
                                         </div>
-                                        <p style={{ fontSize: "12px", color: d.muted, padding: "10px 12px", backgroundColor: d.bg3, borderRadius: "8px', border": `1px solid ${d.border}` }}>{s.detail}</p>
+                                        <p style={{ fontSize: "12px", color: d.muted, padding: "10px 12px", backgroundColor: d.bg3, borderRadius: "8px", border: `1px solid ${d.border}` }}>{s.detail}</p>
                                     </div>
                                 ))}
                             </div>
