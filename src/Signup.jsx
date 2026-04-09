@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import React, { useState } from "react";
 import { supabase } from "./supabase";
 
 // FIX: Field defined OUTSIDE component so it never gets recreated on re-render
