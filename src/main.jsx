@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import Admin from './Admin.jsx'
-import { Component } from 'react'
+import React, { Component } from 'react'
 
 function showFatalOverlay(title, message) {
   const body = document.body
