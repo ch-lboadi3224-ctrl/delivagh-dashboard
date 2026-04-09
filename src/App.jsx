@@ -38,6 +38,7 @@ export default function App() {
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
+    const [onboardingChecked, setOnboardingChecked] = useState(false);
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -195,6 +196,7 @@ export default function App() {
     }
 
     async function fetchBusinessName() {
+        setOnboardingChecked(false);
         const { data } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
         if (data && data.length > 0) {
             const biz = data[0];
@@ -210,15 +212,29 @@ export default function App() {
 
             // ── ONBOARDING CHECK ──
             const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
-            if (!done) {
-                if (menuData && menuData.length > 0) {
+            if (done) {
+                setOnboardingDone(true);
+            } else {
+                // Existing vendors should not get forced back into onboarding.
+                const hasMenu = !!(menuData && menuData.length > 0);
+                const { data: existingOrders } = await supabase
+                    .from("orders")
+                    .select("id")
+                    .eq("business_name", name)
+                    .limit(1);
+                const hasOrders = !!(existingOrders && existingOrders.length > 0);
+                if (hasMenu || hasOrders) {
                     localStorage.setItem("onboarding_done_" + user.id, "true");
                     setOnboardingDone(true);
+                } else {
+                    setOnboardingDone(false);
                 }
-                // else onboardingDone stays false → Onboarding component shows
-            } else {
-                setOnboardingDone(true);
             }
+            setOnboardingChecked(true);
+        } else {
+            // If no business profile yet, don't block on onboarding.
+            setOnboardingDone(true);
+            setOnboardingChecked(true);
         }
     }
 
@@ -460,7 +476,7 @@ export default function App() {
     if (!user) return <Login onLogin={u => setUser(u)} onSignup={() => setPage("signup")} />;
 
     // ── ONBOARDING SCREEN ──
-    if (user && businessName && !onboardingDone) {
+    if (user && businessName && onboardingChecked && !onboardingDone) {
         return <Onboarding
             user={user}
             businessName={businessName}
