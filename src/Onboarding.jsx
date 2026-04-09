@@ -45,11 +45,12 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
     }
 
     async function loadExistingProfile() {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from("businesses")
-            .select("delivery_zones,min_order_amount,bot_greeting")
+            .select("*")
             .eq("user_id", user.id)
             .limit(1);
+        if (error) return;
         const biz = data?.[0];
         if (biz) {
             setDeliveryZones(biz.delivery_zones || "");
@@ -80,9 +81,26 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
         };
         const { error: e } = await supabase.from("businesses").update(payload).eq("user_id", user.id);
         if (e) {
-            setError(e.message);
-            setProfileSaving(false);
-            return;
+            const missingColumnError = typeof e.message === "string" && e.message.includes("Could not find the");
+            if (!missingColumnError) {
+                setError(e.message);
+                setProfileSaving(false);
+                return;
+            }
+
+            // Backward compatibility: allow onboarding to continue even if optional columns are not yet in schema.
+            const fallbackPayload = {};
+            if (!e.message.includes("'delivery_zones'")) fallbackPayload.delivery_zones = payload.delivery_zones;
+            if (!e.message.includes("'min_order_amount'")) fallbackPayload.min_order_amount = payload.min_order_amount;
+            if (!e.message.includes("'bot_greeting'")) fallbackPayload.bot_greeting = payload.bot_greeting;
+            if (Object.keys(fallbackPayload).length > 0) {
+                const { error: fallbackError } = await supabase.from("businesses").update(fallbackPayload).eq("user_id", user.id);
+                if (fallbackError) {
+                    setError(fallbackError.message);
+                    setProfileSaving(false);
+                    return;
+                }
+            }
         }
         setProfileSaving(false);
         setStep(hasExistingMenu ? 3 : 2);

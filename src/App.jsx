@@ -490,6 +490,16 @@ export default function App() {
     if (!user && page === "signup") return <Signup onSignup={u => { setUser(u); setPage("login"); }} onLogin={() => setPage("login")} />;
     if (!user) return <Login onLogin={u => setUser(u)} onSignup={() => setPage("signup")} />;
 
+    // Avoid flashing dashboard before onboarding decision finishes.
+    if (user && !onboardingChecked) return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: d.bg }}>
+            <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "22px", fontWeight: "800", color: d.text, fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
+                <p style={{ color: d.muted, marginTop: "8px", fontSize: "13px" }}>Preparing your workspace...</p>
+            </div>
+        </div>
+    );
+
     // ── ONBOARDING SCREEN ──
     if (user && businessName && onboardingChecked && !onboardingDone) {
         return <Onboarding
