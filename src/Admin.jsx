@@ -49,6 +49,7 @@ export default function Admin() {
     }
 
     useEffect(() => {
+        if (!supabase) return;
         if (!authed) return;
         fetchAll();
         checkHealth();
@@ -185,6 +186,16 @@ export default function Admin() {
         { id: "health", label: "System Health", icon: "❤" },
         { id: "analytics", label: "Analytics", icon: "📊" },
     ];
+
+    if (!supabase) return (
+        <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: d.text, padding: "24px" }}>
+            <div style={{ ...cardStyle, maxWidth: "640px", padding: "22px" }}>
+                <h2 style={{ margin: "0 0 10px", fontSize: "18px" }}>Missing Supabase Configuration</h2>
+                <p style={{ margin: "0 0 8px", fontSize: "14px", color: d.strongMuted }}>Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` in your Vercel environment variables, then redeploy.</p>
+                <p style={{ margin: 0, fontSize: "12px", color: d.muted }}>The admin panel cannot query businesses or orders until this is configured.</p>
+            </div>
+        </div>
+    );
 
     // ── LOGIN SCREEN ──
     if (!authed) return (
