@@ -17,8 +17,11 @@ export default function Admin() {
     const [lastOrder, setLastOrder] = useState(null);
     const [selectedBiz, setSelectedBiz] = useState(null);
     const [botConfig, setBotConfig] = useState({});
+    const [paymentConfig, setPaymentConfig] = useState({});
     const [saving, setSaving] = useState(false);
+    const [paymentSaving, setPaymentSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState("");
+    const [paymentMsg, setPaymentMsg] = useState("");
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
     const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
@@ -140,6 +143,37 @@ export default function Admin() {
         await fetchAll();
     }
 
+    function openPaymentConfig(biz) {
+        setSelectedBiz(biz);
+        setPaymentConfig({
+            subaccount_code: biz.subaccount_code || "",
+            commission_type: biz.commission_type || "flat",
+            commission_value: typeof biz.commission_value === "number" ? biz.commission_value : (parseFloat(biz.commission_value) || 1),
+        });
+        setPaymentMsg("");
+        setActivePage("payments");
+    }
+
+    async function savePaymentConfig() {
+        if (!selectedBiz) return;
+        setPaymentSaving(true);
+        setPaymentMsg("");
+        const payload = {
+            subaccount_code: (paymentConfig.subaccount_code || "").trim(),
+            commission_type: paymentConfig.commission_type || "flat",
+            commission_value: parseFloat(paymentConfig.commission_value || 0) || 0,
+        };
+        const { error } = await supabase.from("businesses").update(payload).eq("id", selectedBiz.id);
+        if (error) {
+            setPaymentMsg("Could not save: " + error.message);
+            setPaymentSaving(false);
+            return;
+        }
+        setPaymentMsg("Payment settings saved");
+        setPaymentSaving(false);
+        await fetchAll();
+    }
+
     // Stats
     const pending = businesses.filter(b => b.status === "pending");
     const active = businesses.filter(b => b.status === "active");
@@ -150,6 +184,29 @@ export default function Admin() {
     // Business order counts
     function bizOrders(name) { return orders.filter(o => o.business_name === name); }
     function bizRevenue(name) { return orders.filter(o => o.business_name === name && o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0); }
+    const bizByName = businesses.reduce((acc, biz) => ({ ...acc, [biz.name]: biz }), {});
+
+    function orderPlatformCut(order, biz) {
+        if (!biz || order.payment_status !== "paid") return 0;
+        const orderAmount = parseFloat(order.total_amount) || 0;
+        const commissionType = biz.commission_type || "flat";
+        const commissionValue = parseFloat(biz.commission_value) || 0;
+        if (commissionType === "percent") return (orderAmount * commissionValue) / 100;
+        if (commissionType === "flat") return commissionValue;
+        return 0;
+    }
+
+    function bizPlatformEarnings(name) {
+        const biz = bizByName[name];
+        return orders
+            .filter(o => o.business_name === name)
+            .reduce((sum, order) => sum + orderPlatformCut(order, biz), 0);
+    }
+
+    const platformRevenueByRules = orders.reduce((sum, order) => {
+        const biz = bizByName[order.business_name];
+        return sum + orderPlatformCut(order, biz);
+    }, 0);
 
     function HealthDot({ status }) {
         const colors = { ok: "#22c55e", warn: "#f59e0b", error: "#ef4444", checking: "#64748b" };
@@ -177,12 +234,13 @@ export default function Admin() {
 
     const inp = (extra = {}) => ({ padding: "10px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", ...extra });
     const cardStyle = { backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px" };
-    const pageNames = { overview: "Overview", approvals: "Pending Approvals", businesses: "Businesses", health: "System Health", analytics: "Analytics", botconfig: "Bot Configuration" };
+    const pageNames = { overview: "Overview", approvals: "Pending Approvals", businesses: "Businesses", health: "System Health", analytics: "Analytics", botconfig: "Bot Configuration", payments: "Payment Settings" };
 
     const navItems = [
         { id: "overview", label: "Overview", icon: "▦" },
         { id: "approvals", label: "Approvals", icon: "✓", badge: pending.length },
         { id: "businesses", label: "Businesses", icon: "🏪" },
+        { id: "payments", label: "Payments", icon: "💳" },
         { id: "health", label: "System Health", icon: "❤" },
         { id: "analytics", label: "Analytics", icon: "📊" },
     ];
@@ -458,7 +516,7 @@ export default function Admin() {
                                 <div style={{ overflowX: "auto" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
                                         <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Phone", "Status", "Bot Name", "Orders", "Revenue", "Joined", "Actions"].map(h => (
+                                            {["Business", "Phone", "Status", "Subaccount", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
                                                 <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
                                             ))}
                                         </tr></thead>
@@ -473,14 +531,23 @@ export default function Admin() {
                                                     </td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
                                                     <td style={{ padding: "12px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>{biz.bot_name || "DelivaGH"}</td>
+                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>{biz.subaccount_code || "—"}</td>
+                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>
+                                                        {biz.commission_type === "percent"
+                                                            ? `${parseFloat(biz.commission_value || 0).toFixed(2)}%`
+                                                            : `GHS ${(parseFloat(biz.commission_value || 0) || 0).toFixed(2)}`}
+                                                    </td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: d.text }}>{bizOrders(biz.name).length}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
+                                                    <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(biz.name).toFixed(2)}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(biz.created_at).toLocaleDateString("en-GH")}</td>
                                                     <td style={{ padding: "12px 14px" }}>
                                                         <div style={{ display: "flex", gap: "6px" }}>
                                                             <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(37,99,235,0.1)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: "6px", color: "#2563eb", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
                                                                 Bot Config
+                                                            </button>
+                                                            <button onClick={() => openPaymentConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: "6px", color: "#8b5cf6", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                                                Payments
                                                             </button>
                                                             {biz.status === "active" && (
                                                                 <button onClick={() => suspendBusiness(biz.id, biz.status)} disabled={actionLoading[biz.id] === "suspending"}
@@ -607,7 +674,7 @@ export default function Admin() {
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
                                 {[
                                     { label: "Total Revenue Processed", value: "GHS " + orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0).toFixed(2), sub: "All paid orders", color: "#22c55e" },
-                                    { label: "Platform Earnings", value: "GHS " + orders.length.toFixed(2), sub: "@ GHS 1/order", color: "#8b5cf6" },
+                                    { label: "Platform Earnings", value: "GHS " + platformRevenueByRules.toFixed(2), sub: "Based on configured commission rules", color: "#8b5cf6" },
                                     { label: "Avg Order Value", value: "GHS " + (orders.length > 0 ? (orders.filter(o => o.total_amount).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / orders.filter(o => o.total_amount).length || 0).toFixed(2) : "0.00"), sub: "Across all businesses", color: "#2563eb" },
                                 ].map((s, i) => (
                                     <div key={i} style={{ ...cardStyle, padding: "20px" }}>
@@ -626,7 +693,7 @@ export default function Admin() {
                                 <div style={{ overflowX: "auto" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                         <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Status", "Total Orders", "Today", "Revenue", "Paid", "Pending", "Delivered"].map(h => (
+                                            {["Business", "Status", "Total Orders", "Today", "Revenue", "Platform Cut", "Paid", "Pending", "Delivered"].map(h => (
                                                 <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
                                             ))}
                                         </tr></thead>
@@ -641,6 +708,7 @@ export default function Admin() {
                                                         <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "700", color: d.text }}>{bo.length}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "13px", color: "#2563eb", fontWeight: "700" }}>{bt.length}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
+                                                        <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(biz.name).toFixed(2)}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", color: "#22c55e" }}>{bo.filter(o => o.payment_status === "paid").length}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", color: "#f59e0b" }}>{bo.filter(o => o.status === "pending").length}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", color: "#22c55e" }}>{bo.filter(o => o.status === "delivered").length}</td>
@@ -651,6 +719,101 @@ export default function Admin() {
                                     </table>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* ── PAYMENT SETTINGS ── */}
+                    {activePage === "payments" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease", maxWidth: "760px" }}>
+                            {!selectedBiz ? (
+                                <div style={cardStyle}>
+                                    <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                        <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Choose a business</p>
+                                    </div>
+                                    <div style={{ padding: "14px 18px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                                        {businesses.map(b => (
+                                            <button key={b.id} onClick={() => openPaymentConfig(b)}
+                                                style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.bg3, color: d.text, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+                                                {b.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                        <button onClick={() => { setSelectedBiz(null); setPaymentMsg(""); }} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← All Businesses</button>
+                                        <div>
+                                            <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Payment Settings — {selectedBiz.name}</h1>
+                                            <p style={{ fontSize: "12px", color: d.muted }}>Configure vendor subaccount routing and platform commission rule</p>
+                                        </div>
+                                    </div>
+
+                                    <div style={cardStyle}>
+                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Settlement Routing</p>
+                                        </div>
+                                        <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                                            <div>
+                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Subaccount Code</label>
+                                                <input value={paymentConfig.subaccount_code || ""} onChange={e => setPaymentConfig(p => ({ ...p, subaccount_code: e.target.value }))}
+                                                    placeholder="e.g. ACCT_6e3jqm4w80k0w4e" style={inp()} />
+                                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Used when initializing split payment so funds route to this vendor.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={cardStyle}>
+                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Platform Commission Rule</p>
+                                        </div>
+                                        <div style={{ padding: "18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                                            <div>
+                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Commission Type</label>
+                                                <select value={paymentConfig.commission_type || "flat"} onChange={e => setPaymentConfig(p => ({ ...p, commission_type: e.target.value }))} style={inp()}>
+                                                    <option value="flat">Flat amount (GHS)</option>
+                                                    <option value="percent">Percentage (%)</option>
+                                                    <option value="none">No commission</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Commission Value</label>
+                                                <input type="number" min="0" step="0.01" value={paymentConfig.commission_value ?? 0}
+                                                    onChange={e => setPaymentConfig(p => ({ ...p, commission_value: e.target.value }))}
+                                                    placeholder={paymentConfig.commission_type === "percent" ? "e.g. 7.5" : "e.g. 1.00"} style={inp()} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={cardStyle}>
+                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Business Earnings Snapshot</p>
+                                        </div>
+                                        <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
+                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Paid Revenue</p>
+                                                <p style={{ fontSize: "22px", fontWeight: "800", color: "#22c55e" }}>GHS {bizRevenue(selectedBiz.name).toFixed(2)}</p>
+                                            </div>
+                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
+                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Platform Cut</p>
+                                                <p style={{ fontSize: "22px", fontWeight: "800", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(selectedBiz.name).toFixed(2)}</p>
+                                            </div>
+                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
+                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Net to Vendor</p>
+                                                <p style={{ fontSize: "22px", fontWeight: "800", color: d.text }}>GHS {(bizRevenue(selectedBiz.name) - bizPlatformEarnings(selectedBiz.name)).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                        <button onClick={savePaymentConfig} disabled={paymentSaving}
+                                            style={{ padding: "12px 28px", backgroundColor: paymentSaving ? d.muted : "#8b5cf6", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: paymentSaving ? "not-allowed" : "pointer" }}>
+                                            {paymentSaving ? "Saving..." : "Save Payment Settings"}
+                                        </button>
+                                        {paymentMsg && <span style={{ fontSize: "13px", color: paymentMsg.startsWith("Could not") ? "#ef4444" : "#22c55e", fontWeight: "600" }}>{paymentMsg}</span>}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
 
