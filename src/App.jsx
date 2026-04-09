@@ -114,6 +114,14 @@ export default function App() {
         supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
     }, []);
 
+    useEffect(() => {
+        if (!supabase) return;
+        // If vendor intentionally goes to signup while already logged in, switch account cleanly.
+        if (page === "signup" && user) {
+            supabase.auth.signOut().finally(() => setUser(null));
+        }
+    }, [page, user]);
+
     // ── REAL-TIME — filtered by business ──
     useEffect(() => {
         if (!user) return;

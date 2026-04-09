@@ -18,12 +18,31 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
+    const progressKey = user?.id ? `onboarding_last_step_${user.id}` : null;
 
     useEffect(() => {
         if (!user?.id || initializedRef.current) return;
         initializedRef.current = true;
+        const last = parseInt(localStorage.getItem(`onboarding_last_step_${user.id}`) || "", 10);
+        if (!Number.isNaN(last) && last >= 1 && last <= 4) setStep(last);
         loadExistingProfile();
     }, [user?.id]);
+
+    useEffect(() => {
+        if (!progressKey) return;
+        persistProgress(step);
+    }, [step, progressKey]);
+
+    async function persistProgress(nextStep) {
+        if (!user?.id) return;
+        localStorage.setItem(`onboarding_last_step_${user.id}`, String(nextStep));
+        // Best-effort backend persistence; safe even if column doesn't exist yet.
+        try {
+            await supabase.from("businesses").update({ onboarding_last_step: nextStep }).eq("user_id", user.id);
+        } catch {
+            // Ignore; localStorage keeps resume behavior working.
+        }
+    }
 
     async function loadExistingProfile() {
         const { data } = await supabase
@@ -87,6 +106,8 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
 
     function finish() {
         localStorage.setItem("onboarding_done_" + user.id, "true");
+        localStorage.removeItem(`onboarding_last_step_${user.id}`);
+        supabase.from("businesses").update({ onboarding_last_step: null }).eq("user_id", user.id);
         onComplete();
     }
 
