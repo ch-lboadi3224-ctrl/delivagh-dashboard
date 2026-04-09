@@ -41,6 +41,7 @@ export default function App() {
     const [settingsSaved, setSettingsSaved] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     const [authNotice, setAuthNotice] = useState("");
+    const [accountStatus, setAccountStatus] = useState(null); // { type, message }
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
     const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -138,6 +139,7 @@ export default function App() {
                             ? "Your account application was not approved. Please contact support."
                             : "Your account has been suspended. Please contact support.";
                 setAuthNotice(msg);
+                setAccountStatus({ type: status, message: msg });
                 await supabase.auth.signOut();
                 if (!cancelled) {
                     setUser(null);
@@ -515,10 +517,40 @@ export default function App() {
     );
 
     if (!user && page === "signup") return <Signup onSignup={() => {
-        setAuthNotice("Account created. Wait for admin approval before first login.");
+        const msg = "Account created. Wait for admin approval before first login.";
+        setAuthNotice(msg);
+        setAccountStatus({ type: "pending", message: msg });
         setPage("login");
         if (supabase) supabase.auth.signOut().finally(() => setUser(null));
     }} onLogin={() => setPage("login")} />;
+    if (!user && page !== "signup" && accountStatus) return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ width: "100%", maxWidth: "520px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "26px" }}>
+                <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
+                    Delivagh<span style={{ color: accent }}>.</span>
+                </div>
+                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Account Status</p>
+                <h2 style={{ margin: "0 0 10px", fontSize: "24px", color: "#ecfdf3", fontFamily: "'Playfair Display', serif" }}>
+                    {accountStatus.type === "pending" ? "Approval Pending" : accountStatus.type === "rejected" ? "Application Rejected" : "Account Suspended"}
+                </h2>
+                <p style={{ margin: "0 0 18px", color: "rgba(236,253,243,0.75)", fontSize: "14px", lineHeight: 1.6 }}>{accountStatus.message}</p>
+                <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                        onClick={() => { setAccountStatus(null); setAuthNotice(""); }}
+                        style={{ flex: 1, padding: "12px", backgroundColor: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(236,253,243,0.75)", fontWeight: "700", cursor: "pointer" }}
+                    >
+                        Back to Login
+                    </button>
+                    <button
+                        onClick={() => { setAccountStatus(null); setAuthNotice(""); setPage("signup"); }}
+                        style={{ flex: 1, padding: "12px", backgroundColor: accent, border: "none", borderRadius: "10px", color: "white", fontWeight: "700", cursor: "pointer" }}
+                    >
+                        Use Different Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
     if (!user) return <Login notice={authNotice} onLogin={u => { setAuthNotice(""); setUser(u); }} onSignup={() => { setAuthNotice(""); setPage("signup"); }} />;
 
     // Avoid flashing dashboard before onboarding decision finishes.
