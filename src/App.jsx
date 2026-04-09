@@ -40,6 +40,7 @@ export default function App() {
     const [buttonLoading, setButtonLoading] = useState({});
     const [settingsSaved, setSettingsSaved] = useState(false);
     const [showNotifPanel, setShowNotifPanel] = useState(false);
+    const [authNotice, setAuthNotice] = useState("");
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
     const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -121,6 +122,32 @@ export default function App() {
             supabase.auth.signOut().finally(() => setUser(null));
         }
     }, [page, user]);
+
+    useEffect(() => {
+        if (!supabase || !user) return;
+        let cancelled = false;
+        (async () => {
+            const { data } = await supabase.from("businesses").select("status").eq("user_id", user.id).limit(1);
+            if (cancelled) return;
+            const status = data?.[0]?.status;
+            if (status === "pending" || status === "rejected" || status === "suspended") {
+                const msg =
+                    status === "pending"
+                        ? "Your account is pending admin approval. You will be notified once approved."
+                        : status === "rejected"
+                            ? "Your account application was not approved. Please contact support."
+                            : "Your account has been suspended. Please contact support.";
+                setAuthNotice(msg);
+                await supabase.auth.signOut();
+                if (!cancelled) {
+                    setUser(null);
+                    setBusinessName("");
+                    setOnboardingChecked(false);
+                }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user]);
 
     // ── REAL-TIME — filtered by business ──
     useEffect(() => {
@@ -487,8 +514,12 @@ export default function App() {
         </div>
     );
 
-    if (!user && page === "signup") return <Signup onSignup={u => { setUser(u); setPage("login"); }} onLogin={() => setPage("login")} />;
-    if (!user) return <Login onLogin={u => setUser(u)} onSignup={() => setPage("signup")} />;
+    if (!user && page === "signup") return <Signup onSignup={() => {
+        setAuthNotice("Account created. Wait for admin approval before first login.");
+        setPage("login");
+        if (supabase) supabase.auth.signOut().finally(() => setUser(null));
+    }} onLogin={() => setPage("login")} />;
+    if (!user) return <Login notice={authNotice} onLogin={u => { setAuthNotice(""); setUser(u); }} onSignup={() => { setAuthNotice(""); setPage("signup"); }} />;
 
     // Avoid flashing dashboard before onboarding decision finishes.
     if (user && !onboardingChecked) return (

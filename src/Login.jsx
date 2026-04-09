@@ -1,7 +1,7 @@
 ﻿import React, { useState } from "react";
 import { supabase } from "./supabase";
 
-export default function Login({ onLogin, onSignup }) {
+export default function Login({ onLogin, onSignup, notice = "" }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -64,6 +64,7 @@ export default function Login({ onLogin, onSignup }) {
                         </div>
                         <h1 style={{ fontSize: "28px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "8px", fontFamily: "'Playfair Display',serif" }}>Welcome back</h1>
                         <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "36px", fontWeight: "300" }}>Sign in to manage your orders</p>
+                        {notice && <div style={{ backgroundColor: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", color: "#fcd34d", padding: "12px 14px", borderRadius: "10px", marginBottom: "14px", fontSize: "13px" }}>{notice}</div>}
                         {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "20px", fontSize: "13px" }}>{error}</div>}
                         <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
                             <div>
