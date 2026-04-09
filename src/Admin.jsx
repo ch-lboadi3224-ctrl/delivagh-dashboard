@@ -28,18 +28,20 @@ export default function Admin() {
 
     const themes = {
         dark: {
-            bg: "#0a0d12", bg2: "#0f1318", bg3: "#141920", card: "#141920",
-            border: "#1e2530", text: "#e2e8f0", muted: "#64748b", strongMuted: "#94a3b8",
-            hover: "#1a2130", input: "#0f1318", inputBorder: "#1e2530", shadow: "0 8px 20px rgba(0,0,0,0.25)",
+            bg: "#080f0a", bg2: "#0d1610", bg3: "#122019", card: "#101b14",
+            border: "rgba(255,255,255,0.10)", text: "#ecfdf3", muted: "rgba(236,253,243,0.62)", strongMuted: "rgba(236,253,243,0.8)",
+            hover: "rgba(255,255,255,0.06)", input: "rgba(255,255,255,0.06)", inputBorder: "rgba(255,255,255,0.12)", shadow: "0 8px 20px rgba(0,0,0,0.28)",
         },
         light: {
-            bg: "#f3f6fb", bg2: "#ffffff", bg3: "#f8fafc", card: "#ffffff",
-            border: "#dbe3ee", text: "#0f172a", muted: "#475569", strongMuted: "#334155",
-            hover: "#eef2f8", input: "#ffffff", inputBorder: "#cbd5e1", shadow: "0 8px 20px rgba(15,23,42,0.06)",
+            bg: "#f0fdf4", bg2: "#ffffff", bg3: "#f7fff9", card: "#ffffff",
+            border: "#d1fae5", text: "#052e16", muted: "#166534", strongMuted: "#065f46",
+            hover: "#ecfdf5", input: "#ffffff", inputBorder: "#a7f3d0", shadow: "0 8px 20px rgba(6,95,70,0.08)",
         },
     };
     const d = themes[theme] || themes.dark;
     const isDark = theme === "dark";
+    const accent = "#22c55e";
+    const accentSoft = isDark ? "rgba(34,197,94,0.12)" : "#ecfdf5";
 
     function handleLogin() {
         if (pwInput === ADMIN_PASSWORD) {
@@ -246,7 +248,7 @@ export default function Admin() {
     ];
 
     if (!supabase) return (
-        <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: d.text, padding: "24px" }}>
+        <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", color: d.text, padding: "24px" }}>
             <div style={{ ...cardStyle, maxWidth: "640px", padding: "22px" }}>
                 <h2 style={{ margin: "0 0 10px", fontSize: "18px" }}>Missing Supabase Configuration</h2>
                 <p style={{ margin: "0 0 8px", fontSize: "14px", color: d.strongMuted }}>Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` in your Vercel environment variables, then redeploy.</p>
@@ -258,11 +260,11 @@ export default function Admin() {
     // ── LOGIN SCREEN ──
     if (!authed) return (
         <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-            <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: d.text }}>
+            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+            <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", color: d.text }}>
                 <div style={{ width: "100%", maxWidth: "360px", padding: "20px" }}>
                     <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                        <div style={{ fontSize: "20px", fontWeight: "800", color: d.text, marginBottom: "4px" }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>
+                        <div style={{ fontSize: "20px", fontWeight: "800", color: d.text, marginBottom: "4px", fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
                         <p style={{ fontSize: "12px", color: d.muted }}>Admin Portal</p>
                     </div>
                     <div style={{ ...cardStyle, borderRadius: "16px", padding: "32px", boxShadow: d.shadow }}>
@@ -276,7 +278,7 @@ export default function Admin() {
                         {pwError && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", marginBottom: "16px" }}>{pwError}</div>}
                         <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()}
                             placeholder="Admin password" style={{ width: "100%", padding: "12px 14px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "10px", fontSize: "14px", color: d.text, outline: "none", boxSizing: "border-box", marginBottom: "14px", fontFamily: "inherit" }} />
-                        <button onClick={handleLogin} style={{ width: "100%", padding: "12px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}>
+                        <button onClick={handleLogin} style={{ width: "100%", padding: "12px", backgroundColor: accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}>
                             Enter Admin
                         </button>
                     </div>
@@ -288,9 +290,9 @@ export default function Admin() {
     // ── MAIN ADMIN ──
     return (
         <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
             <style>{`
-                * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, sans-serif; }
+                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
                 body { background: ${d.bg}; }
                 ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 2px; }
                 .row-h:hover td { background: ${d.hover} !important; }
@@ -302,13 +304,13 @@ export default function Admin() {
                 {/* SIDEBAR */}
                 <aside style={{ width: "220px", backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, position: "fixed", top: 0, left: 0, bottom: 0, display: "flex", flexDirection: "column", zIndex: 50 }}>
                     <div style={{ padding: "20px 16px", borderBottom: `1px solid ${d.border}` }}>
-                        <div style={{ fontSize: "15px", fontWeight: "800", color: d.text }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>
+                        <div style={{ fontSize: "15px", fontWeight: "800", color: d.text, fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
                         <p style={{ fontSize: "10px", color: d.muted, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Admin Portal</p>
                     </div>
                     <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px" }}>
                         {navItems.map(item => (
                             <button key={item.id} onClick={() => setActivePage(item.id)}
-                                style={{ display: "flex", alignItems: "center", gap: "9px", padding: "10px 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "12px", textAlign: "left", backgroundColor: activePage === item.id ? "rgba(37,99,235,0.12)" : "transparent", color: activePage === item.id ? "#2563eb" : d.muted, transition: "all 0.12s" }}>
+                                style={{ display: "flex", alignItems: "center", gap: "9px", padding: "10px 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "12px", textAlign: "left", backgroundColor: activePage === item.id ? accentSoft : "transparent", color: activePage === item.id ? accent : d.muted, transition: "all 0.12s" }}>
                                 <span>{item.icon}</span>
                                 <span style={{ flex: 1 }}>{item.label}</span>
                                 {item.badge > 0 && <span style={{ backgroundColor: "#ef4444", color: "white", fontSize: "9px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800" }}>{item.badge}</span>}
@@ -357,7 +359,7 @@ export default function Admin() {
                             {/* Stats */}
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
                                 {[
-                                    { label: "Total Businesses", value: businesses.length, sub: `${active.length} active`, color: "#2563eb" },
+                                    { label: "Total Businesses", value: businesses.length, sub: `${active.length} active`, color: accent },
                                     { label: "Pending Approval", value: pending.length, sub: "Need review", color: pending.length > 0 ? "#f59e0b" : d.muted, alert: pending.length > 0 },
                                     { label: "Total Orders", value: orders.length, sub: `${todayOrders.length} today`, color: "#22c55e" },
                                     { label: "Platform Revenue", value: "GHS " + (orders.length * 1).toFixed(2), sub: "@ GHS 1/order", color: "#8b5cf6" },
@@ -415,7 +417,7 @@ export default function Admin() {
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Businesses</p>
-                                    <button onClick={() => setActivePage("businesses")} style={{ fontSize: "11px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}>View all</button>
+                                    <button onClick={() => setActivePage("businesses")} style={{ fontSize: "11px", color: accent, background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}>View all</button>
                                 </div>
                                 <div style={{ overflowX: "auto" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -464,7 +466,7 @@ export default function Admin() {
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                                                        <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "16px", color: "white", flexShrink: 0 }}>
+                                                        <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "16px", color: "white", flexShrink: 0 }}>
                                                             {biz.name.charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
@@ -525,7 +527,7 @@ export default function Admin() {
                                                 <tr key={biz.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
                                                     <td style={{ padding: "12px 14px" }}>
                                                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                                                            <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "12px", color: "white", flexShrink: 0 }}>{biz.name.charAt(0).toUpperCase()}</div>
+                                                            <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "12px", color: "white", flexShrink: 0 }}>{biz.name.charAt(0).toUpperCase()}</div>
                                                             <span style={{ fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</span>
                                                         </div>
                                                     </td>
@@ -543,7 +545,7 @@ export default function Admin() {
                                                     <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(biz.created_at).toLocaleDateString("en-GH")}</td>
                                                     <td style={{ padding: "12px 14px" }}>
                                                         <div style={{ display: "flex", gap: "6px" }}>
-                                                            <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(37,99,235,0.1)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: "6px", color: "#2563eb", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                                            <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "6px", color: accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
                                                                 Bot Config
                                                             </button>
                                                             <button onClick={() => openPaymentConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: "6px", color: "#8b5cf6", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -586,7 +588,7 @@ export default function Admin() {
                                     <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>System Health</h1>
                                     <p style={{ fontSize: "12px", color: d.muted }}>Live status of all platform services</p>
                                 </div>
-                                <button onClick={checkHealth} style={{ padding: "8px 16px", backgroundColor: "rgba(37,99,235,0.1)", border: "1px solid rgba(37,99,235,0.2)", borderRadius: "8px", color: "#2563eb", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+                                <button onClick={checkHealth} style={{ padding: "8px 16px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "8px", color: accent, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
                                     Refresh
                                 </button>
                             </div>
@@ -652,7 +654,7 @@ export default function Admin() {
                                                     <td style={{ padding: "10px 14px", fontSize: "12px", color: d.muted }}>{o.customer_phone?.replace("whatsapp:", "")}</td>
                                                     <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>{o.total_amount ? "GHS " + parseFloat(o.total_amount).toFixed(2) : "—"}</td>
                                                     <td style={{ padding: "10px 14px" }}>
-                                                        <span style={{ fontSize: "10px", fontWeight: "700", padding: "2px 8px", borderRadius: "5px", backgroundColor: o.status === "delivered" ? "rgba(34,197,94,0.1)" : o.status === "pending" ? "rgba(245,158,11,0.1)" : "rgba(37,99,235,0.1)", color: o.status === "delivered" ? "#22c55e" : o.status === "pending" ? "#f59e0b" : "#2563eb" }}>
+                                                        <span style={{ fontSize: "10px", fontWeight: "700", padding: "2px 8px", borderRadius: "5px", backgroundColor: o.status === "delivered" ? "rgba(34,197,94,0.1)" : o.status === "pending" ? "rgba(245,158,11,0.1)" : accentSoft, color: o.status === "delivered" ? "#22c55e" : o.status === "pending" ? "#f59e0b" : accent }}>
                                                             {o.status}
                                                         </span>
                                                     </td>
@@ -675,7 +677,7 @@ export default function Admin() {
                                 {[
                                     { label: "Total Revenue Processed", value: "GHS " + orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0).toFixed(2), sub: "All paid orders", color: "#22c55e" },
                                     { label: "Platform Earnings", value: "GHS " + platformRevenueByRules.toFixed(2), sub: "Based on configured commission rules", color: "#8b5cf6" },
-                                    { label: "Avg Order Value", value: "GHS " + (orders.length > 0 ? (orders.filter(o => o.total_amount).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / orders.filter(o => o.total_amount).length || 0).toFixed(2) : "0.00"), sub: "Across all businesses", color: "#2563eb" },
+                                    { label: "Avg Order Value", value: "GHS " + (orders.length > 0 ? (orders.filter(o => o.total_amount).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / orders.filter(o => o.total_amount).length || 0).toFixed(2) : "0.00"), sub: "Across all businesses", color: accent },
                                 ].map((s, i) => (
                                     <div key={i} style={{ ...cardStyle, padding: "20px" }}>
                                         <p style={{ fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>{s.label}</p>
@@ -706,7 +708,7 @@ export default function Admin() {
                                                         <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</td>
                                                         <td style={{ padding: "11px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
                                                         <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "700", color: d.text }}>{bo.length}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "13px", color: "#2563eb", fontWeight: "700" }}>{bt.length}</td>
+                                                        <td style={{ padding: "11px 14px", fontSize: "13px", color: accent, fontWeight: "700" }}>{bt.length}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(biz.name).toFixed(2)}</td>
                                                         <td style={{ padding: "11px 14px", fontSize: "12px", color: "#22c55e" }}>{bo.filter(o => o.payment_status === "paid").length}</td>
@@ -844,10 +846,10 @@ export default function Admin() {
                                         const selected = (botConfig.bot_type || "food") === type.id;
                                         return (
                                             <div key={type.id} onClick={() => setBotConfig(p => ({ ...p, bot_type: type.id }))}
-                                                style={{ padding: "14px", borderRadius: "10px", border: `1px solid ${selected ? "#2563eb" : d.border}`, backgroundColor: selected ? "rgba(37,99,235,0.08)" : d.bg3, cursor: "pointer", transition: "all 0.15s" }}>
+                                                style={{ padding: "14px", borderRadius: "10px", border: `1px solid ${selected ? accent : d.border}`, backgroundColor: selected ? accentSoft : d.bg3, cursor: "pointer", transition: "all 0.15s" }}>
                                                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
                                                     <span style={{ fontSize: "18px" }}>{type.icon}</span>
-                                                    <span style={{ fontSize: "12px", fontWeight: "700", color: selected ? "#2563eb" : d.text }}>{type.label}</span>
+                                                    <span style={{ fontSize: "12px", fontWeight: "700", color: selected ? accent : d.text }}>{type.label}</span>
                                                 </div>
                                                 <p style={{ fontSize: "11px", color: d.muted, margin: 0, lineHeight: "1.4" }}>{type.desc}</p>
                                             </div>
@@ -902,7 +904,7 @@ export default function Admin() {
                             {/* Save */}
                             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                                 <button onClick={saveBotConfig} disabled={saving}
-                                    style={{ padding: "12px 28px", backgroundColor: saving ? d.muted : "#2563eb", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer" }}>
+                                    style={{ padding: "12px 28px", backgroundColor: saving ? d.muted : accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer" }}>
                                     {saving ? "Saving..." : "Save Configuration"}
                                 </button>
                                 {saveMsg && <span style={{ fontSize: "13px", color: "#22c55e", fontWeight: "600" }}>✓ {saveMsg}</span>}
