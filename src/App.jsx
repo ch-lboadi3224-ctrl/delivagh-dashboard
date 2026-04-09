@@ -15,6 +15,7 @@ export default function App() {
     const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, delivered: 0, revenue: 0, unpaidRevenue: 0 });
     const [activePage, setActivePage] = useState("overview");
     const [activeTab, setActiveTab] = useState("all");
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [businessName, setBusinessName] = useState("");
     const [menuItems, setMenuItems] = useState([]);
     const [newItem, setNewItem] = useState({ item_name: "", item_price: "", item_description: "", category: "Main" });
@@ -402,6 +403,27 @@ export default function App() {
     const todayRevenue = todayOrders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
     const filteredOrders = activeTab === "all" ? orders : orders.filter(o => o.status === activeTab);
     const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => i.category === menuFilter);
+    const customers = Object.values(
+        orders.reduce((acc, order) => {
+            const phone = (order.customer_phone || "").replace("whatsapp:", "") || "Unknown";
+            if (!acc[phone]) {
+                acc[phone] = {
+                    phone,
+                    orders: 0,
+                    delivered: 0,
+                    pending: 0,
+                    revenue: 0,
+                    lastOrderAt: order.created_at,
+                };
+            }
+            acc[phone].orders += 1;
+            if (order.status === "delivered") acc[phone].delivered += 1;
+            if (order.status === "pending") acc[phone].pending += 1;
+            if (order.payment_status === "paid") acc[phone].revenue += parseFloat(order.total_amount) || 0;
+            if (new Date(order.created_at) > new Date(acc[phone].lastOrderAt)) acc[phone].lastOrderAt = order.created_at;
+            return acc;
+        }, {})
+    ).sort((a, b) => new Date(b.lastOrderAt) - new Date(a.lastOrderAt));
     const sidebarW = sidebarCollapsed ? "60px" : "240px";
     const unreadNotifs = notifications.length;
     const inp = (extra = {}) => ({ padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", ...extra });
@@ -409,6 +431,7 @@ export default function App() {
     const navItems = [
         { id: "overview", label: "Overview", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
         { id: "pending", label: "Orders", badge: stats.pending, icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg> },
+        { id: "customers", label: "Customers", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg> },
         { id: "menu", label: "Menu", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg> },
         { id: "insights", label: "Insights", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg> },
         { id: "settings", label: "Settings", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg> },
@@ -681,6 +704,69 @@ export default function App() {
                     );
                 })()}
 
+                {/* CUSTOMER DETAIL MODAL */}
+                {selectedCustomer && (() => {
+                    const customerOrders = orders
+                        .filter(o => (o.customer_phone || "").replace("whatsapp:", "") === selectedCustomer.phone)
+                        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    const latest = customerOrders[0];
+                    return (
+                        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setSelectedCustomer(null)}>
+                            <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "24px", width: "100%", maxWidth: "820px", boxShadow: "0 24px 64px rgba(0,0,0,0.35)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                                    <div>
+                                        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: d.text }}>Customer Details</h2>
+                                        <p style={{ margin: "4px 0 0", fontSize: "12px", color: d.muted }}>{selectedCustomer.phone}</p>
+                                    </div>
+                                    <button onClick={() => setSelectedCustomer(null)} style={{ background: d.hover, border: `1px solid ${d.border}`, borderRadius: "7px", padding: "6px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: d.muted }}>Close</button>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "14px", marginBottom: "14px" }}>
+                                    <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "14px" }}>
+                                        <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Customer Information</p>
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                                            {[
+                                                { label: "Phone", value: selectedCustomer.phone },
+                                                { label: "First Seen", value: customerOrders.length ? new Date(customerOrders[customerOrders.length - 1].created_at).toLocaleDateString("en-GH") : "—" },
+                                                { label: "Total Orders", value: selectedCustomer.orders },
+                                                { label: "Revenue", value: "GHS " + selectedCustomer.revenue.toFixed(2) },
+                                            ].map(row => (
+                                                <div key={row.label} style={{ backgroundColor: d.card, borderRadius: "8px", padding: "10px 11px", border: `1px solid ${d.border}` }}>
+                                                    <p style={{ margin: "0 0 2px", fontSize: "10px", color: d.muted }}>{row.label}</p>
+                                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.text }}>{row.value}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "14px" }}>
+                                        <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Order Statistics</p>
+                                        <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Delivered: <strong style={{ color: "#16a34a" }}>{selectedCustomer.delivered}</strong></p>
+                                        <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Pending: <strong style={{ color: "#d97706" }}>{selectedCustomer.pending}</strong></p>
+                                        <p style={{ margin: 0, fontSize: "12px", color: d.text }}>Last Order: <strong>{latest ? new Date(latest.created_at).toLocaleDateString("en-GH") : "—"}</strong></p>
+                                    </div>
+                                </div>
+                                <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "12px" }}>
+                                    <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: "700", color: d.text }}>Recent Orders</p>
+                                    {customerOrders.length === 0 ? (
+                                        <p style={{ margin: 0, color: d.muted, fontSize: "12px" }}>No orders found for this customer.</p>
+                                    ) : (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                            {customerOrders.slice(0, 6).map(order => (
+                                                <div key={order.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr auto auto auto", alignItems: "center", gap: "8px", backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "8px", padding: "9px 10px" }}>
+                                                    <span style={{ fontFamily: "monospace", fontSize: "11px", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</span>
+                                                    <span style={{ fontSize: "11px", color: d.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{order.items}</span>
+                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</span>
+                                                    <StatusBadge status={order.status} />
+                                                    <button onClick={() => { setSelectedCustomer(null); setSelectedOrder(order); }} style={{ padding: "4px 8px", backgroundColor: "rgba(37,99,235,0.12)", color: "#2563eb", border: "1px solid rgba(37,99,235,0.22)", borderRadius: "6px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>Open</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* ADD MENU MODAL */}
                 {showAddModal && (
                     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setShowAddModal(false)}>
@@ -787,7 +873,7 @@ export default function App() {
                 <main style={{ marginLeft: sidebarW, flex: 1, display: "flex", flexDirection: "column", minWidth: 0, transition: "margin-left 0.2s ease" }}>
                     <header style={{ height: "58px", backgroundColor: d.bg2, borderBottom: `1px solid ${d.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px", position: "sticky", top: 0, zIndex: 50, flexShrink: 0 }}>
                         <div>
-                            <h1 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: d.text }}>{{ overview: "Overview", pending: "Orders", menu: "Menu Manager", insights: "Insights", settings: "Settings" }[activePage]}</h1>
+                            <h1 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: d.text }}>{{ overview: "Overview", pending: "Orders", customers: "Customers", menu: "Menu Manager", insights: "Insights", settings: "Settings" }[activePage]}</h1>
                             <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -911,8 +997,9 @@ export default function App() {
                                                 {[
                                                     { label: "Add Item", action: () => { setActivePage("menu"); setShowAddModal(true); } },
                                                     { label: "Menu", action: () => setActivePage("menu") },
+                                                    { label: "Customers", action: () => setActivePage("customers") },
                                                     { label: "Insights", action: () => setActivePage("insights") },
-                                                    { label: "Settings", action: () => setActivePage("settings") },
+                                                    { label: "Orders", action: () => setActivePage("pending") },
                                                 ].map(btn => (
                                                     <button key={btn.label} onClick={btn.action} style={{ padding: "10px 6px", backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", color: d.muted }}
                                                         onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.color = "#2563eb"; }}
@@ -993,6 +1080,62 @@ export default function App() {
                                                 </table>
                                             </div>
                                         )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CUSTOMERS */}
+                        {activePage === "customers" && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
+                                    {[
+                                        { label: "Total Customers", value: customers.length, sub: "Unique WhatsApp numbers" },
+                                        { label: "Active Today", value: customers.filter(c => new Date(c.lastOrderAt).toDateString() === new Date().toDateString()).length, sub: "Ordered today" },
+                                        { label: "Pending Attention", value: customers.filter(c => c.pending > 0).length, sub: "With pending orders" },
+                                        { label: "Customer Revenue", value: "GHS " + customers.reduce((s, c) => s + c.revenue, 0).toFixed(2), sub: "Paid order value" },
+                                    ].map((s, i) => (
+                                        <div key={i} style={{ backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px", padding: "16px" }}>
+                                            <p style={{ margin: "0 0 6px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
+                                            <p style={{ margin: "0 0 3px", fontSize: "24px", fontWeight: "800", color: d.text, lineHeight: 1 }}>{s.value}</p>
+                                            <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>{s.sub}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
+                                    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${d.border}` }}>
+                                        <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: d.text }}>Customer Directory</p>
+                                    </div>
+                                    {customers.length === 0 ? (
+                                        <div style={{ padding: "64px", textAlign: "center" }}>
+                                            <p style={{ fontSize: "32px", margin: "0 0 10px" }}>👥</p>
+                                            <p style={{ color: d.muted, fontSize: "14px", fontWeight: "600", margin: 0 }}>No customers yet</p>
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: "auto" }}>
+                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "840px" }}>
+                                                <thead><tr style={{ backgroundColor: d.bg3 }}>
+                                                    {["Customer", "Orders", "Delivered", "Pending", "Paid Revenue", "Last Order", "Actions"].map(h => (
+                                                        <th key={h} style={{ padding: "10px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
+                                                    ))}
+                                                </tr></thead>
+                                                <tbody>
+                                                    {customers.map(c => (
+                                                        <tr key={c.phone} className="row-hover" style={{ borderTop: `1px solid ${d.border}` }}>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text }}>{c.phone}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text }}>{c.orders}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#16a34a", fontWeight: "700" }}>{c.delivered}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: c.pending > 0 ? "#d97706" : d.muted, fontWeight: "700" }}>{c.pending}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#2563eb", fontWeight: "700" }}>GHS {c.revenue.toFixed(2)}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted }}>{new Date(c.lastOrderAt).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                                                            <td style={{ padding: "11px 13px" }}>
+                                                                <button onClick={() => setSelectedCustomer(c)} style={{ padding: "5px 10px", backgroundColor: "rgba(37,99,235,0.12)", color: "#2563eb", border: "1px solid rgba(37,99,235,0.22)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>View</button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
