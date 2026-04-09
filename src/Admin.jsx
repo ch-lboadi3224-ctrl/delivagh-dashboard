@@ -22,6 +22,7 @@ export default function Admin() {
     const [paymentSaving, setPaymentSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState("");
     const [paymentMsg, setPaymentMsg] = useState("");
+    const [resyncingBot, setResyncingBot] = useState(false);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
     const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
@@ -201,6 +202,30 @@ export default function Admin() {
         await fetchAll();
     }
 
+    async function resyncBotBusinesses() {
+        setResyncingBot(true);
+        setSaveMsg("");
+        try {
+            const r = await fetch(API + "/whatsapp/resync-businesses", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            const data = await r.json();
+            if (!r.ok || !data?.success) {
+                const reason = data?.error || (data?.failures?.[0]?.error) || "unknown error";
+                setSaveMsg("Bot resync failed: " + reason);
+            } else {
+                setSaveMsg(`Bot resync complete: ${data.synced}/${data.totalActive} active businesses synced`);
+            }
+            setTimeout(() => setSaveMsg(""), 5000);
+        } catch (e) {
+            setSaveMsg("Bot resync failed: " + e.message);
+            setTimeout(() => setSaveMsg(""), 5000);
+        } finally {
+            setResyncingBot(false);
+        }
+    }
+
     // Stats
     const pending = businesses.filter(b => b.status === "pending");
     const active = businesses.filter(b => b.status === "active");
@@ -365,6 +390,10 @@ export default function Admin() {
                             <button onClick={fetchAll}
                                 style={{ padding: "8px 12px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.strongMuted, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
                                 Refresh Data
+                            </button>
+                            <button onClick={resyncBotBusinesses} disabled={resyncingBot}
+                                style={{ padding: "8px 12px", backgroundColor: resyncingBot ? d.muted : accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: resyncingBot ? "not-allowed" : "pointer" }}>
+                                {resyncingBot ? "Resyncing..." : "Resync Bot Directory"}
                             </button>
                             <button onClick={() => setTheme(isDark ? "light" : "dark")}
                                 style={{ padding: "8px 12px", backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(15,23,42,0.07)", border: `1px solid ${isDark ? "rgba(245,158,11,0.25)" : d.border}`, borderRadius: "8px", color: isDark ? "#f59e0b" : d.strongMuted, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
