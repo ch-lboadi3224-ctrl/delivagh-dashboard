@@ -104,32 +104,44 @@ export default function Admin() {
 
     async function approveBusiness(id) {
         setActionLoading(p => ({ ...p, [id]: "approving" }));
-        const { error: statusError } = await supabase.from("businesses").update({ status: "active" }).eq("id", id);
+
+        const biz = businesses.find(b => b.id === id);
+        if (!biz) {
+            setActionLoading(p => ({ ...p, [id]: null }));
+            return;
+        }
+
+        // 1. Set status to active
+        const { error: statusError } = await supabase
+            .from("businesses")
+            .update({ status: "active" })
+            .eq("id", id);
+
         if (statusError) {
             setSaveMsg("Could not approve: " + statusError.message);
             setTimeout(() => setSaveMsg(""), 4500);
             setActionLoading(p => ({ ...p, [id]: null }));
             return;
         }
-        const biz = businesses.find(b => b.id === id);
-        if (biz?.name) {
-            // Keep bot directory in sync in case signup-time insert failed or was skipped.
-            const payload = { business_name: (biz.name || "").trim(), description: biz.bot_greeting || "" };
-            const { error: upsertError } = await supabase.from("registered_businesses").upsert(
-                [payload],
-                { onConflict: "business_name" }
-            );
-            // If upsert fails (e.g. missing unique index for onConflict), fallback to plain insert.
-            if (upsertError) {
-                const { error: insertError } = await supabase.from("registered_businesses").insert([payload]);
-                if (insertError && !String(insertError.message || "").toLowerCase().includes("duplicate")) {
-                    setSaveMsg("Approved, but bot sync failed: " + insertError.message);
-                    setTimeout(() => setSaveMsg(""), 5000);
-                }
-            }
-            // Ensure any whitespace/casing mismatch is corrected for bot lookup consistency.
-            await supabase.from("registered_businesses").update({ business_name: payload.business_name }).eq("business_name", biz.name);
+
+        // 2. Sync to registered_businesses so bot can see it
+        const payload = {
+            business_name: biz.name.trim(),
+            description: biz.bot_greeting || ""
+        };
+
+        const { error: syncError } = await supabase
+            .from("registered_businesses")
+            .upsert([payload], { onConflict: "business_name" });
+
+        if (syncError) {
+            setSaveMsg("Approved but bot sync failed: " + syncError.message);
+            setTimeout(() => setSaveMsg(""), 5000);
+        } else {
+            setSaveMsg(biz.name.trim() + " approved and live on bot ✓");
+            setTimeout(() => setSaveMsg(""), 4000);
         }
+
         await fetchAll();
         setActionLoading(p => ({ ...p, [id]: null }));
     }

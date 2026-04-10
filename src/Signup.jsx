@@ -81,7 +81,6 @@ export default function Signup({ onSignup, onLogin }) {
             setLoading(false); return;
         }
 
-        await supabase.from("registered_businesses").insert([{ business_name: businessName.trim(), description: "" }]);
         onSignup(data.user);
         setLoading(false);
     }
