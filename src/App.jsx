@@ -773,7 +773,7 @@ export default function App() {
                                 </div>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
                                     {[
-                                        { label: "Customer", value: liveOrder.customer_phone?.replace("whatsapp:", "") },
+                                        { label: "Customer", value: (liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") || "Customer") },
                                         { label: "Items", value: liveOrder.items },
                                         { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
                                         ...(liveOrder.momo_number ? [{ label: "MoMo #", value: liveOrder.momo_number }] : []),
@@ -1070,7 +1070,12 @@ export default function App() {
                                                 <tbody>
                                                     {orders.slice(0, 8).map(order => (
                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
-                                                            <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
+                                                            <td style={{ padding: "10px 14px" }}>
+                                                                <div style={{ fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</div>
+                                                                <div style={{ fontSize: "11px", fontWeight: "700", color: d.text, marginTop: "2px", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                    {order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}
+                                                                </div>
+                                                            </td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                             <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
@@ -1159,7 +1164,9 @@ export default function App() {
                                                                         {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
+                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>
+                                                                                {order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}
+                                                                            </td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                                             <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
