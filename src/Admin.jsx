@@ -107,32 +107,20 @@ export default function Admin() {
         const biz = businesses.find(b => b.id === id);
         if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
 
-        const { error: statusError } = await supabase
-            .from("businesses").update({ status: "active" }).eq("id", id);
+        const r = await fetch(API + "/admin/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            body: JSON.stringify({ id, businessName: biz.name, phone: biz.phone, botGreeting: biz.bot_greeting })
+        });
+        const data = await r.json();
 
-        if (statusError) {
-            setSaveMsg("Could not approve: " + statusError.message);
-            setTimeout(() => setSaveMsg(""), 4500);
-            setActionLoading(p => ({ ...p, [id]: null }));
-            return;
-        }
-
-        const { error: syncError } = await supabase
-            .from("registered_businesses")
-            .upsert(
-                [{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }],
-                { onConflict: "business_name" }
-            );
-
-        if (syncError) {
-            setSaveMsg("Approved but bot sync failed: " + syncError.message);
+        if (!r.ok || data.error) {
+            setSaveMsg("Could not approve: " + (data.error || "unknown error"));
         } else {
-            setSaveMsg(biz.name.trim() + " approved and live on bot ✓");
+            setSaveMsg(biz.name + " approved and live on bot ✓");
+            setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "active" } : b));
         }
         setTimeout(() => setSaveMsg(""), 4000);
-
-        // Optimistically update local state so UI reflects immediately
-        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "active" } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
     }
@@ -141,16 +129,19 @@ export default function Admin() {
         if (!window.confirm("Reject and delete this business account?")) return;
         setActionLoading(p => ({ ...p, [id]: "rejecting" }));
         const biz = businesses.find(b => b.id === id);
+        if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
 
-        await supabase.from("businesses").update({ status: "rejected" }).eq("id", id);
+        const r = await fetch(API + "/admin/reject", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            body: JSON.stringify({ id, businessName: biz.name })
+        });
 
-        // Also remove from bot directory if it was there
-        if (biz?.name) {
-            await supabase.from("registered_businesses")
-                .delete().eq("business_name", biz.name.trim());
+        if (r.ok) {
+            setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "rejected" } : b));
+            setSaveMsg(biz.name + " rejected ✓");
+            setTimeout(() => setSaveMsg(""), 4000);
         }
-
-        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "rejected" } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
     }
@@ -161,34 +152,20 @@ export default function Admin() {
         const biz = businesses.find(b => b.id === id);
         if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
 
-        const { error } = await supabase
-            .from("businesses").update({ status: newStatus }).eq("id", id);
+        const r = await fetch(API + "/admin/suspend", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            body: JSON.stringify({ id, businessName: biz.name, newStatus, phone: biz.phone, botGreeting: biz.bot_greeting })
+        });
+        const data = await r.json();
 
-        if (error) {
-            setSaveMsg("Action failed: " + error.message);
-            setTimeout(() => setSaveMsg(""), 4000);
-            setActionLoading(p => ({ ...p, [id]: null }));
-            return;
-        }
-
-        if (newStatus === "suspended") {
-            // Remove from bot so customers can't see it
-            await supabase.from("registered_businesses")
-                .delete().eq("business_name", biz.name.trim());
-            setSaveMsg(biz.name.trim() + " suspended and removed from bot ✓");
+        if (!r.ok || data.error) {
+            setSaveMsg("Action failed: " + (data.error || "unknown error"));
         } else {
-            // Restore to bot
-            await supabase.from("registered_businesses")
-                .upsert(
-                    [{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }],
-                    { onConflict: "business_name" }
-                );
-            setSaveMsg(biz.name.trim() + " reactivated and live on bot ✓");
+            setSaveMsg(biz.name + (newStatus === "suspended" ? " suspended ✓" : " reactivated ✓"));
+            setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
         }
         setTimeout(() => setSaveMsg(""), 4000);
-
-        // Optimistically update state so button flips immediately
-        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
     }
