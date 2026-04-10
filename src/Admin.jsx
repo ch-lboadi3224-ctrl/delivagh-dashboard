@@ -104,18 +104,11 @@ export default function Admin() {
 
     async function approveBusiness(id) {
         setActionLoading(p => ({ ...p, [id]: "approving" }));
-
         const biz = businesses.find(b => b.id === id);
-        if (!biz) {
-            setActionLoading(p => ({ ...p, [id]: null }));
-            return;
-        }
+        if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
 
-        // 1. Set status to active
         const { error: statusError } = await supabase
-            .from("businesses")
-            .update({ status: "active" })
-            .eq("id", id);
+            .from("businesses").update({ status: "active" }).eq("id", id);
 
         if (statusError) {
             setSaveMsg("Could not approve: " + statusError.message);
@@ -124,59 +117,80 @@ export default function Admin() {
             return;
         }
 
-        // 2. Sync to registered_businesses so bot can see it
-        const payload = {
-            business_name: biz.name.trim(),
-            description: biz.bot_greeting || ""
-        };
-
         const { error: syncError } = await supabase
             .from("registered_businesses")
-            .upsert([payload], { onConflict: "business_name" });
+            .upsert(
+                [{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }],
+                { onConflict: "business_name" }
+            );
 
         if (syncError) {
             setSaveMsg("Approved but bot sync failed: " + syncError.message);
-            setTimeout(() => setSaveMsg(""), 5000);
         } else {
             setSaveMsg(biz.name.trim() + " approved and live on bot ✓");
-            setTimeout(() => setSaveMsg(""), 4000);
         }
+        setTimeout(() => setSaveMsg(""), 4000);
 
-        await fetchAll();
+        // Optimistically update local state so UI reflects immediately
+        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "active" } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
+        await fetchAll();
     }
 
     async function rejectBusiness(id) {
         if (!window.confirm("Reject and delete this business account?")) return;
         setActionLoading(p => ({ ...p, [id]: "rejecting" }));
+        const biz = businesses.find(b => b.id === id);
+
         await supabase.from("businesses").update({ status: "rejected" }).eq("id", id);
-        await fetchAll();
+
+        // Also remove from bot directory if it was there
+        if (biz?.name) {
+            await supabase.from("registered_businesses")
+                .delete().eq("business_name", biz.name.trim());
+        }
+
+        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "rejected" } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
+        await fetchAll();
     }
 
     async function suspendBusiness(id, current) {
         const newStatus = current === "suspended" ? "active" : "suspended";
         setActionLoading(p => ({ ...p, [id]: "suspending" }));
-
         const biz = businesses.find(b => b.id === id);
+        if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
 
-        await supabase.from("businesses").update({ status: newStatus }).eq("id", id);
+        const { error } = await supabase
+            .from("businesses").update({ status: newStatus }).eq("id", id);
 
-        if (newStatus === "suspended") {
-            // Remove from bot directory
-            await supabase
-                .from("registered_businesses")
-                .delete()
-                .eq("business_name", biz.name.trim());
-        } else {
-            // Restore to bot directory
-            await supabase
-                .from("registered_businesses")
-                .upsert([{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }], { onConflict: "business_name" });
+        if (error) {
+            setSaveMsg("Action failed: " + error.message);
+            setTimeout(() => setSaveMsg(""), 4000);
+            setActionLoading(p => ({ ...p, [id]: null }));
+            return;
         }
 
-        await fetchAll();
+        if (newStatus === "suspended") {
+            // Remove from bot so customers can't see it
+            await supabase.from("registered_businesses")
+                .delete().eq("business_name", biz.name.trim());
+            setSaveMsg(biz.name.trim() + " suspended and removed from bot ✓");
+        } else {
+            // Restore to bot
+            await supabase.from("registered_businesses")
+                .upsert(
+                    [{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }],
+                    { onConflict: "business_name" }
+                );
+            setSaveMsg(biz.name.trim() + " reactivated and live on bot ✓");
+        }
+        setTimeout(() => setSaveMsg(""), 4000);
+
+        // Optimistically update state so button flips immediately
+        setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
         setActionLoading(p => ({ ...p, [id]: null }));
+        await fetchAll();
     }
 
     function openBotConfig(biz) {
