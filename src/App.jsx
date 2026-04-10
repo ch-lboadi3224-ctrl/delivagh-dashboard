@@ -6,6 +6,21 @@ import Onboarding from "./Onboarding";
 
 const API = "https://web-production-a3a4.up.railway.app";
 
+function waDigitsFromOrder(order) {
+    return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
+}
+
+/** Number the vendor should call (customer may use a different line than WhatsApp). */
+function callDigitsForOrder(order) {
+    const c = (order.contact_phone || "").replace(/\D/g, "");
+    return c || waDigitsFromOrder(order);
+}
+
+function formatCallDisplay(order) {
+    const d = callDigitsForOrder(order);
+    return d || "—";
+}
+
 export default function App() {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -774,6 +789,10 @@ export default function App() {
                                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
                                     {[
                                         { label: "Customer", value: (liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") || "Customer") },
+                                        { label: "Phone (for calls)", value: formatCallDisplay(liveOrder) },
+                                        ...(waDigitsFromOrder(liveOrder) && callDigitsForOrder(liveOrder) !== waDigitsFromOrder(liveOrder)
+                                            ? [{ label: "WhatsApp (chat)", value: waDigitsFromOrder(liveOrder) }]
+                                            : []),
                                         { label: "Items", value: liveOrder.items },
                                         { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
                                         ...(liveOrder.momo_number ? [{ label: "MoMo #", value: liveOrder.momo_number }] : []),
@@ -1075,6 +1094,7 @@ export default function App() {
                                                                 <div style={{ fontSize: "11px", fontWeight: "700", color: d.text, marginTop: "2px", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                                     {order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}
                                                                 </div>
+                                                                <div style={{ fontSize: "10px", color: d.muted, marginTop: "2px", fontFamily: "monospace" }}>{formatCallDisplay(order)}</div>
                                                             </td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
@@ -1165,7 +1185,8 @@ export default function App() {
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>
-                                                                                {order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}
+                                                                                <div style={{ fontWeight: "700", color: d.text }}>{order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}</div>
+                                                                                <div style={{ fontSize: "10px", fontFamily: "monospace", marginTop: "2px" }}>{formatCallDisplay(order)}</div>
                                                                             </td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
