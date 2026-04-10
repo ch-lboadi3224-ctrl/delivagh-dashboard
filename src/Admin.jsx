@@ -157,7 +157,24 @@ export default function Admin() {
     async function suspendBusiness(id, current) {
         const newStatus = current === "suspended" ? "active" : "suspended";
         setActionLoading(p => ({ ...p, [id]: "suspending" }));
+
+        const biz = businesses.find(b => b.id === id);
+
         await supabase.from("businesses").update({ status: newStatus }).eq("id", id);
+
+        if (newStatus === "suspended") {
+            // Remove from bot directory
+            await supabase
+                .from("registered_businesses")
+                .delete()
+                .eq("business_name", biz.name.trim());
+        } else {
+            // Restore to bot directory
+            await supabase
+                .from("registered_businesses")
+                .upsert([{ business_name: biz.name.trim(), description: biz.bot_greeting || "", owner_phone: biz.phone || "" }], { onConflict: "business_name" });
+        }
+
         await fetchAll();
         setActionLoading(p => ({ ...p, [id]: null }));
     }
