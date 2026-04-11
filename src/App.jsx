@@ -45,7 +45,7 @@ export default function App() {
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [broadcastSending, setBroadcastSending] = useState(false);
     const [broadcastResult, setBroadcastResult] = useState(null);
-    const [insights, setInsights] = useState({ topItems: [], totalCustomers: 0, avgOrderValue: 0 });
+    const [insights, setInsights] = useState({ topItems: [], totalCustomers: 0, avgOrderValue: 0, avgRating: 0, ratingsCount: 0 });
     const [darkMode, setDarkMode] = useState(() => {
         const stored = localStorage.getItem("delivagh_dark");
         if (stored === null) return true;
@@ -248,7 +248,9 @@ export default function App() {
         const uniqueCustomers = new Set(data.map(o => o.customer_phone)).size;
         const completed = data.filter(o => o.total_amount > 0);
         const avg = completed.length > 0 ? completed.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / completed.length : 0;
-        setInsights({ topItems, totalCustomers: uniqueCustomers, avgOrderValue: avg });
+        const rated = data.filter(o => o.status === "delivered" && o.rating >= 1 && o.rating <= 5);
+        const avgRating = rated.length > 0 ? rated.reduce((s, o) => s + Number(o.rating), 0) / rated.length : 0;
+        setInsights({ topItems, totalCustomers: uniqueCustomers, avgOrderValue: avg, avgRating, ratingsCount: rated.length });
     }
 
     async function fetchBusinessName() {
@@ -807,8 +809,20 @@ export default function App() {
                                     ))}
                                     {liveOrder.notes && (
                                         <div style={{ padding: "11px 13px", backgroundColor: "#fefce8", borderRadius: "8px", border: "1px solid #fde68a" }}>
-                                            <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: "#92400e", textTransform: "uppercase" }}>Special Instructions</p>
+                                            <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: "#92400e", textTransform: "uppercase" }}>Kitchen / special requests</p>
                                             <p style={{ margin: 0, fontSize: "13px", color: "#78350f" }}>{liveOrder.notes}</p>
+                                        </div>
+                                    )}
+                                    {(liveOrder.rating >= 1 && liveOrder.rating <= 5) && (
+                                        <div style={{ padding: "11px 13px", backgroundColor: dm ? "rgba(34,197,94,0.1)" : "#ecfdf5", borderRadius: "8px", border: `1px solid ${accentBorder}` }}>
+                                            <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: accent, textTransform: "uppercase" }}>Customer rating</p>
+                                            <p style={{ margin: 0, fontSize: "15px", color: d.text }}>{"★".repeat(liveOrder.rating)}{"☆".repeat(5 - liveOrder.rating)} <span style={{ fontSize: "12px", color: d.muted }}>({liveOrder.rating}/5)</span></p>
+                                        </div>
+                                    )}
+                                    {liveOrder.feedback_comment && (
+                                        <div style={{ padding: "11px 13px", backgroundColor: dm ? "rgba(37,99,235,0.1)" : "#eff6ff", borderRadius: "8px", border: "1px solid rgba(37,99,235,0.25)" }}>
+                                            <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: "#2563eb", textTransform: "uppercase" }}>Post-delivery feedback</p>
+                                            <p style={{ margin: 0, fontSize: "13px", color: d.text }}>{liveOrder.feedback_comment}</p>
                                         </div>
                                     )}
                                     <div style={{ padding: "11px 13px", backgroundColor: d.hover, borderRadius: "8px" }}>
@@ -1166,7 +1180,7 @@ export default function App() {
                                             <div style={{ overflowX: "auto" }}>
                                                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                                                     <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                                        {["Order", "Customer", "Items", "Total", "Notes", "Type", "Payment", "Status", "Time", "Action"].map(h => (
+                                                        {["Order", "Customer", "Items", "Total", "Kitchen notes", "Rating", "Type", "Payment", "Status", "Time", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "10px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
                                                         ))}
                                                     </tr></thead>
@@ -1181,7 +1195,7 @@ export default function App() {
                                                                 const dl = isToday ? "Today" : isYest ? "Yesterday" : new Date(order.created_at).toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" });
                                                                 return (
                                                                     <>
-                                                                        {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
+                                                                        {isNew && <tr key={"d-" + od}><td colSpan="11" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>
@@ -1193,6 +1207,9 @@ export default function App() {
                                                                             <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
                                                                                 {order.notes ? <span title={order.notes} style={{ backgroundColor: dm ? "#2a1f0a" : "#fffbeb", color: "#d97706", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.notes}</span>
                                                                                     : <span style={{ color: d.muted, fontSize: "12px" }}>—</span>}
+                                                                            </td>
+                                                                            <td style={{ padding: "11px 13px", fontSize: "11px", color: d.text, whiteSpace: "nowrap", maxWidth: "100px" }}>
+                                                                                {order.rating >= 1 && order.rating <= 5 ? <span title={order.feedback_comment || ""} style={{ fontWeight: "700", color: "#f59e0b" }}>{"★".repeat(order.rating)}</span> : <span style={{ color: d.muted }}>—</span>}
                                                                             </td>
                                                                             <td style={{ padding: "11px 13px" }}>
                                                                                 <span style={{ backgroundColor: order.delivery_type === "pickup" ? (dm ? "rgba(124,58,237,0.12)" : "#ede9fe") : (dm ? "rgba(37,99,235,0.12)" : "#eff6ff"), color: order.delivery_type === "pickup" ? "#7c3aed" : "#2563eb", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700" }}>
@@ -1326,11 +1343,12 @@ export default function App() {
                         {/* INSIGHTS */}
                         {activePage === "insights" && (
                             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
                                     {[
                                         { label: "Total Customers", value: insights.totalCustomers, sub: "Unique WhatsApp numbers" },
                                         { label: "Avg Order Value", value: "GHS " + insights.avgOrderValue.toFixed(2), sub: "Per completed order" },
                                         { label: "Completion Rate", value: Math.round((stats.delivered / (stats.total || 1)) * 100) + "%", sub: "Orders delivered" },
+                                        { label: "Avg Rating", value: insights.ratingsCount > 0 ? insights.avgRating.toFixed(1) + " / 5" : "—", sub: insights.ratingsCount > 0 ? insights.ratingsCount + " ratings from delivered orders" : "No ratings yet" },
                                     ].map((s, i) => (
                                         <div key={i} style={{ backgroundColor: d.card, padding: "18px", borderRadius: "12px", border: `1px solid ${d.border}` }}>
                                             <p style={{ margin: "0 0 4px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
