@@ -791,9 +791,9 @@ export default function App() {
                                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
                                     {[
                                         { label: "Customer", value: (liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") || "Customer") },
-                                        { label: "Phone (for calls)", value: formatCallDisplay(liveOrder) },
-                                        ...(waDigitsFromOrder(liveOrder) && callDigitsForOrder(liveOrder) !== waDigitsFromOrder(liveOrder)
-                                            ? [{ label: "WhatsApp (chat)", value: waDigitsFromOrder(liveOrder) }]
+                                        { label: "Customer contact #", value: formatCallDisplay(liveOrder) },
+                                        ...(waDigitsFromOrder(liveOrder)
+                                            ? [{ label: "WhatsApp #", value: waDigitsFromOrder(liveOrder) }]
                                             : []),
                                         { label: "Items", value: liveOrder.items },
                                         { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
@@ -1178,9 +1178,9 @@ export default function App() {
                                             </div>
                                         ) : (
                                             <div style={{ overflowX: "auto" }}>
-                                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+                                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "980px" }}>
                                                     <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                                        {["Order", "Customer", "Items", "Total", "Kitchen notes", "Rating", "Type", "Payment", "Status", "Time", "Action"].map(h => (
+                                                        {["Order", "Customer", "Contact #", "Items", "Total", "Kitchen notes", "Rating", "Type", "Payment", "Status", "Time", "Action"].map(h => (
                                                             <th key={h} style={{ padding: "10px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
                                                         ))}
                                                     </tr></thead>
@@ -1195,13 +1195,14 @@ export default function App() {
                                                                 const dl = isToday ? "Today" : isYest ? "Yesterday" : new Date(order.created_at).toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" });
                                                                 return (
                                                                     <>
-                                                                        {isNew && <tr key={"d-" + od}><td colSpan="11" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
+                                                                        {isNew && <tr key={"d-" + od}><td colSpan="12" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>
                                                                                 <div style={{ fontWeight: "700", color: d.text }}>{order.customer_name || order.customer_phone?.replace("whatsapp:", "") || "Customer"}</div>
                                                                                 <div style={{ fontSize: "10px", fontFamily: "monospace", marginTop: "2px" }}>{formatCallDisplay(order)}</div>
                                                                             </td>
+                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, fontFamily: "monospace", whiteSpace: "nowrap" }}>{formatCallDisplay(order)}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                                             <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
