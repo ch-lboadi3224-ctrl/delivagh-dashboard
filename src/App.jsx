@@ -377,12 +377,28 @@ export default function App() {
         try {
             const { error } = await supabase.from("orders").update({ status }).eq("id", id);
             if (error) { fetchOrders(); return; }
-            fetch(API + "/whatsapp/notify", {
-                method: "POST", headers: { "Content-Type": "application/json" },
+            const notifyUrl = API + "/whatsapp/notify";
+            const resp = await fetch(notifyUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ customerPhone, orderId: id, status, deliveryType })
-            }).catch(e => console.log("Notify error:", e));
+            });
+            if (!resp.ok) {
+                const body = await resp.text().catch(() => "");
+                console.log("Notify HTTP error:", resp.status, body);
+                let errDetail = body;
+                try {
+                    const json = JSON.parse(body);
+                    errDetail = json?.error || json?.message || errDetail;
+                } catch { /* response not JSON */ }
+                throw new Error("WhatsApp notify failed: HTTP " + resp.status + (errDetail ? (" - " + errDetail) : ""));
+            }
             addNotif(msgs[status] || "Order updated", "success");
-        } catch (e) { fetchOrders(); }
+        } catch (e) {
+            console.log("Notify failed:", e?.message || e);
+            addNotif(e?.message ? ("Notify failed: " + e.message) : "Notify failed", "error");
+            fetchOrders();
+        }
         finally { setButtonLoading(prev => ({ ...prev, [id]: false })); }
     }
 
