@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 
 const ADMIN_PASSWORD = "delivagh_admin_2024";
-const API = "https://web-production-a3a4.up.railway.app";
+const API = "https://web-production-a167.up.railway.app";
 
 export default function Admin() {
     const [authed, setAuthed] = useState(() => sessionStorage.getItem("admin_auth") === "true");
