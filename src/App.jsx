@@ -4,7 +4,7 @@ import Login from "./Login";
 import Signup from "./Signup";
 import Onboarding from "./Onboarding";
 
-const API = "https://web-production-a3a4.up.railway.app";
+const API = "https://web-production-a167.up.railway.app";
 
 function waDigitsFromOrder(order) {
     return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
