@@ -25,6 +25,9 @@ export default function Admin() {
     const [resyncingBot, setResyncingBot] = useState(false);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
+    const [webhookLogs, setWebhookLogs] = useState([]);
+    const [webhookLogsError, setWebhookLogsError] = useState("");
+    const [webhookFilter, setWebhookFilter] = useState("");
     const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
 
     const themes = {
@@ -67,6 +70,44 @@ export default function Admin() {
         localStorage.setItem("admin_theme", theme);
         document.body.style.background = d.bg;
     }, [theme, d.bg]);
+
+    useEffect(() => {
+        if (!supabase || !authed || activePage !== "webhooks") return undefined;
+        let cancelled = false;
+        let channel = null;
+
+        (async () => {
+            setWebhookLogsError("");
+            const { data, error } = await supabase
+                .from("webhook_inbound_logs")
+                .select("*")
+                .order("created_at", { ascending: false })
+                .limit(250);
+            if (cancelled) return;
+            if (error) {
+                setWebhookLogs([]);
+                setWebhookLogsError(error.message || "Could not load webhook logs (did you run supabase_webhook_inbound_logs.sql?)");
+                return;
+            }
+            setWebhookLogs(data || []);
+
+            channel = supabase
+                .channel("admin_webhook_logs")
+                .on(
+                    "postgres_changes",
+                    { event: "INSERT", schema: "public", table: "webhook_inbound_logs" },
+                    (payload) => {
+                        setWebhookLogs((prev) => [payload.new, ...prev].slice(0, 500));
+                    }
+                )
+                .subscribe();
+        })();
+
+        return () => {
+            cancelled = true;
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, [supabase, authed, activePage]);
 
     async function fetchAll() {
         setLoading(true);
@@ -308,16 +349,56 @@ export default function Admin() {
 
     const inp = (extra = {}) => ({ padding: "10px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", ...extra });
     const cardStyle = { backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px" };
-    const pageNames = { overview: "Overview", approvals: "Pending Approvals", businesses: "Businesses", health: "System Health", analytics: "Analytics", botconfig: "Bot Configuration", payments: "Payment Settings" };
+    const pageNames = {
+        overview: "Overview",
+        approvals: "Pending Approvals",
+        businesses: "Businesses",
+        webhooks: "Webhook Logs",
+        health: "System Health",
+        analytics: "Analytics",
+        botconfig: "Bot Configuration",
+        payments: "Payment Settings",
+    };
 
     const navItems = [
         { id: "overview", label: "Overview", icon: "▦" },
         { id: "approvals", label: "Approvals", icon: "✓", badge: pending.length },
         { id: "businesses", label: "Businesses", icon: "🏪" },
+        { id: "webhooks", label: "Webhook Logs", icon: "📡" },
         { id: "payments", label: "Payments", icon: "💳" },
         { id: "health", label: "System Health", icon: "❤" },
         { id: "analytics", label: "Analytics", icon: "📊" },
     ];
+
+    function outcomeStyle(o) {
+        const x = (o || "").toLowerCase();
+        if (x === "replied") return { bg: "rgba(34,197,94,0.12)", c: "#86efac", b: "rgba(34,197,94,0.25)" };
+        if (x === "skipped") return { bg: "rgba(245,158,11,0.12)", c: "#fcd34d", b: "rgba(245,158,11,0.25)" };
+        if (x === "no_reply") return { bg: "rgba(148,163,184,0.12)", c: "#94a3b8", b: "rgba(148,163,184,0.2)" };
+        if (x === "send_failed") return { bg: "rgba(249,115,22,0.12)", c: "#fdba74", b: "rgba(249,115,22,0.25)" };
+        return { bg: "rgba(239,68,68,0.12)", c: "#fca5a5", b: "rgba(239,68,68,0.25)" };
+    }
+
+    const whFilter = webhookFilter.trim().toLowerCase();
+    const filteredWebhookLogs = whFilter
+        ? webhookLogs.filter((row) => {
+              const hay = [
+                  row.body,
+                  row.business_name,
+                  row.customer_phone,
+                  row.outcome,
+                  row.skip_reason,
+                  row.reply_preview,
+                  row.error_message,
+                  row.message_id,
+                  row.source,
+              ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase();
+              return hay.includes(whFilter);
+          })
+        : webhookLogs;
 
     if (!supabase) return (
         <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", color: d.text, padding: "24px" }}>
@@ -649,6 +730,74 @@ export default function Admin() {
                                                     </td>
                                                 </tr>
                                             ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── WEBHOOK LOGS (incoming WhatsApp / debug) ── */}
+                    {activePage === "webhooks" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "slideDown 0.2s ease", maxWidth: "1200px" }}>
+                            <div>
+                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Webhook logs</h1>
+                                <p style={{ fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>
+                                    Live feed of inbound customer messages (Meta + Twilio paths). Use this when someone says the bot did not answer (e.g. &quot;Kelewele&quot;). Rows with outcome <strong style={{ color: d.text }}>skipped</strong> were dropped before the bot ran (duplicate, stale, or out-of-order).
+                                </p>
+                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "8px" }}>
+                                    Run <code style={{ fontSize: "10px", backgroundColor: d.bg3, padding: "2px 6px", borderRadius: "4px" }}>supabase_webhook_inbound_logs.sql</code> in Supabase, then enable Realtime for table <code style={{ fontSize: "10px", backgroundColor: d.bg3, padding: "2px 6px", borderRadius: "4px" }}>webhook_inbound_logs</code> for instant updates.
+                                </p>
+                            </div>
+                            {webhookLogsError && (
+                                <div style={{ ...cardStyle, padding: "14px 18px", borderColor: "rgba(239,68,68,0.35)", backgroundColor: "rgba(239,68,68,0.06)" }}>
+                                    <p style={{ margin: 0, fontSize: "13px", color: "#fca5a5", fontWeight: "600" }}>{webhookLogsError}</p>
+                                </div>
+                            )}
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                                <input
+                                    value={webhookFilter}
+                                    onChange={(e) => setWebhookFilter(e.target.value)}
+                                    placeholder="Filter: phone, business, text (e.g. kelewele), outcome…"
+                                    style={{ ...inp({ flex: "1", minWidth: "220px", maxWidth: "420px" }) }}
+                                />
+                                <span style={{ fontSize: "12px", color: d.muted }}>{filteredWebhookLogs.length} row{filteredWebhookLogs.length !== 1 ? "s" : ""}</span>
+                            </div>
+                            <div style={{ ...cardStyle, overflow: "hidden" }}>
+                                <div style={{ overflowX: "auto", maxHeight: "70vh", overflowY: "auto" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "960px" }}>
+                                        <thead>
+                                            <tr style={{ backgroundColor: d.bg3, position: "sticky", top: 0, zIndex: 1 }}>
+                                                {["Time", "Src", "Customer", "Business", "Message", "Outcome", "Note / reply"].map((h) => (
+                                                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap", borderBottom: `1px solid ${d.border}` }}>{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredWebhookLogs.length === 0 && !webhookLogsError && (
+                                                <tr>
+                                                    <td colSpan={7} style={{ padding: "28px", textAlign: "center", color: d.muted, fontSize: "13px" }}>No log rows yet. Send a WhatsApp message to the bot — entries appear here.</td>
+                                                </tr>
+                                            )}
+                                            {filteredWebhookLogs.map((row) => {
+                                                const os = outcomeStyle(row.outcome);
+                                                const t = row.created_at ? new Date(row.created_at).toLocaleString("en-GH", { hour12: false }) : "—";
+                                                const msg = (row.body || "").length > 120 ? (row.body || "").slice(0, 120) + "…" : row.body || "—";
+                                                const note = row.skip_reason || row.error_message || (row.reply_preview ? row.reply_preview.slice(0, 160) + (row.reply_preview.length > 160 ? "…" : "") : "—");
+                                                return (
+                                                    <tr key={row.id} className="row-h" style={{ borderTop: `1px solid ${d.border}`, verticalAlign: "top" }}>
+                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{t}</td>
+                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.text, fontWeight: "600" }}>{row.source || "—"}</td>
+                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.text, maxWidth: "140px", wordBreak: "break-all" }}>{(row.customer_phone || "").replace("whatsapp:", "") || "—"}</td>
+                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.strongMuted, maxWidth: "120px" }}>{row.business_name || "—"}</td>
+                                                        <td style={{ padding: "10px 12px", fontSize: "12px", color: d.text, maxWidth: "280px" }} title={row.body || ""}>{msg}</td>
+                                                        <td style={{ padding: "10px 12px" }}>
+                                                            <span style={{ display: "inline-block", backgroundColor: os.bg, color: os.c, border: `1px solid ${os.b}`, padding: "2px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "800" }}>{row.outcome || "—"}</span>
+                                                        </td>
+                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.muted, maxWidth: "320px" }} title={note}>{note}</td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
