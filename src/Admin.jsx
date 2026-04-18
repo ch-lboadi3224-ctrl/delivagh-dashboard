@@ -177,6 +177,8 @@ export default function Admin() {
             bot_greeting: biz.bot_greeting || "",
             delivery_zones: biz.delivery_zones || "",
             min_order_amount: biz.min_order_amount || 0,
+            bot_type: biz.bot_type || "food",
+            business_context: typeof biz.business_context === "string" ? biz.business_context : "",
         });
         setActivePage("botconfig");
     }
@@ -900,7 +902,7 @@ export default function Admin() {
                                 <button onClick={() => setActivePage("businesses")} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← Back</button>
                                 <div>
                                     <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Bot Config — {selectedBiz.name}</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>Customize how the WhatsApp bot behaves for this business</p>
+                                    <p style={{ fontSize: "12px", color: d.muted }}>Customize how the WhatsApp bot behaves for this business — including the AI personality text injected into every customer chat.</p>
                                 </div>
                             </div>
 
@@ -950,6 +952,13 @@ export default function Admin() {
                                             placeholder={`e.g. Welcome to ${selectedBiz.name}! 👋 How can I help you today?`}
                                             style={{ ...inp({ height: "90px", resize: "none" }) }} />
                                         <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Leave blank to use default DelivaGH greeting</p>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>AI business context (system prompt)</label>
+                                        <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
+                                            placeholder={'Who you are, location, what you sell, vibe, hours, boundaries. Example: You represent Mama\'s Kitchen behind the Engineering Block. Waakye and kelewele. Warm, motherly tone. Orders until 10 PM only.'}
+                                            style={{ ...inp({ height: "140px", resize: "vertical" }) }} />
+                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>This is the main place to configure AI tone and shop facts: injected into the WhatsApp AI on every message for this business. If empty, the bot falls back to greeting + delivery zones only.</p>
                                     </div>
                                 </div>
                             </div>
