@@ -36,6 +36,11 @@ export function validateBusinessName(raw) {
     return { ok: true, value: name };
 }
 
+/** Three or more of the same character in a row (catches dddj, aaab, etc.). */
+function hasTripleRun(s) {
+    return /(.)\1{2,}/.test(String(s || ""));
+}
+
 /** Practical email check + normalisation (lowercase domain). */
 export function normalizeEmail(raw) {
     const s = String(raw || "").trim().toLowerCase();
@@ -44,9 +49,25 @@ export function normalizeEmail(raw) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s)) {
         return { ok: false, value: s, message: "Enter a valid email address" };
     }
-    const [local, domain] = s.split("@");
+    const at = s.lastIndexOf("@");
+    const local = s.slice(0, at);
+    const domain = s.slice(at + 1);
     if (local.length > 64 || !local.length) return { ok: false, value: s, message: "Enter a valid email address" };
     if (domain.includes("..") || local.startsWith(".") || local.endsWith(".")) {
+        return { ok: false, value: s, message: "Enter a valid email address" };
+    }
+    // Block keyboard-mash / placeholder hosts (e.g. sjhjss@dddj.com)
+    if (hasTripleRun(local)) {
+        return { ok: false, value: s, message: "That email address does not look valid" };
+    }
+    for (const label of domain.split(".")) {
+        if (label.length > 0 && hasTripleRun(label)) {
+            return { ok: false, value: s, message: "Use a real email domain you can receive mail at" };
+        }
+    }
+    // Require at least one dot in domain (already enforced) and non-numeric-only hostname
+    const hostNoTld = domain.split(".").slice(0, -1).join(".");
+    if (hostNoTld && /^[0-9.]+$/.test(hostNoTld)) {
         return { ok: false, value: s, message: "Enter a valid email address" };
     }
     return { ok: true, value: s, message: null };
