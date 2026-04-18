@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import Login from "./Login";
 import Signup from "./Signup";
 import Onboarding from "./Onboarding";
+import CompleteVendorProfile from "./CompleteVendorProfile";
 
 const API = "https://web-production-a167.up.railway.app";
 
@@ -57,6 +58,7 @@ export default function App() {
     const [showNotifPanel, setShowNotifPanel] = useState(false);
     const [authNotice, setAuthNotice] = useState("");
     const [accountStatus, setAccountStatus] = useState(null); // { type, message }
+    const [needsVendorProfile, setNeedsVendorProfile] = useState(false);
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
     const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -155,16 +157,18 @@ export default function App() {
                             : "Your account has been suspended. Please contact support.";
                 setAuthNotice(msg);
                 setAccountStatus({ type: status, message: msg });
+                setNeedsVendorProfile(false);
                 await supabase.auth.signOut();
                 if (!cancelled) {
                     setUser(null);
                     setBusinessName("");
+                    businessNameRef.current = "";
                     setOnboardingChecked(false);
                 }
             }
         })();
         return () => { cancelled = true; };
-    }, [user]);
+    }, [user, businessName]);
 
     // ── REAL-TIME — filtered by business ──
     useEffect(() => {
@@ -255,6 +259,7 @@ export default function App() {
 
     async function fetchBusinessName() {
         setOnboardingChecked(false);
+        setNeedsVendorProfile(false);
         const { data } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
         if (data && data.length > 0) {
             const biz = data[0];
@@ -290,7 +295,56 @@ export default function App() {
             }
             setOnboardingChecked(true);
         } else {
-            // If no business profile yet, don't block on onboarding.
+            const meta = user.user_metadata || {};
+            const pendingName = meta.pending_business_name;
+            const pendingPhone = meta.pending_business_phone;
+            if (pendingName && pendingPhone) {
+                const { error: insErr } = await supabase.from("businesses").insert([{
+                    name: String(pendingName).trim(),
+                    phone: String(pendingPhone).trim(),
+                    user_id: user.id,
+                    status: "pending",
+                }]);
+                if (!insErr) {
+                    await supabase.auth.updateUser({
+                        data: { pending_business_name: null, pending_business_phone: null },
+                    });
+                    const { data: data2 } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
+                    if (data2 && data2.length > 0) {
+                        const biz = data2[0];
+                        const name = biz.name;
+                        setBusinessName(name);
+                        businessNameRef.current = name;
+                        const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
+                        if (menuData) setMenuItems(menuData);
+                        const { data: sd } = await supabase.from("business_settings").select("*").eq("business_name", name).single();
+                        if (sd) setSettings(sd);
+                        const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
+                        if (done) {
+                            setOnboardingDone(true);
+                        } else {
+                            const hasMenu = !!(menuData && menuData.length > 0);
+                            const { data: existingOrders } = await supabase
+                                .from("orders")
+                                .select("id")
+                                .eq("business_name", name)
+                                .limit(1);
+                            const hasOrders = !!(existingOrders && existingOrders.length > 0);
+                            if (hasMenu || hasOrders) {
+                                localStorage.setItem("onboarding_done_" + user.id, "true");
+                                setOnboardingDone(true);
+                            } else {
+                                setOnboardingDone(false);
+                            }
+                        }
+                        setOnboardingChecked(true);
+                        return;
+                    }
+                }
+            }
+            setBusinessName("");
+            businessNameRef.current = "";
+            setNeedsVendorProfile(true);
             setOnboardingDone(true);
             setOnboardingChecked(true);
         }
@@ -549,7 +603,14 @@ export default function App() {
         </div>
     );
 
-    if (!user && page === "signup") return <Signup onSignup={() => {
+    if (!user && page === "signup") return <Signup onSignup={(opts) => {
+        if (opts?.kind === "verify_email") {
+            const msg = `We sent a confirmation link to ${opts.email || "your email"}. Open it to verify your account, then sign in. Your vendor application will be created on first login and will await admin approval.`;
+            setAuthNotice(msg);
+            setAccountStatus({ type: "verify_email", message: msg });
+            setPage("login");
+            return;
+        }
         const msg = "Account created. Wait for admin approval before first login.";
         setAuthNotice(msg);
         setAccountStatus({ type: "pending", message: msg });
@@ -560,11 +621,11 @@ export default function App() {
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
             <div style={{ width: "100%", maxWidth: "520px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "26px" }}>
                 <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
-                    Delivagh<span style={{ color: accent }}>.</span>
+                    Delivagh<span style={{ color: "#22c55e" }}>.</span>
                 </div>
                 <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Account Status</p>
                 <h2 style={{ margin: "0 0 10px", fontSize: "24px", color: "#ecfdf3", fontFamily: "'Playfair Display', serif" }}>
-                    {accountStatus.type === "pending" ? "Approval Pending" : accountStatus.type === "rejected" ? "Application Rejected" : "Account Suspended"}
+                    {accountStatus.type === "verify_email" ? "Confirm your email" : accountStatus.type === "pending" ? "Approval Pending" : accountStatus.type === "rejected" ? "Application Rejected" : "Account Suspended"}
                 </h2>
                 <p style={{ margin: "0 0 18px", color: "rgba(236,253,243,0.75)", fontSize: "14px", lineHeight: 1.6 }}>{accountStatus.message}</p>
                 <div style={{ display: "flex", gap: "10px" }}>
@@ -576,7 +637,7 @@ export default function App() {
                     </button>
                     <button
                         onClick={() => { setAccountStatus(null); setAuthNotice(""); setPage("signup"); }}
-                        style={{ flex: 1, padding: "12px", backgroundColor: accent, border: "none", borderRadius: "10px", color: "white", fontWeight: "700", cursor: "pointer" }}
+                        style={{ flex: 1, padding: "12px", backgroundColor: "#22c55e", border: "none", borderRadius: "10px", color: "white", fontWeight: "700", cursor: "pointer" }}
                     >
                         Use Different Account
                     </button>
@@ -595,6 +656,28 @@ export default function App() {
             </div>
         </div>
     );
+
+    if (user && needsVendorProfile) {
+        return (
+            <CompleteVendorProfile
+                user={user}
+                onRegistered={() => {
+                    const msg = "Account created. Wait for admin approval before first login.";
+                    setAuthNotice(msg);
+                    setAccountStatus({ type: "pending", message: msg });
+                    setNeedsVendorProfile(false);
+                    if (supabase) {
+                        supabase.auth.signOut().finally(() => {
+                            setUser(null);
+                            setBusinessName("");
+                            businessNameRef.current = "";
+                            setOnboardingChecked(false);
+                        });
+                    }
+                }}
+            />
+        );
+    }
 
     // ── ONBOARDING SCREEN ──
     if (user && businessName && onboardingChecked && !onboardingDone) {

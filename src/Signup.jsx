@@ -1,7 +1,12 @@
 ﻿import React, { useState } from "react";
 import { supabase } from "./supabase";
+import {
+    normalizeGhanaPhone,
+    validateBusinessName,
+    normalizeEmail,
+    validatePassword,
+} from "./authValidators";
 
-// FIX: Field defined OUTSIDE component so it never gets recreated on re-render
 function Field({ label, error, children }) {
     return (
         <div>
@@ -10,6 +15,25 @@ function Field({ label, error, children }) {
             {error && <p style={{ margin: "5px 0 0", fontSize: "12px", color: "#fca5a5" }}>{error}</p>}
         </div>
     );
+}
+
+function googleButtonStyle() {
+    return {
+        width: "100%",
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "10px",
+        background: "rgba(255,255,255,0.06)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: "10px",
+        color: "white",
+        fontSize: "14px",
+        fontWeight: "600",
+        cursor: "pointer",
+        fontFamily: "'DM Sans',sans-serif",
+    };
 }
 
 export default function Signup({ onSignup, onLogin }) {
@@ -23,6 +47,11 @@ export default function Signup({ onSignup, onLogin }) {
     const [showPass, setShowPass] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
     const [fieldErrors, setFieldErrors] = useState({});
+    const [step, setStep] = useState("form"); // 'form' | 'phone'
+    const [otp, setOtp] = useState("");
+    const [phoneE164, setPhoneE164] = useState("");
+    const [phoneDisplay, setPhoneDisplay] = useState("");
+    const [smsHint, setSmsHint] = useState("");
 
     function getPasswordStrength(p) {
         let s = 0;
@@ -36,53 +65,185 @@ export default function Signup({ onSignup, onLogin }) {
     const pwLabel = ["", "Weak", "Fair", "Good", "Strong"][pwS];
     const pwColor = ["", "#ef4444", "#f59e0b", "#3b82f6", "#22c55e"][pwS];
 
+    const redirectUrl = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin + "/" : undefined);
+
     function validate() {
         const e = {};
-        if (!businessName.trim()) e.businessName = "Business name is required";
-        if (!phone.trim()) e.phone = "Phone number is required";
-        if (!email.trim()) e.email = "Email is required";
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Enter a valid email address";
-        if (!password) e.password = "Password is required";
-        else {
-            const issues = [];
-            if (password.length < 8) issues.push("at least 8 characters");
-            if (!/[A-Z]/.test(password)) issues.push("one uppercase letter");
-            if (!/[0-9]/.test(password)) issues.push("one number");
-            if (issues.length > 0) e.password = "Password needs: " + issues.join(", ");
-        }
+        const bn = validateBusinessName(businessName);
+        if (!bn.ok) e.businessName = bn.message;
+
+        const ph = normalizeGhanaPhone(phone);
+        if (ph.error) e.phone = ph.error;
+
+        const em = normalizeEmail(email);
+        if (!em.ok) e.email = em.message;
+
+        const pw = validatePassword(password);
+        if (!pw.ok) e.password = pw.message;
+
         if (!confirmPassword) e.confirmPassword = "Please confirm your password";
         else if (password !== confirmPassword) e.confirmPassword = "Passwords do not match";
+
         setFieldErrors(e);
         return Object.keys(e).length === 0;
     }
 
-    async function handleSignup() {
-        if (!validate()) return;
-        setLoading(true); setError("");
+    async function insertBusinessRow(userId, name, phoneLocal) {
+        const { error: be } = await supabase.from("businesses").insert([{ name, phone: phoneLocal, user_id: userId, status: "pending" }]);
+        return be;
+    }
 
-        const { data: ep } = await supabase.from("businesses").select("id").eq("phone", phone.trim()).limit(1);
-        if (ep && ep.length > 0) { setFieldErrors(p => ({ ...p, phone: "This phone number is already in use" })); setLoading(false); return; }
-
-        const { data: en } = await supabase.from("businesses").select("id").eq("name", businessName.trim()).limit(1);
-        if (en && en.length > 0) { setFieldErrors(p => ({ ...p, businessName: "This business name is already taken" })); setLoading(false); return; }
-
-        const { data, error: ae } = await supabase.auth.signUp({ email, password });
-        if (ae) {
-            if (ae.message.toLowerCase().includes("already")) setFieldErrors(p => ({ ...p, email: "This email is already in use" }));
-            else setError(ae.message);
-            setLoading(false); return;
-        }
-
-        const { error: be } = await supabase.from("businesses").insert([{ name: businessName.trim(), phone: phone.trim(), user_id: data.user.id, status: "pending" }]);
+    async function finishSignupAfterVerified({ userId, name, phoneLocal }) {
+        const be = await insertBusinessRow(userId, name, phoneLocal);
         if (be) {
             if (be.message.includes("phone")) setFieldErrors(p => ({ ...p, phone: "This phone number is already in use" }));
             else if (be.message.includes("name")) setFieldErrors(p => ({ ...p, businessName: "This business name is already taken" }));
             else setError(be.message);
-            setLoading(false); return;
+            return false;
+        }
+        await supabase.auth.updateUser({
+            data: { pending_business_name: null, pending_business_phone: null },
+        });
+        onSignup({ kind: "pending_admin" });
+        return true;
+    }
+
+    async function handleGoogleSignup() {
+        setError("");
+        const { error: oerr } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: redirectUrl },
+        });
+        if (oerr) setError(oerr.message);
+    }
+
+    async function sendPhoneOtp(e164) {
+        const { error: uerr } = await supabase.auth.updateUser({ phone: e164 });
+        if (uerr) throw uerr;
+    }
+
+    async function handleSignup() {
+        if (!validate()) return;
+        setLoading(true);
+        setError("");
+        setSmsHint("");
+
+        const bn = validateBusinessName(businessName).value;
+        const ph = normalizeGhanaPhone(phone);
+        const em = normalizeEmail(email).value;
+
+        const { data: ep } = await supabase.from("businesses").select("id").eq("phone", ph.display).limit(1);
+        if (ep && ep.length > 0) {
+            setFieldErrors(p => ({ ...p, phone: "This phone number is already in use" }));
+            setLoading(false);
+            return;
         }
 
-        onSignup(data.user);
+        const { data: en } = await supabase.from("businesses").select("id").eq("name", bn).limit(1);
+        if (en && en.length > 0) {
+            setFieldErrors(p => ({ ...p, businessName: "This business name is already taken" }));
+            setLoading(false);
+            return;
+        }
+
+        const { data, error: ae } = await supabase.auth.signUp({
+            email: em,
+            password,
+            options: {
+                emailRedirectTo: redirectUrl,
+                data: {
+                    pending_business_name: bn,
+                    pending_business_phone: ph.display,
+                },
+            },
+        });
+
+        if (ae) {
+            if (ae.message.toLowerCase().includes("already")) setFieldErrors(p => ({ ...p, email: "This email is already in use" }));
+            else setError(ae.message);
+            setLoading(false);
+            return;
+        }
+
+        if (!data?.user?.id) {
+            setError("Could not create account. Please try again.");
+            setLoading(false);
+            return;
+        }
+
+        const session = data.session;
+
+        if (!session) {
+            onSignup({ kind: "verify_email", email: em });
+            setLoading(false);
+            return;
+        }
+
+        setPhoneE164(ph.e164);
+        setPhoneDisplay(ph.display);
+
+        try {
+            await sendPhoneOtp(ph.e164);
+            setStep("phone");
+            setSmsHint("Enter the code we sent to your phone (SMS).");
+        } catch (smsErr) {
+            console.warn("Phone OTP not sent:", smsErr);
+            setSmsHint("SMS verification is unavailable (check Supabase Phone provider). You can continue — your number is still saved on your profile.");
+            const ok = await finishSignupAfterVerified({ userId: data.user.id, name: bn, phoneLocal: ph.display });
+            if (ok) {
+                setLoading(false);
+                return;
+            }
+        }
+
         setLoading(false);
+    }
+
+    async function handleVerifyOtp() {
+        const code = otp.replace(/\D/g, "");
+        if (code.length < 6) {
+            setError("Enter the 6-digit code from SMS");
+            return;
+        }
+        setLoading(true);
+        setError("");
+        const { error: verr } = await supabase.auth.verifyOtp({
+            phone: phoneE164,
+            token: code,
+            type: "sms",
+        });
+        if (verr) {
+            setError(verr.message);
+            setLoading(false);
+            return;
+        }
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u?.user?.id;
+        if (!uid) {
+            setError("Session lost. Please sign in again.");
+            setLoading(false);
+            return;
+        }
+        const bn = validateBusinessName(businessName).value;
+        const ok = await finishSignupAfterVerified({ userId: uid, name: bn, phoneLocal: phoneDisplay });
+        setLoading(false);
+        if (ok) setStep("form");
+    }
+
+    async function skipPhoneAndFinish() {
+        setLoading(true);
+        setError("");
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u?.user?.id;
+        if (!uid) {
+            setError("Session lost. Please sign in again.");
+            setLoading(false);
+            return;
+        }
+        const bn = validateBusinessName(businessName).value;
+        const ok = await finishSignupAfterVerified({ userId: uid, name: bn, phoneLocal: phoneDisplay });
+        setLoading(false);
+        if (ok) setStep("form");
     }
 
     const clr = (key) => setFieldErrors(p => ({ ...p, [key]: "" }));
@@ -113,50 +274,78 @@ export default function Signup({ onSignup, onLogin }) {
                             <div style={{ fontSize: "22px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "4px" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
                             <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", fontWeight: "300" }}>Vendor Portal</p>
                         </div>
-                        <h1 style={{ fontSize: "26px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "6px", fontFamily: "'Playfair Display',serif" }}>Create your account</h1>
-                        <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "28px", fontWeight: "300" }}>Start receiving WhatsApp orders today</p>
 
-                        {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "20px", fontSize: "13px", animation: "shake 0.4s ease" }}>{error}</div>}
+                        {step === "phone" ? (
+                            <>
+                                <h1 style={{ fontSize: "26px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "6px", fontFamily: "'Playfair Display',serif" }}>Verify your phone</h1>
+                                <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "20px", fontWeight: "300" }}>{smsHint || `Code sent to ${phoneDisplay}`}</p>
+                                {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "16px", fontSize: "13px", animation: "shake 0.4s ease" }}>{error}</div>}
+                                <input className="ai" inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code" value={otp} onChange={e => setOtp(e.target.value)} style={{ marginBottom: "14px", letterSpacing: "0.2em", textAlign: "center", fontSize: "18px" }} />
+                                <button className="ab" onClick={handleVerifyOtp} disabled={loading}>{loading ? "Checking..." : "Verify & continue"}</button>
+                                <button type="button" onClick={skipPhoneAndFinish} disabled={loading} style={{ width: "100%", marginTop: "12px", padding: "12px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: "13px" }}>
+                                    Skip verification (not recommended)
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <h1 style={{ fontSize: "26px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "6px", fontFamily: "'Playfair Display',serif" }}>Create your account</h1>
+                                <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "28px", fontWeight: "300" }}>Start receiving WhatsApp orders today</p>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "22px" }}>
-                            <Field label="Business Name" error={fieldErrors.businessName}>
-                                <input className={`ai${fieldErrors.businessName ? " err" : ""}`} type="text" value={businessName} onChange={e => { setBusinessName(e.target.value); clr("businessName"); }} placeholder="e.g. Mama's Kitchen" />
-                            </Field>
-                            <Field label="Business Phone" error={fieldErrors.phone}>
-                                <input className={`ai${fieldErrors.phone ? " err" : ""}`} type="text" value={phone} onChange={e => { setPhone(e.target.value); clr("phone"); }} placeholder="0244000000" />
-                            </Field>
-                            <Field label="Email Address" error={fieldErrors.email}>
-                                <input className={`ai${fieldErrors.email ? " err" : ""}`} type="email" value={email} onChange={e => { setEmail(e.target.value); clr("email"); }} placeholder="your@email.com" />
-                            </Field>
-                            <Field label="Password" error={fieldErrors.password}>
-                                <div style={{ position: "relative" }}>
-                                    <input className={`ai${fieldErrors.password ? " err" : ""}`} type={showPass ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); clr("password"); }} placeholder="Min. 8 chars, 1 uppercase, 1 number" style={{ paddingRight: "54px" }} />
-                                    <button onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
-                                </div>
-                                {password.length > 0 && <>
-                                    <div style={{ display: "flex", gap: "4px", marginTop: "8px", marginBottom: "4px" }}>
-                                        {[1, 2, 3, 4].map(n => <div key={n} style={{ flex: 1, height: "3px", borderRadius: "2px", backgroundColor: n <= pwS ? pwColor : "rgba(255,255,255,0.1)", transition: "background 0.3s" }} />)}
-                                    </div>
-                                    <p style={{ margin: "0 0 6px", fontSize: "11px", color: pwColor, fontWeight: "500" }}>{pwLabel}</p>
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                                        {[{ l: "8+ chars", ok: password.length >= 8 }, { l: "Uppercase", ok: /[A-Z]/.test(password) }, { l: "Number", ok: /[0-9]/.test(password) }].map(r => (
-                                            <span key={r.l} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "999px", backgroundColor: r.ok ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.06)", color: r.ok ? "#86efac" : "rgba(255,255,255,0.3)", border: `1px solid ${r.ok ? "rgba(34,197,94,0.25)" : "rgba(255,255,255,0.08)"}`, transition: "all 0.2s" }}>{r.ok ? "✓ " : ""}{r.l}</span>
-                                        ))}
-                                    </div>
-                                </>}
-                            </Field>
-                            <Field label="Confirm Password" error={fieldErrors.confirmPassword}>
-                                <div style={{ position: "relative" }}>
-                                    <input className={`ai${fieldErrors.confirmPassword ? " err" : ""}`} type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); clr("confirmPassword"); }} placeholder="Re-enter your password" style={{ paddingRight: "80px", borderColor: confirmPassword && confirmPassword === password && !fieldErrors.confirmPassword ? "#22c55e" : undefined }} />
-                                    <div style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "8px" }}>
-                                        {confirmPassword && confirmPassword === password && <span style={{ color: "#22c55e", fontSize: "14px" }}>✓</span>}
-                                        <button onClick={() => setShowConfirm(p => !p)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showConfirm ? "Hide" : "Show"}</button>
+                                {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "20px", fontSize: "13px", animation: "shake 0.4s ease" }}>{error}</div>}
+
+                                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
+                                    <button type="button" style={googleButtonStyle()} onClick={handleGoogleSignup}>
+                                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.283 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c5.265 0 9.61-3.527 11.191-8.36l6.57 5.045C40.556 39.661 32.831 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                                        Continue with Google
+                                    </button>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "rgba(255,255,255,0.25)", fontSize: "11px" }}>
+                                        <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                                        or email
+                                        <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
                                     </div>
                                 </div>
-                            </Field>
-                        </div>
 
-                        <button className="ab" onClick={handleSignup} disabled={loading}>{loading ? "Creating account..." : "Create Account"}</button>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "22px" }}>
+                                    <Field label="Business Name" error={fieldErrors.businessName}>
+                                        <input className={`ai${fieldErrors.businessName ? " err" : ""}`} type="text" value={businessName} onChange={e => { setBusinessName(e.target.value); clr("businessName"); }} placeholder="e.g. Mama's Kitchen" />
+                                    </Field>
+                                    <Field label="Business Phone (Ghana)" error={fieldErrors.phone}>
+                                        <input className={`ai${fieldErrors.phone ? " err" : ""}`} type="tel" value={phone} onChange={e => { setPhone(e.target.value); clr("phone"); }} placeholder="0244000000" autoComplete="tel" />
+                                    </Field>
+                                    <Field label="Email Address" error={fieldErrors.email}>
+                                        <input className={`ai${fieldErrors.email ? " err" : ""}`} type="email" value={email} onChange={e => { setEmail(e.target.value); clr("email"); }} placeholder="your@email.com" autoComplete="email" />
+                                    </Field>
+                                    <Field label="Password" error={fieldErrors.password}>
+                                        <div style={{ position: "relative" }}>
+                                            <input className={`ai${fieldErrors.password ? " err" : ""}`} type={showPass ? "text" : "password"} value={password} onChange={e => { setPassword(e.target.value); clr("password"); }} placeholder="Min. 8 chars, 1 uppercase, 1 number" style={{ paddingRight: "54px" }} autoComplete="new-password" />
+                                            <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
+                                        </div>
+                                        {password.length > 0 && <>
+                                            <div style={{ display: "flex", gap: "4px", marginTop: "8px", marginBottom: "4px" }}>
+                                                {[1, 2, 3, 4].map(n => <div key={n} style={{ flex: 1, height: "3px", borderRadius: "2px", backgroundColor: n <= pwS ? pwColor : "rgba(255,255,255,0.1)", transition: "background 0.3s" }} />)}
+                                            </div>
+                                            <p style={{ margin: "0 0 6px", fontSize: "11px", color: pwColor, fontWeight: "500" }}>{pwLabel}</p>
+                                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                                                {[{ l: "8+ chars", ok: password.length >= 8 }, { l: "Uppercase", ok: /[A-Z]/.test(password) }, { l: "Number", ok: /[0-9]/.test(password) }].map(r => (
+                                                    <span key={r.l} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "999px", backgroundColor: r.ok ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.06)", color: r.ok ? "#86efac" : "rgba(255,255,255,0.3)", border: `1px solid ${r.ok ? "rgba(34,197,94,0.25)" : "rgba(255,255,255,0.08)"}`, transition: "all 0.2s" }}>{r.ok ? "✓ " : ""}{r.l}</span>
+                                                ))}
+                                            </div>
+                                        </>}
+                                    </Field>
+                                    <Field label="Confirm Password" error={fieldErrors.confirmPassword}>
+                                        <div style={{ position: "relative" }}>
+                                            <input className={`ai${fieldErrors.confirmPassword ? " err" : ""}`} type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); clr("confirmPassword"); }} placeholder="Re-enter your password" style={{ paddingRight: "80px", borderColor: confirmPassword && confirmPassword === password && !fieldErrors.confirmPassword ? "#22c55e" : undefined }} autoComplete="new-password" />
+                                            <div style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "8px" }}>
+                                                {confirmPassword && confirmPassword === password && <span style={{ color: "#22c55e", fontSize: "14px" }}>✓</span>}
+                                                <button type="button" onClick={() => setShowConfirm(p => !p)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showConfirm ? "Hide" : "Show"}</button>
+                                            </div>
+                                        </div>
+                                    </Field>
+                                </div>
+
+                                <button className="ab" onClick={handleSignup} disabled={loading}>{loading ? "Creating account..." : "Create Account"}</button>
+                            </>
+                        )}
 
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "16px", marginTop: "18px" }}>
                             {["Free to start", "GHS 1/order", "No monthly fees"].map((t, i) => (

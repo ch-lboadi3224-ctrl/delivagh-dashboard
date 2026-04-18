@@ -1,5 +1,27 @@
 ﻿import React, { useState } from "react";
 import { supabase } from "./supabase";
+import { normalizeEmail } from "./authValidators";
+
+const redirectUrl = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin + "/" : undefined);
+
+function googleButtonStyle() {
+    return {
+        width: "100%",
+        padding: "12px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "10px",
+        background: "rgba(255,255,255,0.06)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: "10px",
+        color: "white",
+        fontSize: "14px",
+        fontWeight: "600",
+        cursor: "pointer",
+        fontFamily: "'DM Sans',sans-serif",
+    };
+}
 
 export default function Login({ onLogin, onSignup, notice = "" }) {
     const [email, setEmail] = useState("");
@@ -7,32 +29,84 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [showPass, setShowPass] = useState(false);
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendMsg, setResendMsg] = useState("");
+
+    async function handleGoogle() {
+        setError("");
+        setResendMsg("");
+        const { error: oerr } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: redirectUrl },
+        });
+        if (oerr) setError(oerr.message);
+    }
+
+    async function handleResendConfirmation() {
+        const em = normalizeEmail(email);
+        if (!em.ok) {
+            setResendMsg("");
+            setError("Enter the email you signed up with, then tap Resend.");
+            return;
+        }
+        setResendLoading(true);
+        setResendMsg("");
+        setError("");
+        const { error: rerr } = await supabase.auth.resend({
+            type: "signup",
+            email: em.value,
+            options: { emailRedirectTo: redirectUrl },
+        });
+        setResendLoading(false);
+        if (rerr) setResendMsg(rerr.message);
+        else setResendMsg("Check your inbox for a new confirmation link.");
+    }
 
     async function handleLogin() {
-        if (!email || !password) { setError("Please fill in all fields."); return; }
+        setResendMsg("");
+        const em = normalizeEmail(email);
+        if (!em.ok) {
+            setError(em.message);
+            return;
+        }
+        if (!password) {
+            setError("Please enter your password.");
+            return;
+        }
         setLoading(true);
         setError("");
-        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-        if (authError) { setError(authError.message); setLoading(false); return; }
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email: em.value, password });
+        if (authError) {
+            const msg = (authError.message || "").toLowerCase();
+            if (msg.includes("confirm") || msg.includes("verified") || msg.includes("not confirmed")) {
+                setError("Please confirm your email before signing in. Use “Resend confirmation email” if you did not get the link.");
+            } else {
+                setError(authError.message);
+            }
+            setLoading(false);
+            return;
+        }
 
-        // Check approval status
         const { data: bizData } = await supabase.from("businesses").select("status").eq("user_id", data.user.id).limit(1);
         if (bizData && bizData.length > 0) {
             const status = bizData[0].status;
             if (status === "pending") {
                 await supabase.auth.signOut();
                 setError("Your account is pending admin approval. You will be notified once approved.");
-                setLoading(false); return;
+                setLoading(false);
+                return;
             }
             if (status === "rejected") {
                 await supabase.auth.signOut();
                 setError("Your account application was not approved. Please contact support.");
-                setLoading(false); return;
+                setLoading(false);
+                return;
             }
             if (status === "suspended") {
                 await supabase.auth.signOut();
                 setError("Your account has been suspended. Please contact support.");
-                setLoading(false); return;
+                setLoading(false);
+                return;
             }
         }
         onLogin(data.user);
@@ -63,13 +137,27 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                             <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", fontWeight: "300" }}>Vendor Portal</p>
                         </div>
                         <h1 style={{ fontSize: "28px", fontWeight: "700", color: "white", letterSpacing: "-0.5px", marginBottom: "8px", fontFamily: "'Playfair Display',serif" }}>Welcome back</h1>
-                        <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "36px", fontWeight: "300" }}>Sign in to manage your orders</p>
+                        <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginBottom: "28px", fontWeight: "300" }}>Sign in to manage your orders</p>
                         {notice && <div style={{ backgroundColor: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", color: "#fcd34d", padding: "12px 14px", borderRadius: "10px", marginBottom: "14px", fontSize: "13px" }}>{notice}</div>}
                         {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "20px", fontSize: "13px" }}>{error}</div>}
+                        {resendMsg && <div style={{ backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", color: "#86efac", padding: "12px 14px", borderRadius: "10px", marginBottom: "14px", fontSize: "13px" }}>{resendMsg}</div>}
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "18px" }}>
+                            <button type="button" style={googleButtonStyle()} onClick={handleGoogle}>
+                                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.283 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c5.265 0 9.61-3.527 11.191-8.36l6.57 5.045C40.556 39.661 32.831 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                                Continue with Google
+                            </button>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "rgba(255,255,255,0.25)", fontSize: "11px" }}>
+                                <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                                or email
+                                <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                            </div>
+                        </div>
+
                         <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
                             <div>
                                 <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Email</label>
-                                <input className="ai" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" />
+                                <input className="ai" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" autoComplete="email" />
                             </div>
                             <div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
@@ -77,12 +165,15 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                                     <span style={{ fontSize: "12px", color: "#22c55e", cursor: "pointer", fontWeight: "500" }}>Forgot?</span>
                                 </div>
                                 <div style={{ position: "relative" }}>
-                                    <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} />
-                                    <button onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
+                                    <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} autoComplete="current-password" />
+                                    <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
                                 </div>
                             </div>
                         </div>
                         <button className="ab" onClick={handleLogin} disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
+                        <button type="button" onClick={handleResendConfirmation} disabled={resendLoading} style={{ width: "100%", marginTop: "10px", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+                            {resendLoading ? "Sending…" : "Resend confirmation email"}
+                        </button>
                         <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<span onClick={onSignup} style={{ color: "#22c55e", fontWeight: "600", cursor: "pointer" }}>Create one free</span></p>
                     </div>
                 </div>
