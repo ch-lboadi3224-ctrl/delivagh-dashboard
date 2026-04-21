@@ -30,6 +30,12 @@ export default function Admin() {
     const [webhookFilter, setWebhookFilter] = useState("");
     const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
 
+    // Bot Learnings
+    const [learnings, setLearnings] = useState([]);
+    const [learningsLoading, setLearningsLoading] = useState(false);
+    const [learningsFilter, setLearningsFilter] = useState("pending");
+    const [learningsBiz, setLearningsBiz] = useState("all");
+
     const themes = {
         dark: {
             bg: "#080f0a", bg2: "#0d1610", bg3: "#122019", card: "#101b14",
@@ -93,13 +99,8 @@ export default function Admin() {
 
             channel = supabase
                 .channel("admin_webhook_logs")
-                .on(
-                    "postgres_changes",
-                    { event: "INSERT", schema: "public", table: "webhook_inbound_logs" },
-                    (payload) => {
-                        setWebhookLogs((prev) => [payload.new, ...prev].slice(0, 500));
-                    }
-                )
+                .on("postgres_changes", { event: "INSERT", schema: "public", table: "webhook_inbound_logs" },
+                    (payload) => { setWebhookLogs((prev) => [payload.new, ...prev].slice(0, 500)); })
                 .subscribe();
         })();
 
@@ -108,6 +109,11 @@ export default function Admin() {
             if (channel) supabase.removeChannel(channel);
         };
     }, [supabase, authed, activePage]);
+
+    useEffect(() => {
+        if (!supabase || !authed || activePage !== "learnings") return;
+        fetchLearnings();
+    }, [authed, activePage]);
 
     async function fetchAll() {
         setLoading(true);
@@ -123,20 +129,47 @@ export default function Admin() {
         setLoading(false);
     }
 
+    async function fetchLearnings() {
+        setLearningsLoading(true);
+        const { data } = await supabase
+            .from("bot_learnings")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(200);
+        setLearnings(data || []);
+        setLearningsLoading(false);
+    }
+
+    async function approveLearning(id) {
+        await supabase.from("bot_learnings").update({
+            status: "approved",
+            approved_by: "admin",
+            approved_at: new Date().toISOString()
+        }).eq("id", id);
+        setLearnings(prev => prev.map(l => l.id === id ? { ...l, status: "approved" } : l));
+    }
+
+    async function rejectLearning(id) {
+        await supabase.from("bot_learnings").update({ status: "rejected" }).eq("id", id);
+        setLearnings(prev => prev.map(l => l.id === id ? { ...l, status: "rejected" } : l));
+    }
+
+    async function deleteLearning(id) {
+        await supabase.from("bot_learnings").delete().eq("id", id);
+        setLearnings(prev => prev.filter(l => l.id !== id));
+    }
+
     async function checkHealth() {
-        // Backend
         try {
             const r = await fetch(API + "/", { signal: AbortSignal.timeout(5000) });
             setHealth(h => ({ ...h, backend: r.ok ? "ok" : "error" }));
         } catch { setHealth(h => ({ ...h, backend: "error" })); }
 
-        // Supabase
         try {
             const { error } = await supabase.from("businesses").select("id").limit(1);
             setHealth(h => ({ ...h, supabase: error ? "error" : "ok" }));
         } catch { setHealth(h => ({ ...h, supabase: "error" })); }
 
-        // Groq (via backend ping)
         try {
             const r = await fetch(API + "/whatsapp/health", { signal: AbortSignal.timeout(5000) });
             setHealth(h => ({ ...h, groq: r.ok ? "ok" : "warn" }));
@@ -232,7 +265,6 @@ export default function Admin() {
         if (!selectedBiz) return;
         setSaving(true);
 
-        // Auto-compose business_context from structured fields if override is empty
         let finalContext = (botConfig.business_context || "").trim();
         if (!finalContext) {
             const parts = [];
@@ -246,11 +278,7 @@ export default function Admin() {
         const r = await fetch(API + "/admin/update-bot-config", {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
-            body: JSON.stringify({
-                id: selectedBiz.id,
-                ...botConfig,
-                business_context: finalContext
-            })
+            body: JSON.stringify({ id: selectedBiz.id, ...botConfig, business_context: finalContext })
         });
 
         const data = await r.json();
@@ -282,7 +310,7 @@ export default function Admin() {
         const payload = {
             subaccount_code: (paymentConfig.subaccount_code || "").trim(),
             commission_type: paymentConfig.commission_type || "flat",
-            commission_value: parseFloat(paymentConfig.commission_value || 0) || 0,
+            commission_value: parseFloat(paymentConfig.commission_value) || 0,
         };
         const { error } = await supabase.from("businesses").update(payload).eq("id", selectedBiz.id);
         if (error) {
@@ -325,8 +353,8 @@ export default function Admin() {
     const today = new Date().toDateString();
     const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
     const totalRevenue = orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
+    const pendingLearnings = learnings.filter(l => l.status === "pending").length;
 
-    // Business order counts
     function bizOrders(name) { return orders.filter(o => o.business_name === name); }
     function bizRevenue(name) { return orders.filter(o => o.business_name === name && o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0); }
     const bizByName = businesses.reduce((acc, biz) => ({ ...acc, [biz.name]: biz }), {});
@@ -343,9 +371,7 @@ export default function Admin() {
 
     function bizPlatformEarnings(name) {
         const biz = bizByName[name];
-        return orders
-            .filter(o => o.business_name === name)
-            .reduce((sum, order) => sum + orderPlatformCut(order, biz), 0);
+        return orders.filter(o => o.business_name === name).reduce((sum, order) => sum + orderPlatformCut(order, biz), 0);
     }
 
     const platformRevenueByRules = orders.reduce((sum, order) => {
@@ -388,6 +414,7 @@ export default function Admin() {
         analytics: "Analytics",
         botconfig: "Bot Configuration",
         payments: "Payment Settings",
+        learnings: "Bot Learnings",
     };
 
     const navItems = [
@@ -398,6 +425,7 @@ export default function Admin() {
         { id: "payments", label: "Payments", icon: "💳" },
         { id: "health", label: "System Health", icon: "❤" },
         { id: "analytics", label: "Analytics", icon: "📊" },
+        { id: "learnings", label: "Bot Learnings", icon: "🧠", badge: pendingLearnings },
     ];
 
     function outcomeStyle(o) {
@@ -412,22 +440,10 @@ export default function Admin() {
     const whFilter = webhookFilter.trim().toLowerCase();
     const filteredWebhookLogs = whFilter
         ? webhookLogs.filter((row) => {
-              const hay = [
-                  row.body,
-                  row.business_name,
-                  row.customer_phone,
-                  row.outcome,
-                  row.skip_reason,
-                  row.reply_preview,
-                  row.error_message,
-                  row.message_id,
-                  row.source,
-              ]
-                  .filter(Boolean)
-                  .join(" ")
-                  .toLowerCase();
-              return hay.includes(whFilter);
-          })
+            const hay = [row.body, row.business_name, row.customer_phone, row.outcome, row.skip_reason, row.reply_preview, row.error_message, row.message_id, row.source]
+                .filter(Boolean).join(" ").toLowerCase();
+            return hay.includes(whFilter);
+        })
         : webhookLogs;
 
     if (!supabase) return (
@@ -440,7 +456,6 @@ export default function Admin() {
         </div>
     );
 
-    // ── LOGIN SCREEN ──
     if (!authed) return (
         <>
             <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -470,7 +485,6 @@ export default function Admin() {
         </>
     );
 
-    // ── MAIN ADMIN ──
     return (
         <>
             <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -542,8 +556,6 @@ export default function Admin() {
                                 <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Overview</h1>
                                 <p style={{ fontSize: "12px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
                             </div>
-
-                            {/* Stats */}
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
                                 {[
                                     { label: "Total Businesses", value: businesses.length, sub: `${active.length} active`, color: accent },
@@ -558,8 +570,6 @@ export default function Admin() {
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Health Summary */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>System Status</p>
@@ -582,25 +592,17 @@ export default function Admin() {
                                     </p>
                                 </div>
                             </div>
-
-                            {/* Pending approvals alert */}
                             {pending.length > 0 && (
                                 <div style={{ backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                     <div>
-                                        <p style={{ fontSize: "14px", fontWeight: "700", color: "#f59e0b", marginBottom: "3px" }}>
-                                            {pending.length} business{pending.length > 1 ? "es" : ""} waiting for approval
-                                        </p>
-                                        <p style={{ fontSize: "12px", color: "rgba(245,158,11,0.6)" }}>
-                                            {pending.map(b => b.name).join(", ")}
-                                        </p>
+                                        <p style={{ fontSize: "14px", fontWeight: "700", color: "#f59e0b", marginBottom: "3px" }}>{pending.length} business{pending.length > 1 ? "es" : ""} waiting for approval</p>
+                                        <p style={{ fontSize: "12px", color: "rgba(245,158,11,0.6)" }}>{pending.map(b => b.name).join(", ")}</p>
                                     </div>
                                     <button onClick={() => setActivePage("approvals")} style={{ padding: "8px 18px", backgroundColor: "#f59e0b", color: "#0a0d12", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
                                         Review Now
                                     </button>
                                 </div>
                             )}
-
-                            {/* Recent businesses */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Businesses</p>
@@ -639,7 +641,6 @@ export default function Admin() {
                                 <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Pending Approvals</h1>
                                 <p style={{ fontSize: "12px", color: d.muted }}>{pending.length} business{pending.length !== 1 ? "es" : ""} waiting for review</p>
                             </div>
-
                             {pending.length === 0 ? (
                                 <div style={{ ...cardStyle, padding: "64px", textAlign: "center" }}>
                                     <p style={{ fontSize: "32px", marginBottom: "12px" }}>✅</p>
@@ -722,9 +723,7 @@ export default function Admin() {
                                                     <td style={{ padding: "12px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>{biz.subaccount_code || "—"}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>
-                                                        {biz.commission_type === "percent"
-                                                            ? `${parseFloat(biz.commission_value || 0).toFixed(2)}%`
-                                                            : `GHS ${(parseFloat(biz.commission_value || 0) || 0).toFixed(2)}`}
+                                                        {biz.commission_type === "percent" ? `${parseFloat(biz.commission_value || 0).toFixed(2)}%` : `GHS ${(parseFloat(biz.commission_value || 0) || 0).toFixed(2)}`}
                                                     </td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: d.text }}>{bizOrders(biz.name).length}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
@@ -732,12 +731,8 @@ export default function Admin() {
                                                     <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(biz.created_at).toLocaleDateString("en-GH")}</td>
                                                     <td style={{ padding: "12px 14px" }}>
                                                         <div style={{ display: "flex", gap: "6px" }}>
-                                                            <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "6px", color: accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                                                Bot Config
-                                                            </button>
-                                                            <button onClick={() => openPaymentConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: "6px", color: "#8b5cf6", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                                                Payments
-                                                            </button>
+                                                            <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "6px", color: accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>Bot Config</button>
+                                                            <button onClick={() => openPaymentConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: "6px", color: "#8b5cf6", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>Payments</button>
                                                             {biz.status === "active" && (
                                                                 <button onClick={() => suspendBusiness(biz.id, biz.status)} disabled={actionLoading[biz.id] === "suspending"}
                                                                     style={{ padding: "5px 10px", backgroundColor: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: "6px", color: "#64748b", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
@@ -750,7 +745,7 @@ export default function Admin() {
                                                                     {actionLoading[biz.id] ? "..." : "Reactivate"}
                                                                 </button>
                                                             )}
-                                                            {(biz.status === "pending") && (
+                                                            {biz.status === "pending" && (
                                                                 <button onClick={() => approveBusiness(biz.id)} disabled={actionLoading[biz.id] === "approving"}
                                                                     style={{ padding: "5px 10px", backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "6px", color: "#22c55e", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
                                                                     {actionLoading[biz.id] ? "..." : "Approve"}
@@ -767,17 +762,12 @@ export default function Admin() {
                         </div>
                     )}
 
-                    {/* ── WEBHOOK LOGS (incoming WhatsApp / debug) ── */}
+                    {/* ── WEBHOOK LOGS ── */}
                     {activePage === "webhooks" && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "slideDown 0.2s ease", maxWidth: "1200px" }}>
                             <div>
                                 <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Webhook logs</h1>
-                                <p style={{ fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>
-                                    Live feed of inbound customer messages (Meta + Twilio paths). Use this when someone says the bot did not answer (e.g. &quot;Kelewele&quot;). Rows with outcome <strong style={{ color: d.text }}>skipped</strong> were dropped before the bot ran (duplicate, stale, or out-of-order).
-                                </p>
-                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "8px" }}>
-                                    Run <code style={{ fontSize: "10px", backgroundColor: d.bg3, padding: "2px 6px", borderRadius: "4px" }}>supabase_webhook_inbound_logs.sql</code> in Supabase, then enable Realtime for table <code style={{ fontSize: "10px", backgroundColor: d.bg3, padding: "2px 6px", borderRadius: "4px" }}>webhook_inbound_logs</code> for instant updates.
-                                </p>
+                                <p style={{ fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>Live feed of inbound customer messages (Meta + Twilio paths).</p>
                             </div>
                             {webhookLogsError && (
                                 <div style={{ ...cardStyle, padding: "14px 18px", borderColor: "rgba(239,68,68,0.35)", backgroundColor: "rgba(239,68,68,0.06)" }}>
@@ -785,12 +775,9 @@ export default function Admin() {
                                 </div>
                             )}
                             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-                                <input
-                                    value={webhookFilter}
-                                    onChange={(e) => setWebhookFilter(e.target.value)}
-                                    placeholder="Filter: phone, business, text (e.g. kelewele), outcome…"
-                                    style={{ ...inp({ flex: "1", minWidth: "220px", maxWidth: "420px" }) }}
-                                />
+                                <input value={webhookFilter} onChange={(e) => setWebhookFilter(e.target.value)}
+                                    placeholder="Filter: phone, business, text, outcome…"
+                                    style={{ ...inp({ flex: "1", minWidth: "220px", maxWidth: "420px" }) }} />
                                 <span style={{ fontSize: "12px", color: d.muted }}>{filteredWebhookLogs.length} row{filteredWebhookLogs.length !== 1 ? "s" : ""}</span>
                             </div>
                             <div style={{ ...cardStyle, overflow: "hidden" }}>
@@ -805,9 +792,7 @@ export default function Admin() {
                                         </thead>
                                         <tbody>
                                             {filteredWebhookLogs.length === 0 && !webhookLogsError && (
-                                                <tr>
-                                                    <td colSpan={7} style={{ padding: "28px", textAlign: "center", color: d.muted, fontSize: "13px" }}>No log rows yet. Send a WhatsApp message to the bot — entries appear here.</td>
-                                                </tr>
+                                                <tr><td colSpan={7} style={{ padding: "28px", textAlign: "center", color: d.muted, fontSize: "13px" }}>No log rows yet.</td></tr>
                                             )}
                                             {filteredWebhookLogs.map((row) => {
                                                 const os = outcomeStyle(row.outcome);
@@ -847,13 +832,12 @@ export default function Admin() {
                                     Refresh
                                 </button>
                             </div>
-
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                                 {[
-                                    { label: "Backend API", sub: "Railway — Node.js/Express", status: health.backend, url: API, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
-                                    { label: "Database", sub: "Supabase — PostgreSQL", status: health.supabase, url: "supabase.com", detail: health.supabase === "ok" ? "Connected, queries working" : "Connection failed" },
-                                    { label: "AI Bot", sub: "Groq — llama-3.3-70b", status: health.groq, url: "groq.com", detail: health.groq === "ok" ? "API responding" : "Degraded or unreachable" },
-                                    { label: "WhatsApp Bridge", sub: "Twilio + whatsapp-web.js", status: "warn", url: "", detail: "Running via ngrok — fragile" },
+                                    { label: "Backend API", sub: "Railway — Node.js/Express", status: health.backend, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
+                                    { label: "Database", sub: "Supabase — PostgreSQL", status: health.supabase, detail: health.supabase === "ok" ? "Connected, queries working" : "Connection failed" },
+                                    { label: "AI Bot", sub: "Groq — llama-3.3-70b", status: health.groq, detail: health.groq === "ok" ? "API responding" : "Degraded or unreachable" },
+                                    { label: "WhatsApp Bridge", sub: "Meta Cloud API", status: "warn", detail: "Check Meta Business Manager for status" },
                                 ].map((s, i) => (
                                     <div key={i} style={{ ...cardStyle, padding: "22px" }}>
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
@@ -867,8 +851,6 @@ export default function Admin() {
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Database stats */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Database Tables</p>
@@ -877,7 +859,7 @@ export default function Admin() {
                                     {[
                                         { table: "orders", count: orders.length },
                                         { table: "businesses", count: businesses.length },
-                                        { table: "menus", count: "—" },
+                                        { table: "bot_learnings", count: learnings.length },
                                         { table: "conversations", count: "—" },
                                     ].map((t, i) => (
                                         <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
@@ -888,8 +870,6 @@ export default function Admin() {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Recent activity */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Orders (All Businesses)</p>
@@ -927,7 +907,6 @@ export default function Admin() {
                     {activePage === "analytics" && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
                             <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text }}>Platform Analytics</h1>
-
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
                                 {[
                                     { label: "Total Revenue Processed", value: "GHS " + orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0).toFixed(2), sub: "All paid orders", color: "#22c55e" },
@@ -941,8 +920,6 @@ export default function Admin() {
                                     </div>
                                 ))}
                             </div>
-
-                            {/* Per-business breakdown */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Business Performance</p>
@@ -1005,7 +982,6 @@ export default function Admin() {
                                             <p style={{ fontSize: "12px", color: d.muted }}>Configure vendor subaccount routing and platform commission rule</p>
                                         </div>
                                     </div>
-
                                     <div style={cardStyle}>
                                         <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                             <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Settlement Routing</p>
@@ -1019,7 +995,6 @@ export default function Admin() {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div style={cardStyle}>
                                         <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                             <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Platform Commission Rule</p>
@@ -1041,7 +1016,6 @@ export default function Admin() {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div style={cardStyle}>
                                         <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                             <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Business Earnings Snapshot</p>
@@ -1061,7 +1035,6 @@ export default function Admin() {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                                         <button onClick={savePaymentConfig} disabled={paymentSaving}
                                             style={{ padding: "12px 28px", backgroundColor: paymentSaving ? d.muted : "#8b5cf6", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: paymentSaving ? "not-allowed" : "pointer" }}>
@@ -1081,11 +1054,9 @@ export default function Admin() {
                                 <button onClick={() => setActivePage("businesses")} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← Back</button>
                                 <div>
                                     <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Bot Config — {selectedBiz.name}</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>Customize how the WhatsApp bot behaves for this business — including the AI personality text injected into every customer chat.</p>
+                                    <p style={{ fontSize: "12px", color: d.muted }}>Customize how the WhatsApp bot behaves for this business.</p>
                                 </div>
                             </div>
-
-                            {/* Bot Type */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Type</p>
@@ -1112,77 +1083,52 @@ export default function Admin() {
                                     })}
                                 </div>
                             </div>
-
-                            {/* Bot Identity */ }
-                                < div style={cardStyle}>
-                            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Identity</p>
-                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "2px" }}>Define the AI personality for this business. Fill the structured fields — they auto-compose into the AI prompt.</p>
+                            <div style={cardStyle}>
+                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Identity</p>
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "2px" }}>Define the AI personality for this business.</p>
+                                </div>
+                                <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Bot Name</label>
+                                        <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))} placeholder="e.g. Mama's Bot" style={inp()} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🎭 Persona & Vibe</label>
+                                        <textarea value={botConfig.bot_persona || ""} onChange={e => setBotConfig(p => ({ ...p, bot_persona: e.target.value }))}
+                                            placeholder="e.g. Warm and motherly. Speaks like a friendly Ghanaian aunty."
+                                            style={{ ...inp({ height: "80px", resize: "none" }) }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📍 Location & Pickup Info</label>
+                                        <input value={botConfig.bot_location || ""} onChange={e => setBotConfig(p => ({ ...p, bot_location: e.target.value }))}
+                                            placeholder="e.g. Behind the Engineering Block, UMaT." style={inp()} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📌 Special Instructions</label>
+                                        <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
+                                            placeholder="e.g. Closed on Sundays. Delivery is GHS 5."
+                                            style={{ ...inp({ height: "80px", resize: "none" }) }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🚫 Boundaries</label>
+                                        <input value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(p => ({ ...p, bot_boundaries: e.target.value }))}
+                                            placeholder="e.g. Only sell food items. Do not discuss other businesses." style={inp()} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Custom Greeting</label>
+                                        <textarea value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(p => ({ ...p, bot_greeting: e.target.value }))}
+                                            placeholder={`e.g. Welcome to ${selectedBiz?.name}! 👋`}
+                                            style={{ ...inp({ height: "70px", resize: "none" }) }} />
+                                    </div>
+                                    <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>⚙️ Advanced: Full AI Context Override</label>
+                                        <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
+                                            placeholder="Optional: Write a full custom AI system prompt. Overrides all structured fields above."
+                                            style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-
-                                {/* Bot Name */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Bot Name</label>
-                                    <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))}
-                                        placeholder="e.g. Mama's Bot" style={inp()} />
-                                </div>
-
-                                {/* Persona / Vibe */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🎭 Persona & Vibe</label>
-                                    <textarea value={botConfig.bot_persona || ""} onChange={e => setBotConfig(p => ({ ...p, bot_persona: e.target.value }))}
-                                        placeholder="e.g. Warm and motherly. Speaks like a friendly Ghanaian aunty. Uses phrases like 'my dear' and 'chale'."
-                                        style={{ ...inp({ height: "80px", resize: "none" }) }} />
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>The voice and tone of the bot for this business.</p>
-                                </div>
-
-                                {/* Location */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📍 Location & Pickup Info</label>
-                                    <input value={botConfig.bot_location || ""} onChange={e => setBotConfig(p => ({ ...p, bot_location: e.target.value }))}
-                                        placeholder="e.g. Behind the Engineering Block, UMaT. Pickup at the blue kiosk." style={inp()} />
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Where customers pick up or where the business is based.</p>
-                                </div>
-
-                                {/* Special Instructions */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📌 Special Instructions</label>
-                                    <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
-                                        placeholder="e.g. Closed on Sundays. Delivery is GHS 5. Orders above GHS 50 get free delivery."
-                                        style={{ ...inp({ height: "80px", resize: "none" }) }} />
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Rules, hours, delivery fees — things the bot should always tell customers.</p>
-                                </div>
-
-                                {/* Boundaries */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🚫 Boundaries</label>
-                                    <input value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(p => ({ ...p, bot_boundaries: e.target.value }))}
-                                        placeholder="e.g. Only sell food items. Do not discuss other businesses. Do not take orders after 10 PM." style={inp()} />
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>What the bot must never do or discuss for this business.</p>
-                                </div>
-
-                                {/* Custom Greeting */}
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Custom Greeting</label>
-                                    <textarea value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(p => ({ ...p, bot_greeting: e.target.value }))}
-                                        placeholder={`e.g. Welcome to ${selectedBiz?.name}! 👋 How can I help you today?`}
-                                        style={{ ...inp({ height: "70px", resize: "none" }) }} />
-                                </div>
-
-                                {/* Advanced — full override */}
-                                <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>⚙️ Advanced: Full AI Context Override</label>
-                                    <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
-                                        placeholder="Optional: Write a full custom AI system prompt. If filled, this overrides all structured fields above and is injected directly into the AI."
-                                        style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Leave empty to use the structured fields above. Only fill this if you need full control.</p>
-                                </div>
-
-                            </div>
-                        </div>
-
-                            {/* Delivery Settings */}
                             <div style={cardStyle}>
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Delivery Settings</p>
@@ -1192,18 +1138,13 @@ export default function Admin() {
                                         <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Delivery Zones</label>
                                         <input value={botConfig.delivery_zones || ""} onChange={e => setBotConfig(p => ({ ...p, delivery_zones: e.target.value }))}
                                             placeholder="e.g. Accra, Tema, Madina, East Legon" style={inp()} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Comma-separated areas this business delivers to</p>
                                     </div>
                                     <div>
                                         <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Minimum Order Amount (GHS)</label>
-                                        <input type="number" value={botConfig.min_order_amount || ""} onChange={e => setBotConfig(p => ({ ...p, min_order_amount: e.target.value }))}
-                                            placeholder="0" style={inp()} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Set to 0 for no minimum</p>
+                                        <input type="number" value={botConfig.min_order_amount || ""} onChange={e => setBotConfig(p => ({ ...p, min_order_amount: e.target.value }))} placeholder="0" style={inp()} />
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Save */}
                             <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                                 <button onClick={saveBotConfig} disabled={saving}
                                     style={{ padding: "12px 28px", backgroundColor: saving ? d.muted : accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer" }}>
@@ -1211,6 +1152,137 @@ export default function Admin() {
                                 </button>
                                 {saveMsg && <span style={{ fontSize: "13px", color: "#22c55e", fontWeight: "600" }}>✓ {saveMsg}</span>}
                             </div>
+                        </div>
+                    )}
+
+                    {/* ── BOT LEARNINGS ── */}
+                    {activePage === "learnings" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+                                <div>
+                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>🧠 Bot Learnings</h1>
+                                    <p style={{ fontSize: "12px", color: d.muted }}>Review what the bot learned from real conversations. Approve to activate, reject to discard.</p>
+                                </div>
+                                <button onClick={fetchLearnings}
+                                    style={{ padding: "8px 16px", backgroundColor: accentSoft, color: accent, border: `1px solid ${accent}`, borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                                    ↻ Refresh
+                                </button>
+                            </div>
+
+                            {/* Stats */}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
+                                {[
+                                    { label: "Pending Review", value: learnings.filter(l => l.status === "pending").length, color: "#f59e0b" },
+                                    { label: "Approved", value: learnings.filter(l => l.status === "approved").length, color: "#22c55e" },
+                                    { label: "Corrections", value: learnings.filter(l => l.learning_type === "correction").length, color: "#818cf8" },
+                                    { label: "Popular Items", value: learnings.filter(l => l.learning_type === "popular_item").length, color: "#38bdf8" },
+                                ].map(stat => (
+                                    <div key={stat.label} style={{ ...cardStyle, padding: "14px 16px" }}>
+                                        <p style={{ fontSize: "22px", fontWeight: "800", color: stat.color, margin: 0 }}>{stat.value}</p>
+                                        <p style={{ fontSize: "11px", color: d.muted, margin: "2px 0 0" }}>{stat.label}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Filters */}
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                                {["all", "pending", "approved", "rejected"].map(f => (
+                                    <button key={f} onClick={() => setLearningsFilter(f)}
+                                        style={{ padding: "6px 14px", borderRadius: "7px", fontSize: "12px", fontWeight: "600", cursor: "pointer", border: `1px solid ${learningsFilter === f ? accent : d.border}`, backgroundColor: learningsFilter === f ? accentSoft : "transparent", color: learningsFilter === f ? accent : d.muted, transition: "all 0.15s" }}>
+                                        {f.charAt(0).toUpperCase() + f.slice(1)}
+                                    </button>
+                                ))}
+                                <select value={learningsBiz} onChange={e => setLearningsBiz(e.target.value)}
+                                    style={{ ...inp({ width: "auto", padding: "6px 12px", fontSize: "12px" }) }}>
+                                    <option value="all">All Businesses</option>
+                                    {[...new Set(learnings.map(l => l.business_name))].map(biz => (
+                                        <option key={biz} value={biz}>{biz}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Learning cards */}
+                            {learningsLoading ? (
+                                <div style={{ textAlign: "center", padding: "40px", color: d.muted, fontSize: "14px" }}>Loading learnings...</div>
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                    {learnings
+                                        .filter(l => learningsFilter === "all" || l.status === learningsFilter)
+                                        .filter(l => learningsBiz === "all" || l.business_name === learningsBiz)
+                                        .map(learning => {
+                                            const typeColors = {
+                                                correction: { bg: "rgba(129,114,248,0.1)", c: "#818cf8", icon: "🔧" },
+                                                popular_item: { bg: "rgba(56,189,248,0.1)", c: "#38bdf8", icon: "🔥" },
+                                                frequent_question: { bg: "rgba(251,191,36,0.1)", c: "#fbbf24", icon: "❓" },
+                                            };
+                                            const tc = typeColors[learning.learning_type] || typeColors.correction;
+                                            const statusColor = learning.status === "approved" ? "#22c55e" : learning.status === "rejected" ? "#ef4444" : "#f59e0b";
+
+                                            return (
+                                                <div key={learning.id} style={{ ...cardStyle, padding: "16px", borderLeft: `3px solid ${tc.c}` }}>
+                                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                                                        <div style={{ flex: 1, minWidth: "200px" }}>
+                                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+                                                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "5px", backgroundColor: tc.bg, color: tc.c, fontWeight: "700" }}>
+                                                                    {tc.icon} {learning.learning_type.replace("_", " ").toUpperCase()}
+                                                                </span>
+                                                                <span style={{ fontSize: "11px", color: d.muted }}>{learning.business_name}</span>
+                                                                <span style={{ fontSize: "11px", color: statusColor, fontWeight: "600" }}>● {learning.status}</span>
+                                                                {learning.times_seen > 1 && (
+                                                                    <span style={{ fontSize: "11px", color: d.muted }}>seen {learning.times_seen}x</span>
+                                                                )}
+                                                            </div>
+                                                            {learning.trigger_phrase && (
+                                                                <div style={{ marginBottom: "6px" }}>
+                                                                    <span style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>TRIGGER: </span>
+                                                                    <span style={{ fontSize: "12px", color: d.text, fontStyle: "italic" }}>"{learning.trigger_phrase}"</span>
+                                                                </div>
+                                                            )}
+                                                            <div style={{ marginBottom: "6px" }}>
+                                                                <span style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>BEHAVIOR: </span>
+                                                                <span style={{ fontSize: "12px", color: d.text }}>{learning.correct_behavior}</span>
+                                                            </div>
+                                                            {learning.source_context && (
+                                                                <details style={{ marginTop: "8px" }}>
+                                                                    <summary style={{ fontSize: "11px", color: d.muted, cursor: "pointer" }}>View conversation context</summary>
+                                                                    <pre style={{ fontSize: "11px", color: d.muted, backgroundColor: d.bg3, padding: "8px", borderRadius: "6px", marginTop: "6px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                                                        {learning.source_context}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                            <p style={{ fontSize: "11px", color: d.muted, margin: "8px 0 0" }}>{new Date(learning.created_at).toLocaleString()}</p>
+                                                        </div>
+                                                        {learning.status === "pending" && (
+                                                            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                                                                <button onClick={() => approveLearning(learning.id)}
+                                                                    style={{ padding: "7px 14px", backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                                                                    ✓ Approve
+                                                                </button>
+                                                                <button onClick={() => rejectLearning(learning.id)}
+                                                                    style={{ padding: "7px 14px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                                                                    ✗ Reject
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {learning.status !== "pending" && (
+                                                            <button onClick={() => deleteLearning(learning.id)}
+                                                                style={{ padding: "7px 12px", backgroundColor: "transparent", color: d.muted, border: `1px solid ${d.border}`, borderRadius: "7px", fontSize: "11px", cursor: "pointer" }}>
+                                                                🗑 Delete
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    {learnings.filter(l => learningsFilter === "all" || l.status === learningsFilter).filter(l => learningsBiz === "all" || l.business_name === learningsBiz).length === 0 && (
+                                        <div style={{ textAlign: "center", padding: "40px", color: d.muted }}>
+                                            <p style={{ fontSize: "32px", margin: "0 0 8px" }}>🧠</p>
+                                            <p style={{ fontSize: "14px", fontWeight: "600" }}>No learnings yet</p>
+                                            <p style={{ fontSize: "12px", margin: "4px 0 0" }}>The bot will start learning as customers interact with it.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
