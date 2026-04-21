@@ -243,13 +243,22 @@ export default function Admin() {
             finalContext = parts.join("\n\n");
         }
 
-        const payload = {
-            ...botConfig,
-            business_context: finalContext
-        };
+        const r = await fetch(API + "/admin/update-bot-config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            body: JSON.stringify({
+                id: selectedBiz.id,
+                ...botConfig,
+                business_context: finalContext
+            })
+        });
 
-        await supabase.from("businesses").update(payload).eq("id", selectedBiz.id);
-        setSaveMsg("Saved!");
+        const data = await r.json();
+        if (!r.ok || data.error) {
+            setSaveMsg("Could not save: " + (data.error || "unknown error"));
+        } else {
+            setSaveMsg("Saved!");
+        }
         setTimeout(() => setSaveMsg(""), 3000);
         setSaving(false);
         await fetchAll();
