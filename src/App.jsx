@@ -468,11 +468,16 @@ export default function App() {
     async function saveSettings() {
         try {
             const name = businessNameRef.current || businessName;
-            const { error } = await supabase.from("business_settings").upsert({ business_name: name, ...settings }, { onConflict: "business_name" });
-            if (error) throw error;
-            setSettingsSaved(true); setTimeout(() => setSettingsSaved(false), 3000);
+            const res = await fetch(API + "/whatsapp/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ businessName: name, ...settings })
+            });
+            if (!res.ok) throw new Error("Failed");
+            setSettingsSaved(true);
+            setTimeout(() => setSettingsSaved(false), 3000);
             addNotif("Settings saved", "success");
-        } catch (e) { alert("Failed to save settings."); }
+        } catch (e) { alert("Failed to save settings: " + e.message); }
     }
 
     async function sendBroadcast() {
