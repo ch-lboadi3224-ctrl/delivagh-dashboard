@@ -220,6 +220,10 @@ export default function Admin() {
             min_order_amount: biz.min_order_amount || 0,
             bot_type: biz.bot_type || "food",
             business_context: typeof biz.business_context === "string" ? biz.business_context : "",
+            bot_persona: biz.bot_persona || "",
+            bot_location: biz.bot_location || "",
+            bot_special_instructions: biz.bot_special_instructions || "",
+            bot_boundaries: biz.bot_boundaries || "",
         });
         setActivePage("botconfig");
     }
@@ -227,7 +231,24 @@ export default function Admin() {
     async function saveBotConfig() {
         if (!selectedBiz) return;
         setSaving(true);
-        await supabase.from("businesses").update(botConfig).eq("id", selectedBiz.id);
+
+        // Auto-compose business_context from structured fields if override is empty
+        let finalContext = (botConfig.business_context || "").trim();
+        if (!finalContext) {
+            const parts = [];
+            if (botConfig.bot_persona?.trim()) parts.push("PERSONA & VIBE:\n" + botConfig.bot_persona.trim());
+            if (botConfig.bot_location?.trim()) parts.push("LOCATION & PICKUP:\n" + botConfig.bot_location.trim());
+            if (botConfig.bot_special_instructions?.trim()) parts.push("SPECIAL INSTRUCTIONS:\n" + botConfig.bot_special_instructions.trim());
+            if (botConfig.bot_boundaries?.trim()) parts.push("BOUNDARIES (strictly follow):\n" + botConfig.bot_boundaries.trim());
+            finalContext = parts.join("\n\n");
+        }
+
+        const payload = {
+            ...botConfig,
+            business_context: finalContext
+        };
+
+        await supabase.from("businesses").update(payload).eq("id", selectedBiz.id);
         setSaveMsg("Saved!");
         setTimeout(() => setSaveMsg(""), 3000);
         setSaving(false);
@@ -1083,34 +1104,74 @@ export default function Admin() {
                                 </div>
                             </div>
 
-                            {/* Bot Identity */}
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Identity</p>
-                                </div>
-                                <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Bot Name</label>
-                                        <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))}
-                                            placeholder="e.g. Mama's Bot" style={inp()} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Shown to customers in the chat header</p>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Custom Greeting</label>
-                                        <textarea value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(p => ({ ...p, bot_greeting: e.target.value }))}
-                                            placeholder={`e.g. Welcome to ${selectedBiz.name}! 👋 How can I help you today?`}
-                                            style={{ ...inp({ height: "90px", resize: "none" }) }} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Leave blank to use default DelivaGH greeting</p>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>AI business context (system prompt)</label>
-                                        <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
-                                            placeholder={'Who you are, location, what you sell, vibe, hours, boundaries. Example: You represent Mama\'s Kitchen behind the Engineering Block. Waakye and kelewele. Warm, motherly tone. Orders until 10 PM only.'}
-                                            style={{ ...inp({ height: "140px", resize: "vertical" }) }} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>This is the main place to configure AI tone and shop facts: injected into the WhatsApp AI on every message for this business. If empty, the bot falls back to greeting + delivery zones only.</p>
-                                    </div>
-                                </div>
+                            {/* Bot Identity */ }
+                                < div style={cardStyle}>
+                            <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Identity</p>
+                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "2px" }}>Define the AI personality for this business. Fill the structured fields — they auto-compose into the AI prompt.</p>
                             </div>
+                            <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+
+                                {/* Bot Name */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Bot Name</label>
+                                    <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))}
+                                        placeholder="e.g. Mama's Bot" style={inp()} />
+                                </div>
+
+                                {/* Persona / Vibe */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🎭 Persona & Vibe</label>
+                                    <textarea value={botConfig.bot_persona || ""} onChange={e => setBotConfig(p => ({ ...p, bot_persona: e.target.value }))}
+                                        placeholder="e.g. Warm and motherly. Speaks like a friendly Ghanaian aunty. Uses phrases like 'my dear' and 'chale'."
+                                        style={{ ...inp({ height: "80px", resize: "none" }) }} />
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>The voice and tone of the bot for this business.</p>
+                                </div>
+
+                                {/* Location */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📍 Location & Pickup Info</label>
+                                    <input value={botConfig.bot_location || ""} onChange={e => setBotConfig(p => ({ ...p, bot_location: e.target.value }))}
+                                        placeholder="e.g. Behind the Engineering Block, UMaT. Pickup at the blue kiosk." style={inp()} />
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Where customers pick up or where the business is based.</p>
+                                </div>
+
+                                {/* Special Instructions */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📌 Special Instructions</label>
+                                    <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
+                                        placeholder="e.g. Closed on Sundays. Delivery is GHS 5. Orders above GHS 50 get free delivery."
+                                        style={{ ...inp({ height: "80px", resize: "none" }) }} />
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Rules, hours, delivery fees — things the bot should always tell customers.</p>
+                                </div>
+
+                                {/* Boundaries */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🚫 Boundaries</label>
+                                    <input value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(p => ({ ...p, bot_boundaries: e.target.value }))}
+                                        placeholder="e.g. Only sell food items. Do not discuss other businesses. Do not take orders after 10 PM." style={inp()} />
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>What the bot must never do or discuss for this business.</p>
+                                </div>
+
+                                {/* Custom Greeting */}
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Custom Greeting</label>
+                                    <textarea value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(p => ({ ...p, bot_greeting: e.target.value }))}
+                                        placeholder={`e.g. Welcome to ${selectedBiz?.name}! 👋 How can I help you today?`}
+                                        style={{ ...inp({ height: "70px", resize: "none" }) }} />
+                                </div>
+
+                                {/* Advanced — full override */}
+                                <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>⚙️ Advanced: Full AI Context Override</label>
+                                    <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
+                                        placeholder="Optional: Write a full custom AI system prompt. If filled, this overrides all structured fields above and is injected directly into the AI."
+                                        style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
+                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "4px" }}>Leave empty to use the structured fields above. Only fill this if you need full control.</p>
+                                </div>
+
+                            </div>
+                        </div>
 
                             {/* Delivery Settings */}
                             <div style={cardStyle}>
