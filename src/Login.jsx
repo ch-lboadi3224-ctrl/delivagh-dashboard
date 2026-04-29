@@ -43,7 +43,7 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
         setResendMsg("");
         const { error: oerr } = await supabase.auth.signInWithOAuth({
             provider: "google",
-            options: { redirectTo: redirectUrl },
+            options: { redirectTo: "https://www.delivagh.app" },
         });
         if (oerr) setError(oerr.message);
     }
