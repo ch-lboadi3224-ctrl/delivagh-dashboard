@@ -5,7 +5,8 @@ import Signup from "./Signup";
 import Onboarding from "./Onboarding";
 import CompleteVendorProfile from "./CompleteVendorProfile";
 
-const API = "https://web-production-a167.up.railway.app";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://web-production-a167.up.railway.app";
+const API = BACKEND_URL;
 
 function waDigitsFromOrder(order) {
     return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
