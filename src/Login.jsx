@@ -31,6 +31,12 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
     const [showPass, setShowPass] = useState(false);
     const [resendLoading, setResendLoading] = useState(false);
     const [resendMsg, setResendMsg] = useState("");
+    const [showResendButton, setShowResendButton] = useState(false);
+
+    function loginErrorSuggestsUnconfirmedEmail(message) {
+        const m = (message || "").toLowerCase();
+        return m.includes("email") && m.includes("confirm");
+    }
 
     async function handleGoogle() {
         setError("");
@@ -66,10 +72,12 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
         setResendMsg("");
         const em = normalizeEmail(email);
         if (!em.ok) {
+            setShowResendButton(false);
             setError(em.message);
             return;
         }
         if (!password) {
+            setShowResendButton(false);
             setError("Please enter your password.");
             return;
         }
@@ -77,12 +85,14 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
         setError("");
         const { data, error: authError } = await supabase.auth.signInWithPassword({ email: em.value, password });
         if (authError) {
-            const msg = (authError.message || "").toLowerCase();
-            if (msg.includes("confirm") || msg.includes("verified") || msg.includes("not confirmed")) {
-                setError("Please confirm your email before signing in. Use “Resend confirmation email” if you did not get the link.");
-            } else {
-                setError(authError.message);
+            const raw = authError.message || "";
+            const lower = raw.toLowerCase();
+            let displayMsg = raw;
+            if (lower.includes("confirm") || lower.includes("verified") || lower.includes("not confirmed")) {
+                displayMsg = "Please confirm your email before signing in. Use “Resend confirmation email” if you did not get the link.";
             }
+            setError(displayMsg);
+            setShowResendButton(loginErrorSuggestsUnconfirmedEmail(displayMsg));
             setLoading(false);
             return;
         }
@@ -92,18 +102,21 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
             const status = bizData[0].status;
             if (status === "pending") {
                 await supabase.auth.signOut();
+                setShowResendButton(false);
                 setError("Your account is pending admin approval. You will be notified once approved.");
                 setLoading(false);
                 return;
             }
             if (status === "rejected") {
                 await supabase.auth.signOut();
+                setShowResendButton(false);
                 setError("Your account application was not approved. Please contact support.");
                 setLoading(false);
                 return;
             }
             if (status === "suspended") {
                 await supabase.auth.signOut();
+                setShowResendButton(false);
                 setError("Your account has been suspended. Please contact support.");
                 setLoading(false);
                 return;
@@ -157,7 +170,7 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
                             <div>
                                 <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Email</label>
-                                <input className="ai" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" autoComplete="email" />
+                                <input className="ai" type="email" value={email} onChange={e => { setShowResendButton(false); setEmail(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" autoComplete="email" />
                             </div>
                             <div>
                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
@@ -165,15 +178,17 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                                     <span style={{ fontSize: "12px", color: "#22c55e", cursor: "pointer", fontWeight: "500" }}>Forgot?</span>
                                 </div>
                                 <div style={{ position: "relative" }}>
-                                    <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} autoComplete="current-password" />
+                                    <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => { setShowResendButton(false); setPassword(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} autoComplete="current-password" />
                                     <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
                                 </div>
                             </div>
                         </div>
                         <button className="ab" onClick={handleLogin} disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
-                        <button type="button" onClick={handleResendConfirmation} disabled={resendLoading} style={{ width: "100%", marginTop: "10px", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
-                            {resendLoading ? "Sending…" : "Resend confirmation email"}
-                        </button>
+                        {showResendButton && (
+                            <button type="button" onClick={handleResendConfirmation} disabled={resendLoading} style={{ width: "100%", marginTop: "10px", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+                                {resendLoading ? "Sending…" : "Resend confirmation email"}
+                            </button>
+                        )}
                         <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<span onClick={onSignup} style={{ color: "#22c55e", fontWeight: "600", cursor: "pointer" }}>Create one free</span></p>
                     </div>
                 </div>
