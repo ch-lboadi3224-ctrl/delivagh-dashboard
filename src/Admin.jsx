@@ -26,6 +26,18 @@ export default function Admin() {
     const [resyncingBot, setResyncingBot] = useState(false);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
+    const [showCreateVendorModal, setShowCreateVendorModal] = useState(false);
+    const [creatingVendor, setCreatingVendor] = useState(false);
+    const [createVendorMsg, setCreateVendorMsg] = useState("");
+    const [createVendorErr, setCreateVendorErr] = useState("");
+    const [vendorForm, setVendorForm] = useState({
+        businessName: "",
+        ownerName: "",
+        email: "",
+        phone: "",
+        password: "",
+        commissionRate: "1.00",
+    });
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [webhookLogsError, setWebhookLogsError] = useState("");
     const [webhookFilter, setWebhookFilter] = useState("");
@@ -347,6 +359,77 @@ export default function Admin() {
             setTimeout(() => setSaveMsg(""), 5000);
         } finally {
             setResyncingBot(false);
+        }
+    }
+
+    function randomPassword() {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        let out = "";
+        for (let i = 0; i < 12; i++) out += chars[Math.floor(Math.random() * chars.length)];
+        return out;
+    }
+
+    function openCreateVendorModal() {
+        setCreateVendorMsg("");
+        setCreateVendorErr("");
+        setVendorForm({
+            businessName: "",
+            ownerName: "",
+            email: "",
+            phone: "",
+            password: randomPassword(),
+            commissionRate: "1.00",
+        });
+        setShowCreateVendorModal(true);
+    }
+
+    function closeCreateVendorModal() {
+        if (creatingVendor) return;
+        setShowCreateVendorModal(false);
+    }
+
+    async function createVendor(e) {
+        e.preventDefault();
+        if (creatingVendor) return;
+        setCreateVendorMsg("");
+        setCreateVendorErr("");
+
+        if (!vendorForm.businessName.trim() || !vendorForm.ownerName.trim() || !vendorForm.email.trim() || !vendorForm.phone.trim()) {
+            setCreateVendorErr("Please fill in all required fields.");
+            return;
+        }
+
+        setCreatingVendor(true);
+        try {
+            const r = await fetch(API + "/api/admin/create-vendor", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+                body: JSON.stringify({
+                    businessName: vendorForm.businessName.trim(),
+                    ownerName: vendorForm.ownerName.trim(),
+                    email: vendorForm.email.trim(),
+                    phone: vendorForm.phone.trim(),
+                    password: vendorForm.password.trim(),
+                    commissionRate: parseFloat(vendorForm.commissionRate) || 1.00,
+                })
+            });
+            const data = await r.json();
+            if (!r.ok || data.error) {
+                setCreateVendorErr(data.error || "Could not create vendor.");
+                setCreatingVendor(false);
+                return;
+            }
+
+            setCreateVendorMsg("Vendor created successfully.");
+            await fetchAll();
+            setTimeout(() => {
+                setShowCreateVendorModal(false);
+                setCreateVendorMsg("");
+            }, 900);
+        } catch (err) {
+            setCreateVendorErr(err.message || "Could not create vendor.");
+        } finally {
+            setCreatingVendor(false);
         }
     }
 
@@ -701,9 +784,15 @@ export default function Admin() {
                     {/* ── BUSINESSES ── */}
                     {activePage === "businesses" && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div>
-                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>All Businesses</h1>
-                                <p style={{ fontSize: "12px", color: d.muted }}>{businesses.length} registered businesses</p>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                                <div>
+                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>All Businesses</h1>
+                                    <p style={{ fontSize: "12px", color: d.muted }}>{businesses.length} registered businesses</p>
+                                </div>
+                                <button onClick={openCreateVendorModal}
+                                    style={{ padding: "9px 14px", backgroundColor: accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                    + Add Vendor
+                                </button>
                             </div>
                             <div style={cardStyle}>
                                 <div style={{ overflowX: "auto" }}>
@@ -1291,6 +1380,70 @@ export default function Admin() {
 
                 </main>
             </div>
+
+            {showCreateVendorModal && (
+                <div onClick={closeCreateVendorModal}
+                    style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "520px", ...cardStyle, boxShadow: d.shadow }}>
+                        <div style={{ padding: "16px 18px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: d.text }}>Add Vendor</h2>
+                                <p style={{ margin: "4px 0 0", fontSize: "12px", color: d.muted }}>Create auth user + vendor records in one step</p>
+                            </div>
+                            <button onClick={closeCreateVendorModal} style={{ background: "transparent", border: `1px solid ${d.border}`, borderRadius: "7px", color: d.muted, cursor: "pointer", fontSize: "12px", padding: "5px 10px" }}>Close</button>
+                        </div>
+
+                        <form onSubmit={createVendor} style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <div>
+                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Business Name</label>
+                                <input value={vendorForm.businessName} onChange={(e) => setVendorForm((p) => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Ama's Kitchen" style={inp()} required />
+                            </div>
+                            <div>
+                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Owner Full Name</label>
+                                <input value={vendorForm.ownerName} onChange={(e) => setVendorForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="e.g. Ama Mensah" style={inp()} required />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Email Address</label>
+                                    <input type="email" value={vendorForm.email} onChange={(e) => setVendorForm((p) => ({ ...p, email: e.target.value }))} placeholder="owner@business.com" style={inp()} required />
+                                </div>
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Phone Number</label>
+                                    <input value={vendorForm.phone} onChange={(e) => setVendorForm((p) => ({ ...p, phone: e.target.value }))} placeholder="WhatsApp number" style={inp()} required />
+                                </div>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", alignItems: "end" }}>
+                                <div>
+                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Password</label>
+                                    <input value={vendorForm.password} onChange={(e) => setVendorForm((p) => ({ ...p, password: e.target.value }))} placeholder="Set or auto-generate password" style={inp()} />
+                                </div>
+                                <button type="button" onClick={() => setVendorForm((p) => ({ ...p, password: randomPassword() }))}
+                                    style={{ height: "40px", padding: "0 12px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "8px", color: accent, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                                    Generate
+                                </button>
+                            </div>
+                            <div>
+                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Commission Rate</label>
+                                <input type="number" min="0" step="0.01" value={vendorForm.commissionRate} onChange={(e) => setVendorForm((p) => ({ ...p, commissionRate: e.target.value }))} placeholder="1.00" style={inp()} />
+                            </div>
+
+                            {createVendorErr && <p style={{ margin: 0, fontSize: "12px", color: "#ef4444", fontWeight: "700" }}>{createVendorErr}</p>}
+                            {createVendorMsg && <p style={{ margin: 0, fontSize: "12px", color: "#22c55e", fontWeight: "700" }}>{createVendorMsg}</p>}
+
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "6px" }}>
+                                <button type="button" onClick={closeCreateVendorModal}
+                                    style={{ padding: "9px 14px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", fontWeight: "700", cursor: creatingVendor ? "not-allowed" : "pointer" }} disabled={creatingVendor}>
+                                    Cancel
+                                </button>
+                                <button type="submit"
+                                    style={{ padding: "9px 14px", backgroundColor: creatingVendor ? d.muted : accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: creatingVendor ? "not-allowed" : "pointer" }} disabled={creatingVendor}>
+                                    {creatingVendor ? "Creating..." : "Create Vendor"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </>
     );
 }
