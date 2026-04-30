@@ -63,6 +63,8 @@ export default function App() {
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
     const [onboardingChecked, setOnboardingChecked] = useState(false);
+    const [isAdminLinkedVendor, setIsAdminLinkedVendor] = useState(false);
+    const [showEmptyMenuBanner, setShowEmptyMenuBanner] = useState(false);
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -261,10 +263,69 @@ export default function App() {
     async function fetchBusinessName() {
         setOnboardingChecked(false);
         setNeedsVendorProfile(false);
-        const { data } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
-        if (data && data.length > 0) {
-            const biz = data[0];
-            const name = biz.name;
+        setIsAdminLinkedVendor(false);
+        setShowEmptyMenuBanner(false);
+
+        let biz = null;
+        let linkedViaDirectory = false;
+        let businessNameFromDirectory = null;
+
+        const { data: byUserId } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
+        if (byUserId && byUserId.length > 0) {
+            biz = byUserId[0];
+        } else {
+            // Admin-created vendors may not be linked by user_id yet.
+            // Resolve business_name from registered_businesses via auth email/id (when present),
+            // with metadata fallback, then confirm it exists in businesses.
+            if (user.email) {
+                try {
+                    const { data: regByEmail } = await supabase
+                        .from("registered_businesses")
+                        .select("business_name")
+                        .eq("email", user.email)
+                        .limit(1);
+                    businessNameFromDirectory = regByEmail?.[0]?.business_name || null;
+                } catch (_) { /* email column may not exist in some environments */ }
+            }
+            if (!businessNameFromDirectory) {
+                try {
+                    const { data: regByUserId } = await supabase
+                        .from("registered_businesses")
+                        .select("business_name")
+                        .eq("user_id", user.id)
+                        .limit(1);
+                    businessNameFromDirectory = regByUserId?.[0]?.business_name || null;
+                } catch (_) { /* user_id column may not exist in some environments */ }
+            }
+            if (!businessNameFromDirectory) {
+                businessNameFromDirectory = user.user_metadata?.business_name || null;
+            }
+
+            if (businessNameFromDirectory) {
+                let byName = null;
+                const { data: bizByName } = await supabase
+                    .from("businesses")
+                    .select("*")
+                    .eq("name", businessNameFromDirectory)
+                    .limit(1);
+                byName = bizByName?.[0] || null;
+                if (!byName) {
+                    const { data: bizByBusinessName } = await supabase
+                        .from("businesses")
+                        .select("*")
+                        .eq("business_name", businessNameFromDirectory)
+                        .limit(1);
+                    byName = bizByBusinessName?.[0] || null;
+                }
+                if (byName) {
+                    biz = byName;
+                    linkedViaDirectory = true;
+                }
+            }
+        }
+
+        if (biz) {
+            const name = biz.name || biz.business_name || "";
             setBusinessName(name);
             businessNameRef.current = name;
 
@@ -274,24 +335,34 @@ export default function App() {
             const { data: sd } = await supabase.from("business_settings").select("*").eq("business_name", name).single();
             if (sd) setSettings(sd);
 
-            // ── ONBOARDING CHECK ──
-            const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
-            if (done) {
+            if (linkedViaDirectory) {
+                setIsAdminLinkedVendor(true);
+                localStorage.setItem("onboarding_done_" + user.id, "true");
                 setOnboardingDone(true);
+                const dismissed = localStorage.getItem("empty_menu_banner_dismissed_" + user.id) === "true";
+                const isMenuEmpty = !menuData || menuData.length === 0;
+                setShowEmptyMenuBanner(isMenuEmpty && !dismissed);
             } else {
-                // Existing vendors should not get forced back into onboarding.
-                const hasMenu = !!(menuData && menuData.length > 0);
-                const { data: existingOrders } = await supabase
-                    .from("orders")
-                    .select("id")
-                    .eq("business_name", name)
-                    .limit(1);
-                const hasOrders = !!(existingOrders && existingOrders.length > 0);
-                if (hasMenu || hasOrders) {
-                    localStorage.setItem("onboarding_done_" + user.id, "true");
+                setIsAdminLinkedVendor(false);
+                // ── ONBOARDING CHECK ──
+                const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
+                if (done) {
                     setOnboardingDone(true);
                 } else {
-                    setOnboardingDone(false);
+                    // Existing vendors should not get forced back into onboarding.
+                    const hasMenu = !!(menuData && menuData.length > 0);
+                    const { data: existingOrders } = await supabase
+                        .from("orders")
+                        .select("id")
+                        .eq("business_name", name)
+                        .limit(1);
+                    const hasOrders = !!(existingOrders && existingOrders.length > 0);
+                    if (hasMenu || hasOrders) {
+                        localStorage.setItem("onboarding_done_" + user.id, "true");
+                        setOnboardingDone(true);
+                    } else {
+                        setOnboardingDone(false);
+                    }
                 }
             }
             setOnboardingChecked(true);
@@ -345,11 +416,23 @@ export default function App() {
             }
             setBusinessName("");
             businessNameRef.current = "";
+            setIsAdminLinkedVendor(false);
+            setShowEmptyMenuBanner(false);
             setNeedsVendorProfile(true);
             setOnboardingDone(true);
             setOnboardingChecked(true);
         }
     }
+
+    useEffect(() => {
+        if (!isAdminLinkedVendor) {
+            setShowEmptyMenuBanner(false);
+            return;
+        }
+        if (menuItems.length > 0) {
+            setShowEmptyMenuBanner(false);
+        }
+    }, [isAdminLinkedVendor, menuItems]);
 
     // ── FIX: fetchOrders filtered by business ──
     async function fetchOrders() {
@@ -1160,6 +1243,28 @@ export default function App() {
                     </header>
 
                     <div style={{ padding: "20px 22px", flex: 1, overflowY: "auto" }}>
+                        {showEmptyMenuBanner && (
+                            <div style={{ marginBottom: "14px", backgroundColor: dm ? "rgba(34,197,94,0.08)" : "#ecfdf5", border: `1px solid ${dm ? "rgba(34,197,94,0.3)" : "#86efac"}`, borderRadius: "10px", padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                                <p style={{ margin: 0, color: d.text, fontSize: "13px", fontWeight: "600" }}>Your menu is empty - add your first item to get started.</p>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <button
+                                        onClick={() => setActivePage("menu")}
+                                        style={{ backgroundColor: accent, color: "white", border: "none", borderRadius: "8px", padding: "7px 12px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                    >
+                                        Go to Menu
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            localStorage.setItem("empty_menu_banner_dismissed_" + user.id, "true");
+                                            setShowEmptyMenuBanner(false);
+                                        }}
+                                        style={{ background: "transparent", color: d.muted, border: `1px solid ${d.border}`, borderRadius: "8px", padding: "7px 10px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+                                    >
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* OVERVIEW */}
                         {activePage === "overview" && (
