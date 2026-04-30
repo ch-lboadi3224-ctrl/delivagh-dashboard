@@ -297,6 +297,7 @@ export default function Admin() {
         setSelectedBiz(biz);
         setPaymentConfig({
             subaccount_code: biz.subaccount_code || "",
+            split_code: biz.split_code || biz.subaccount_code || "",
             commission_type: biz.commission_type || "flat",
             commission_value: typeof biz.commission_value === "number" ? biz.commission_value : (parseFloat(biz.commission_value) || 1),
         });
@@ -310,6 +311,7 @@ export default function Admin() {
         setPaymentMsg("");
         const payload = {
             subaccount_code: (paymentConfig.subaccount_code || "").trim(),
+            split_code: (paymentConfig.subaccount_code || "").trim(),
             commission_type: paymentConfig.commission_type || "flat",
             commission_value: parseFloat(paymentConfig.commission_value) || 0,
         };
