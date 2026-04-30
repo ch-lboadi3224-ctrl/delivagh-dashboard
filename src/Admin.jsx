@@ -36,7 +36,6 @@ export default function Admin() {
         email: "",
         phone: "",
         password: "",
-        commissionRate: "1.00",
     });
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [webhookLogsError, setWebhookLogsError] = useState("");
@@ -378,7 +377,6 @@ export default function Admin() {
             email: "",
             phone: "",
             password: randomPassword(),
-            commissionRate: "1.00",
         });
         setShowCreateVendorModal(true);
     }
@@ -410,7 +408,6 @@ export default function Admin() {
                     email: vendorForm.email.trim(),
                     phone: vendorForm.phone.trim(),
                     password: vendorForm.password.trim(),
-                    commissionRate: parseFloat(vendorForm.commissionRate) || 1.00,
                 })
             });
             const data = await r.json();
@@ -1422,11 +1419,6 @@ export default function Admin() {
                                     Generate
                                 </button>
                             </div>
-                            <div>
-                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Commission Rate</label>
-                                <input type="number" min="0" step="0.01" value={vendorForm.commissionRate} onChange={(e) => setVendorForm((p) => ({ ...p, commissionRate: e.target.value }))} placeholder="1.00" style={inp()} />
-                            </div>
-
                             {createVendorErr && <p style={{ margin: 0, fontSize: "12px", color: "#ef4444", fontWeight: "700" }}>{createVendorErr}</p>}
                             {createVendorMsg && <p style={{ margin: 0, fontSize: "12px", color: "#22c55e", fontWeight: "700" }}>{createVendorMsg}</p>}
 
