@@ -5,7 +5,7 @@ import Signup from "./Signup";
 import Onboarding from "./Onboarding";
 import CompleteVendorProfile from "./CompleteVendorProfile";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://web-production-a167.up.railway.app";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
 
 /** Wall-clock session length for vendor portal (7 days). */

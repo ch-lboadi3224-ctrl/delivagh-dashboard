@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 
 const ADMIN_PASSWORD = "delivagh_admin_2024";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://web-production-a167.up.railway.app";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
 
 export default function Admin() {
