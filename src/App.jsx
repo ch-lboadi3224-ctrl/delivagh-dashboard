@@ -206,7 +206,13 @@ export default function App() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             const u = session?.user ?? null;
             setUser(u);
-            if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+            if (event === "SIGNED_IN") {
+                setAuthLoading(false);
+            } else if (event === "SIGNED_OUT") {
+                setAuthLoading(false);
+            } else if (event === "INITIAL_SESSION") {
+                setAuthLoading(false);
+            } else {
                 setAuthLoading(false);
             }
             const uid = u?.id;
@@ -224,9 +230,16 @@ export default function App() {
                 ensureVendorSessionStartTimestamp(uid);
             }
             setAuthLoading(false);
+        }).catch(() => {
+            setAuthLoading(false);
         });
         return () => subscription.unsubscribe();
     }, [supabase]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setAuthLoading(false), 5000);
+        return () => clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         if (!supabase) return;
