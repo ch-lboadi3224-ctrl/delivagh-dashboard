@@ -56,6 +56,22 @@ function formatCallDisplay(order) {
     return d || "—";
 }
 
+class ErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { error: null }; }
+    componentDidCatch(error, info) { console.error("[ErrorBoundary] crashed:", error, info); }
+    static getDerivedStateFromError(error) { return { error }; }
+    render() {
+        if (this.state.error) return (
+            <div style={{ padding: "40px", color: "red", fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+                <h2>Dashboard crashed:</h2>
+                <p>{this.state.error?.message}</p>
+                <p>{this.state.error?.stack}</p>
+            </div>
+        );
+        return this.props.children;
+    }
+}
+
 export default function App() {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -1122,7 +1138,7 @@ export default function App() {
 
     // DEAD CODE BELOW — kept for reference, never reached
     if (false) {
-        return (
+        return <ErrorBoundary>
             <>
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
                 <div style={{ minHeight: "100vh", backgroundColor: "#0f1117", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", fontFamily: "Inter, sans-serif" }}>
@@ -1256,6 +1272,6 @@ export default function App() {
                     </div>
                 </div>
             </>
-        );
+        </ErrorBoundary>;
     }
 }
