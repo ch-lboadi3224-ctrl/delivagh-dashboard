@@ -13,7 +13,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     console.warn("Sentry init failed:", e);
   }
 }
-import React, { StrictMode, Component } from 'react'
+import React, { Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
@@ -55,9 +55,7 @@ class RootErrorBoundary extends Component {
 }
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <RootErrorBoundary>
-      <RootComponent />
-    </RootErrorBoundary>
-  </StrictMode>,
+  <RootErrorBoundary>
+    <RootComponent />
+  </RootErrorBoundary>,
 )
