@@ -348,6 +348,20 @@ export default function App() {
         return () => { cancelled = true; };
     }, [supabase, user?.id]);
 
+    useEffect(() => {
+        if (!user?.id) return;
+        const timer = setTimeout(() => {
+            setOnboardingChecked(prev => {
+                if (!prev) {
+                    console.warn("[delivagh] onboardingChecked timeout — forcing true");
+                    setNeedsVendorProfile(true);
+                }
+                return true;
+            });
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [user?.id]);
+
     // ── REAL-TIME — filtered by business ──
     useEffect(() => {
         if (!supabase || !user?.id) return;
