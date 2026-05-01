@@ -503,11 +503,14 @@ export default function App() {
             }
 
             if (biz) {
+                console.log("[debug] biz found:", biz);
+                console.log("[debug] name:", biz.name || biz.business_name);
                 const name = biz.name || biz.business_name || "";
                 setBusinessName(name);
                 businessNameRef.current = name;
 
                 const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
+                console.log("[debug] checkpoint 1 - after menu fetch");
                 if (menuData) setMenuItems(menuData);
 
                 const { data: sd } = await supabase
@@ -515,6 +518,7 @@ export default function App() {
                     .select("*")
                     .eq("business_name", name)
                     .maybeSingle();
+                console.log("[debug] checkpoint 2 - after settings fetch");
                 if (sd) {
                     setSettings(prev => ({
                         ...prev,
@@ -555,6 +559,8 @@ export default function App() {
                         }
                     }
                 }
+                console.log("[debug] checkpoint 3 - before setOnboardingChecked");
+                console.log("[debug] setting onboardingChecked to true");
                 setOnboardingChecked(true);
             } else {
                 const meta = user.user_metadata || {};
