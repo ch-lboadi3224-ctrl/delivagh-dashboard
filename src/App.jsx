@@ -935,7 +935,7 @@ export default function App() {
     function StatusBadge({ status }) {
         const cfg = {
             pending: { bg: "#fef3c7", c: "#92400e", dot: "#f59e0b", label: "Pending" },
-            confirmed: { bg: "#dbeafe", c: "#1e40af", dot: "#3b82f6", label: "Confirmed" },
+            confirmed: { bg: "#dcfce7", c: "#166534", dot: "#22c55e", label: "Confirmed" },
             preparing: { bg: "#fce7f3", c: "#9d174d", dot: "#ec4899", label: "Preparing" },
             ready: { bg: "#ede9fe", c: "#5b21b6", dot: "#8b5cf6", label: "Ready" },
             delivered: { bg: "#dcfce7", c: "#14532d", dot: "#22c55e", label: "Delivered" },
@@ -977,7 +977,7 @@ export default function App() {
             </button>
         );
         switch (order.status) {
-            case "pending": return (<div style={{ display: "flex", gap: "5px" }}>{btn("#2563eb", "Accept", () => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type))}{btn("#dc2626", "Reject", () => updateStatus(order.id, "rejected", order.customer_phone, order.delivery_type))}</div>);
+            case "pending": return (<div style={{ display: "flex", gap: "5px" }}>{btn("#22c55e", "Accept", () => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type))}{btn("#dc2626", "Reject", () => updateStatus(order.id, "rejected", order.customer_phone, order.delivery_type))}</div>);
             case "confirmed": return btn("#db2777", "Preparing", () => updateStatus(order.id, "preparing", order.customer_phone, order.delivery_type));
             case "preparing": return btn("#7c3aed", order.delivery_type === "delivery" ? "On the Way" : "Ready", () => updateStatus(order.id, "ready", order.customer_phone, order.delivery_type));
             case "ready": return btn("#16a34a", "Delivered", () => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type));
@@ -1041,7 +1041,7 @@ export default function App() {
     if (authLoading) return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f1117" }}>
             <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "22px", fontWeight: "800", color: "white" }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>
+                <div style={{ fontSize: "22px", fontWeight: "800", color: "white" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
                 <p style={{ color: "#7d8590", marginTop: "8px", fontSize: "13px" }}>Loading...</p>
             </div>
         </div>
@@ -1168,7 +1168,9 @@ export default function App() {
                 {newOrderAlert && (
                     <div style={{ position: "fixed", top: "20px", right: "20px", zIndex: 9999, animation: "slideIn 0.3s ease" }}>
                         <div style={{ background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", padding: "16px 20px", borderRadius: "14px", boxShadow: "0 16px 48px rgba(220,38,38,0.45)", display: "flex", alignItems: "center", gap: "12px", minWidth: "290px", animation: "pulse 1.5s infinite" }}>
-                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>≡ƒöö</div>
+                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                            </div>
                             <div style={{ flex: 1 }}>
                                 <p style={{ margin: 0, fontWeight: "800", fontSize: "14px" }}>New Order!</p>
                                 <p style={{ margin: "2px 0 0", fontSize: "12px", opacity: 0.9 }}>A customer placed an order</p>
@@ -1261,7 +1263,7 @@ export default function App() {
                                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                                             {[
                                                 { label: "Phone", value: selectedCustomer.phone },
-                                                { label: "First Seen", value: customerOrders.length ? new Date(customerOrders[customerOrders.length - 1].created_at).toLocaleDateString("en-GH") : "ΓÇö" },
+                                                { label: "First Seen", value: customerOrders.length ? new Date(customerOrders[customerOrders.length - 1].created_at).toLocaleDateString("en-GH") : "—" },
                                                 { label: "Total Orders", value: selectedCustomer.orders },
                                                 { label: "Revenue", value: "GHS " + selectedCustomer.revenue.toFixed(2) },
                                             ].map(row => (
@@ -1276,7 +1278,7 @@ export default function App() {
                                         <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Order Statistics</p>
                                         <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Delivered: <strong style={{ color: "#16a34a" }}>{selectedCustomer.delivered}</strong></p>
                                         <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Pending: <strong style={{ color: "#d97706" }}>{selectedCustomer.pending}</strong></p>
-                                        <p style={{ margin: 0, fontSize: "12px", color: d.text }}>Last Order: <strong>{latest ? new Date(latest.created_at).toLocaleDateString("en-GH") : "ΓÇö"}</strong></p>
+                                        <p style={{ margin: 0, fontSize: "12px", color: d.text }}>Last Order: <strong>{latest ? new Date(latest.created_at).toLocaleDateString("en-GH") : "—"}</strong></p>
                                     </div>
                                 </div>
                                 <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "12px" }}>
@@ -1289,9 +1291,9 @@ export default function App() {
                                                 <div key={order.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr auto auto auto", alignItems: "center", gap: "8px", backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "8px", padding: "9px 10px" }}>
                                                     <span style={{ fontFamily: "monospace", fontSize: "11px", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</span>
                                                     <span style={{ fontSize: "11px", color: d.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{order.items}</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "ΓÇö"}</span>
+                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#22c55e" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</span>
                                                     <StatusBadge status={order.status} />
-                                                    <button onClick={() => { setSelectedCustomer(null); setSelectedOrder(order); }} style={{ padding: "4px 8px", backgroundColor: "rgba(37,99,235,0.12)", color: "#2563eb", border: "1px solid rgba(37,99,235,0.22)", borderRadius: "6px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>Open</button>
+                                                    <button onClick={() => { setSelectedCustomer(null); setSelectedOrder(order); }} style={{ padding: "4px 8px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.22)", borderRadius: "6px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>Open</button>
                                                 </div>
                                             ))}
                                         </div>
@@ -1318,7 +1320,7 @@ export default function App() {
                                 <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
                                 <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
                                     <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
-                                    <button onClick={addMenuItem} style={{ flex: 2, padding: "11px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Item</button>
+                                    <button onClick={addMenuItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Item</button>
                                 </div>
                             </div>
                         </div>
@@ -1341,7 +1343,7 @@ export default function App() {
                                 <textarea value={editItem.item_description} onChange={e => setEditItem({ ...editItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
                                 <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
                                     <button onClick={() => { setShowEditModal(false); setEditItem(null); }} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
-                                    <button onClick={saveEditItem} style={{ flex: 2, padding: "11px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Changes</button>
+                                    <button onClick={saveEditItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Changes</button>
                                 </div>
                             </div>
                         </div>
@@ -1351,7 +1353,7 @@ export default function App() {
                 {/* SIDEBAR */}
                 <aside style={{ width: sidebarW, backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100, transition: "width 0.2s ease", overflow: "hidden" }}>
                     <div style={{ padding: sidebarCollapsed ? "18px 0" : "18px 14px", display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "space-between", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
-                        {!sidebarCollapsed && <div style={{ fontSize: "15px", fontWeight: "800", color: d.text }}>Delivagh<span style={{ color: "#2563eb" }}>.</span></div>}
+                        {!sidebarCollapsed && <div style={{ fontSize: "15px", fontWeight: "800", color: d.text }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>}
                         <button onClick={() => setSidebarCollapsed(c => !c)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.muted, fontSize: "11px", flexShrink: 0 }}>
                             {sidebarCollapsed ? "┬╗" : "┬½"}
                         </button>
@@ -1362,8 +1364,8 @@ export default function App() {
                             return (
                                 <button key={item.id} onClick={() => { setActivePage(item.id); if (item.id === "pending") setActiveTab("all"); }}
                                     title={sidebarCollapsed ? item.label : ""}
-                                    style={{ display: "flex", alignItems: "center", gap: "9px", padding: sidebarCollapsed ? "10px" : "10px 11px", borderRadius: "8px", border: "none", cursor: "pointer", textAlign: "left", fontWeight: "600", fontSize: "12px", transition: "all 0.12s", backgroundColor: isActive ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : "transparent", color: isActive ? "#2563eb" : d.muted, justifyContent: sidebarCollapsed ? "center" : "flex-start", position: "relative" }}>
-                                    <span style={{ flexShrink: 0, color: isActive ? "#2563eb" : d.muted }}>{item.icon}</span>
+                                    style={{ display: "flex", alignItems: "center", gap: "9px", padding: sidebarCollapsed ? "10px" : "10px 11px", borderRadius: "8px", border: "none", cursor: "pointer", textAlign: "left", fontWeight: "600", fontSize: "12px", transition: "all 0.12s", backgroundColor: isActive ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : "transparent", color: isActive ? "#22c55e" : d.muted, justifyContent: sidebarCollapsed ? "center" : "flex-start", position: "relative" }}>
+                                    <span style={{ flexShrink: 0, color: isActive ? "#22c55e" : d.muted }}>{item.icon}</span>
                                     {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
                                     {item.badge > 0 && !sidebarCollapsed && <span style={{ backgroundColor: "#dc2626", color: "white", fontSize: "10px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800", animation: "pulse 2s infinite" }}>{item.badge}</span>}
                                     {item.badge > 0 && sidebarCollapsed && <span style={{ position: "absolute", top: "5px", right: "5px", backgroundColor: "#dc2626", color: "white", fontSize: "8px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800" }}>{item.badge}</span>}
@@ -1383,7 +1385,7 @@ export default function App() {
                                 </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", padding: "0 2px" }}>
-                                <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0 }}>
+                                <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0 }}>
                                     {(businessName || user.email || "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div style={{ overflow: "hidden" }}>
@@ -1412,7 +1414,13 @@ export default function App() {
                             <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {activePage === "menu" && <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#2563eb", color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>+ Add Item</button>}
+                            {activePage === "menu" && <>
+                                <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#22c55e", color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>+ Add Item</button>
+                                <button onClick={() => setShowUploadMenuModal(true)} type="button" style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: dm ? "rgba(34,197,94,0.12)" : "#ecfdf5", color: "#166534", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "1px solid #86efac", cursor: "pointer" }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                                    Upload menu
+                                </button>
+                            </>}
                             {stats.pending > 0 && (
                                 <button onClick={() => { setActivePage("pending"); setActiveTab("pending"); }} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}>
                                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", animation: "blink 1.2s infinite" }} />{stats.pending} pending
@@ -1420,8 +1428,8 @@ export default function App() {
                             )}
                             {/* NOTIFICATION BELL */}
                             <div style={{ position: "relative" }}>
-                                <button onClick={() => setShowNotifPanel(p => !p)} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", position: "relative" }}>
-                                    ≡ƒöö
+                                <button type="button" title="Notifications" onClick={() => setShowNotifPanel(p => !p)} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", color: d.text }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
                                     {unreadNotifs > 0 && <span style={{ position: "absolute", top: "4px", right: "4px", backgroundColor: "#dc2626", color: "white", fontSize: "8px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800" }}>{unreadNotifs > 9 ? "9+" : unreadNotifs}</span>}
                                 </button>
                                 {showNotifPanel && (
@@ -1435,7 +1443,9 @@ export default function App() {
                                                 ? <p style={{ padding: "24px", textAlign: "center", color: d.muted, fontSize: "13px", margin: 0 }}>No notifications yet</p>
                                                 : notifications.map(n => (
                                                     <div key={n.id} style={{ padding: "11px 16px", borderBottom: `1px solid ${d.border}`, display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                                                        <span style={{ fontSize: "16px", flexShrink: 0 }}>{n.type === "new" ? "≡ƒöö" : "Γ£à"}</span>
+                                                        <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: d.text }}>{n.type === "new"
+                                                            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                                                            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6L9 17l-5-5" /></svg>}</span>
                                                         <div>
                                                             <p style={{ margin: "0 0 2px", fontSize: "12px", fontWeight: "600", color: d.text }}>{n.message}</p>
                                                             <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{n.time.toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" })}</p>
@@ -1446,8 +1456,10 @@ export default function App() {
                                     </div>
                                 )}
                             </div>
-                            <button onClick={toggleDark} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>
-                                {darkMode ? "ΓÿÇ∩╕Å" : "≡ƒîÖ"}
+                            <button type="button" title={darkMode ? "Light mode" : "Dark mode"} onClick={toggleDark} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.text }}>
+                                {darkMode
+                                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
+                                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>}
                             </button>
                         </div>
                     </header>
@@ -1476,7 +1488,7 @@ export default function App() {
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
                                     {[
                                         { label: "Total Revenue", value: "GHS " + stats.revenue.toFixed(2), c: "#16a34a", bg: dm ? "rgba(22,163,74,0.07)" : "#f0fdf4", br: dm ? "rgba(22,163,74,0.18)" : "#bbf7d0" },
-                                        { label: "Today's Revenue", value: "GHS " + todayRevenue.toFixed(2), c: "#2563eb", bg: dm ? "rgba(37,99,235,0.07)" : "#eff6ff", br: dm ? "rgba(37,99,235,0.18)" : "#bfdbfe" },
+                                        { label: "Today's Revenue", value: "GHS " + todayRevenue.toFixed(2), c: "#22c55e", bg: dm ? "rgba(34,197,94,0.07)" : "#ecfdf5", br: dm ? "rgba(34,197,94,0.18)" : "#86efac" },
                                         { label: "Pending Payment", value: "GHS " + stats.unpaidRevenue.toFixed(2), c: "#d97706", bg: dm ? "rgba(217,119,6,0.07)" : "#fffbeb", br: dm ? "rgba(217,119,6,0.18)" : "#fde68a" },
                                     ].map((s, i) => (
                                         <div key={i} style={{ backgroundColor: s.bg, border: `1px solid ${s.br}`, borderRadius: "12px", padding: "16px" }}>
@@ -1489,7 +1501,7 @@ export default function App() {
                                     <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
                                         <div style={{ padding: "12px 16px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                             <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Orders</p>
-                                            <button onClick={() => setActivePage("pending")} style={{ fontSize: "11px", fontWeight: "600", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}>View all</button>
+                                            <button onClick={() => setActivePage("pending")} style={{ fontSize: "11px", fontWeight: "600", color: "#22c55e", background: "none", border: "none", cursor: "pointer" }}>View all</button>
                                         </div>
                                         <div style={{ overflowX: "auto" }}>
                                             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "480px" }}>
@@ -1503,7 +1515,7 @@ export default function App() {
                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                             <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                            <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "ΓÇö"}</td>
+                                                            <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                             <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
                                                             <td style={{ padding: "10px 14px" }}><StatusBadge status={order.status} /></td>
                                                             <td style={{ padding: "10px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
@@ -1537,7 +1549,7 @@ export default function App() {
                                                     { label: "Orders", action: () => setActivePage("pending") },
                                                 ].map(btn => (
                                                     <button key={btn.label} onClick={btn.action} style={{ padding: "10px 6px", backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", color: d.muted }}
-                                                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.color = "#2563eb"; }}
+                                                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.color = "#22c55e"; }}
                                                         onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.color = d.muted; }}>
                                                         {btn.label}
                                                     </button>
@@ -1555,9 +1567,9 @@ export default function App() {
                                 <div style={{ display: "flex", gap: "7px", flexWrap: "wrap" }}>
                                     {[{ id: "all", label: "All", count: orders.length }, { id: "pending", label: "Pending", count: stats.pending }, { id: "confirmed", label: "Confirmed", count: stats.confirmed }, { id: "delivered", label: "Delivered", count: stats.delivered }].map(tab => (
                                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                                            style={{ padding: "7px 14px", borderRadius: "8px", border: `1px solid ${activeTab === tab.id ? "#2563eb" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: activeTab === tab.id ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : "transparent", color: activeTab === tab.id ? "#2563eb" : d.muted, display: "flex", alignItems: "center", gap: "6px" }}>
+                                            style={{ padding: "7px 14px", borderRadius: "8px", border: `1px solid ${activeTab === tab.id ? "#22c55e" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: activeTab === tab.id ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : "transparent", color: activeTab === tab.id ? "#22c55e" : d.muted, display: "flex", alignItems: "center", gap: "6px" }}>
                                             {tab.label}
-                                            <span style={{ backgroundColor: activeTab === tab.id ? "#2563eb" : d.border, color: activeTab === tab.id ? "white" : d.muted, borderRadius: "999px", padding: "1px 6px", fontSize: "10px", fontWeight: "700" }}>{tab.count}</span>
+                                            <span style={{ backgroundColor: activeTab === tab.id ? "#22c55e" : d.border, color: activeTab === tab.id ? "white" : d.muted, borderRadius: "999px", padding: "1px 6px", fontSize: "10px", fontWeight: "700" }}>{tab.count}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -1565,7 +1577,9 @@ export default function App() {
                                     {loading ? <div style={{ padding: "48px", textAlign: "center", color: d.muted, fontSize: "13px" }}>Loading orders...</div>
                                         : filteredOrders.length === 0 ? (
                                             <div style={{ padding: "64px", textAlign: "center" }}>
-                                                <p style={{ fontSize: "32px", margin: "0 0 10px" }}>≡ƒô¡</p>
+                                                <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
+                                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
+                                                </div>
                                                 <p style={{ color: d.muted, fontSize: "14px", fontWeight: "600", margin: 0 }}>No orders here</p>
                                             </div>
                                         ) : (
@@ -1587,18 +1601,18 @@ export default function App() {
                                                                 const dl = isToday ? "Today" : isYest ? "Yesterday" : new Date(order.created_at).toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" });
                                                                 return (
                                                                     <>
-                                                                        {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.bg3, color: isToday ? "#2563eb" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
+                                                                        {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.bg3, color: isToday ? "#22c55e" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "ΓÇö"}</td>
+                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                                             <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
                                                                                 {order.notes ? <span title={order.notes} style={{ backgroundColor: dm ? "#2a1f0a" : "#fffbeb", color: "#d97706", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.notes}</span>
-                                                                                    : <span style={{ color: d.muted, fontSize: "12px" }}>ΓÇö</span>}
+                                                                                    : <span style={{ color: d.muted, fontSize: "12px" }}>—</span>}
                                                                             </td>
                                                                             <td style={{ padding: "11px 13px" }}>
-                                                                                <span style={{ backgroundColor: order.delivery_type === "pickup" ? (dm ? "rgba(124,58,237,0.12)" : "#ede9fe") : (dm ? "rgba(37,99,235,0.12)" : "#eff6ff"), color: order.delivery_type === "pickup" ? "#7c3aed" : "#2563eb", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700" }}>
+                                                                                <span style={{ backgroundColor: order.delivery_type === "pickup" ? (dm ? "rgba(124,58,237,0.12)" : "#ede9fe") : (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5"), color: order.delivery_type === "pickup" ? "#7c3aed" : "#22c55e", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700" }}>
                                                                                     {order.delivery_type === "pickup" ? "Pickup" : "Delivery"}
                                                                                 </span>
                                                                             </td>
@@ -1642,7 +1656,9 @@ export default function App() {
                                     </div>
                                     {customers.length === 0 ? (
                                         <div style={{ padding: "64px", textAlign: "center" }}>
-                                            <p style={{ fontSize: "32px", margin: "0 0 10px" }}>≡ƒæÑ</p>
+                                            <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
+                                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                                            </div>
                                             <p style={{ color: d.muted, fontSize: "14px", fontWeight: "600", margin: 0 }}>No customers yet</p>
                                         </div>
                                     ) : (
@@ -1660,10 +1676,10 @@ export default function App() {
                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text }}>{c.orders}</td>
                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: "#16a34a", fontWeight: "700" }}>{c.delivered}</td>
                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: c.pending > 0 ? "#d97706" : d.muted, fontWeight: "700" }}>{c.pending}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#2563eb", fontWeight: "700" }}>GHS {c.revenue.toFixed(2)}</td>
+                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#22c55e", fontWeight: "700" }}>GHS {c.revenue.toFixed(2)}</td>
                                                             <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted }}>{new Date(c.lastOrderAt).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
                                                             <td style={{ padding: "11px 13px" }}>
-                                                                <button onClick={() => setSelectedCustomer(c)} style={{ padding: "5px 10px", backgroundColor: "rgba(37,99,235,0.12)", color: "#2563eb", border: "1px solid rgba(37,99,235,0.22)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>View</button>
+                                                                <button onClick={() => setSelectedCustomer(c)} style={{ padding: "5px 10px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.22)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>View</button>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -1680,43 +1696,47 @@ export default function App() {
                             <div>
                                 <div style={{ display: "flex", gap: "7px", marginBottom: "16px" }}>
                                     {["All", "Main", "Sides", "Extras"].map(cat => (
-                                        <button key={cat} onClick={() => setMenuFilter(cat)} style={{ padding: "6px 14px", borderRadius: "8px", border: `1px solid ${menuFilter === cat ? "#2563eb" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: menuFilter === cat ? (dm ? "rgba(37,99,235,0.12)" : "#eff6ff") : d.card, color: menuFilter === cat ? "#2563eb" : d.muted }}>
+                                        <button key={cat} onClick={() => setMenuFilter(cat)} style={{ padding: "6px 14px", borderRadius: "8px", border: `1px solid ${menuFilter === cat ? "#22c55e" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: menuFilter === cat ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.card, color: menuFilter === cat ? "#22c55e" : d.muted }}>
                                             {cat === "All" ? "All Items" : cat}
                                         </button>
                                     ))}
                                 </div>
                                 {filteredMenu.length === 0 ? (
                                     <div style={{ textAlign: "center", padding: "72px 20px", backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}` }}>
-                                        <p style={{ fontSize: "32px", margin: "0 0 10px" }}>≡ƒì╜∩╕Å</p>
+                                        <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" /></svg>
+                                        </div>
                                         <p style={{ color: d.text, fontSize: "14px", fontWeight: "600", margin: "0 0 4px" }}>No items yet</p>
                                         <p style={{ color: d.muted, fontSize: "12px", margin: "0 0 20px" }}>Click "+ Add Item" to get started</p>
-                                        <button onClick={() => setShowAddModal(true)} style={{ padding: "10px 24px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>+ Add First Item</button>
+                                        <button onClick={() => setShowAddModal(true)} style={{ padding: "10px 24px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>+ Add First Item</button>
                                     </div>
                                 ) : (
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "14px" }}>
                                         {filteredMenu.map(item => (
                                             <div key={item.id} style={{ backgroundColor: d.card, padding: "18px", borderRadius: "12px", border: `1px solid ${d.border}`, opacity: item.available ? 1 : 0.55, transition: "all 0.15s" }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                                                onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.transform = "translateY(-2px)"; }}
                                                 onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.transform = ""; }}>
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                                                     <div>
                                                         <span style={{ fontSize: "9px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.1em", color: d.muted }}>{item.category || "Main"}</span>
                                                         <h3 style={{ margin: "2px 0 0", fontSize: "14px", fontWeight: "700", color: d.text }}>{item.item_name}</h3>
                                                     </div>
-                                                    <div onClick={() => toggleAvailable(item.id, item.available)} style={{ width: "36px", height: "20px", backgroundColor: item.available ? "#2563eb" : d.border, borderRadius: "10px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                                                    <div onClick={() => toggleAvailable(item.id, item.available)} style={{ width: "36px", height: "20px", backgroundColor: item.available ? "#22c55e" : d.border, borderRadius: "10px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                                                         <div style={{ position: "absolute", width: "14px", height: "14px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: item.available ? "19px" : "3px", transition: "left 0.2s" }} />
                                                     </div>
                                                 </div>
                                                 <p style={{ fontSize: "12px", color: d.muted, margin: "0 0 14px", lineHeight: "1.5" }}>{item.item_description || "No description"}</p>
                                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${d.border}`, paddingTop: "12px" }}>
-                                                    <span style={{ color: "#2563eb", fontWeight: "800", fontSize: "14px" }}>GHS {parseFloat(item.item_price).toFixed(2)}</span>
+                                                    <span style={{ color: "#22c55e", fontWeight: "800", fontSize: "14px" }}>GHS {parseFloat(item.item_price).toFixed(2)}</span>
                                                     <div style={{ display: "flex", gap: "6px" }}>
                                                         <button onClick={() => { setEditItem({ ...item }); setShowEditModal(true); }} style={{ background: "none", border: `1px solid ${d.border}`, cursor: "pointer", color: d.muted, padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}
-                                                            onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.color = "#2563eb"; }}
+                                                            onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.color = "#22c55e"; }}
                                                             onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.color = d.muted; }}>Edit</button>
-                                                        <button onClick={() => deleteMenuItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: d.border, fontSize: "14px", padding: "4px 5px", borderRadius: "5px" }}
+                                                        <button type="button" title="Delete" onClick={() => deleteMenuItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: d.border, padding: "4px 5px", borderRadius: "5px", display: "flex", alignItems: "center" }}
                                                             onMouseEnter={e => e.currentTarget.style.color = "#dc2626"}
-                                                            onMouseLeave={e => e.currentTarget.style.color = d.border}>≡ƒùæ</button>
+                                                            onMouseLeave={e => e.currentTarget.style.color = d.border}>
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1750,9 +1770,9 @@ export default function App() {
                                                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "11px" }}>
                                                     <span style={{ width: "20px", height: "20px", borderRadius: "5px", backgroundColor: i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#d97706" : d.bg3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "800", color: i < 3 ? "white" : d.muted, flexShrink: 0 }}>{i + 1}</span>
                                                     <span style={{ flex: 1, fontSize: "12px", fontWeight: "500", color: d.text }}>{item.name}</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#2563eb" }}>{item.count}x</span>
+                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#22c55e" }}>{item.count}x</span>
                                                     <div style={{ width: "60px", height: "3px", backgroundColor: d.bg3, borderRadius: "2px", overflow: "hidden" }}>
-                                                        <div style={{ height: "100%", backgroundColor: "#2563eb", width: Math.round((item.count / (insights.topItems[0]?.count || 1)) * 100) + "%" }} />
+                                                        <div style={{ height: "100%", backgroundColor: "#22c55e", width: Math.round((item.count / (insights.topItems[0]?.count || 1)) * 100) + "%" }} />
                                                     </div>
                                                 </div>
                                             ))}
@@ -1761,7 +1781,7 @@ export default function App() {
                                         <h2 style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: "700", color: d.text }}>Broadcast</h2>
                                         <p style={{ margin: "0 0 12px", fontSize: "11px", color: d.muted }}>Send to all {insights.totalCustomers} customers</p>
                                         <textarea value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} placeholder="e.g. Special offer today! 20% off all orders." style={{ width: "100%", padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "12px", color: d.text, outline: "none", height: "80px", resize: "none", boxSizing: "border-box", marginBottom: "9px" }} />
-                                        <button onClick={sendBroadcast} disabled={broadcastSending || !broadcastMsg.trim()} style={{ width: "100%", padding: "10px", backgroundColor: broadcastSending ? d.muted : "#2563eb", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "12px", cursor: broadcastSending ? "not-allowed" : "pointer" }}>
+                                        <button onClick={sendBroadcast} disabled={broadcastSending || !broadcastMsg.trim()} style={{ width: "100%", padding: "10px", backgroundColor: broadcastSending ? d.muted : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "12px", cursor: broadcastSending ? "not-allowed" : "pointer" }}>
                                             {broadcastSending ? "Sending..." : "Send to All Customers"}
                                         </button>
                                         {broadcastResult && (
@@ -1803,15 +1823,15 @@ export default function App() {
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                         <div>
                                             <p style={{ margin: 0, fontWeight: "600", fontSize: "13px", color: d.text }}>Auto-Accept</p>
-                                            <p style={{ margin: "2px 0 0", fontSize: "11px", color: settings.auto_accept ? "#16a34a" : d.muted }}>{settings.auto_accept ? "Enabled" : "Disabled ΓÇö manual review required"}</p>
+                                            <p style={{ margin: "2px 0 0", fontSize: "11px", color: settings.auto_accept ? "#16a34a" : d.muted }}>{settings.auto_accept ? "Enabled" : "Disabled — manual review required"}</p>
                                         </div>
-                                        <div onClick={() => setSettings(s => ({ ...s, auto_accept: !s.auto_accept }))} style={{ width: "44px", height: "22px", backgroundColor: settings.auto_accept ? "#2563eb" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                                        <div onClick={() => setSettings(s => ({ ...s, auto_accept: !s.auto_accept }))} style={{ width: "44px", height: "22px", backgroundColor: settings.auto_accept ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                                             <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings.auto_accept ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                                         </div>
                                     </div>
                                 </div>
-                                <button onClick={saveSettings} style={{ padding: "12px", backgroundColor: settingsSaved ? "#16a34a" : "#2563eb", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "13px", cursor: "pointer", transition: "background 0.3s" }}>
-                                    {settingsSaved ? "Γ£ô Saved!" : "Save Settings"}
+                                <button onClick={saveSettings} style={{ padding: "12px", backgroundColor: settingsSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "13px", cursor: "pointer", transition: "background 0.3s" }}>
+                                    {settingsSaved ? "✓ Saved!" : "Save Settings"}
                                 </button>
                             </div>
                         )}
