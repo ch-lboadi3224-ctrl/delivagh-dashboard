@@ -1327,6 +1327,106 @@ export default function App() {
                     </div>
                 )}
 
+                {/* UPLOAD MENU MODAL */}
+                {showUploadMenuModal && (
+                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backdropFilter: "blur(4px)" }} onClick={closeUploadMenuModal}>
+                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "24px", width: "100%", maxWidth: "920px", maxHeight: "min(92vh, 840px)", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${accentBorder}`, display: "flex", flexDirection: "column", gap: "14px" }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: d.text }}>Upload Menu</h2>
+                            <p style={{ margin: 0, fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>Upload a photo or PDF of your menu. We will read items with AI—you can edit them before saving to your storefront.</p>
+                            <input ref={menuFileInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" style={{ display: "none" }}
+                                onChange={e => { pickUploadMenuFile(e.target.files?.[0]); e.target.value = ""; }} />
+                            <div
+                                onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(true); }}
+                                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(false); }}
+                                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                                onDrop={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setUploadMenuDragActive(false);
+                                    pickUploadMenuFile(e.dataTransfer.files?.[0]);
+                                }}
+                                onClick={() => menuFileInputRef.current?.click()}
+                                style={{
+                                    border: `2px dashed ${uploadMenuDragActive ? accent : d.inputBorder}`,
+                                    borderRadius: "12px",
+                                    padding: "22px",
+                                    textAlign: "center",
+                                    cursor: "pointer",
+                                    backgroundColor: uploadMenuDragActive ? accentSoft : d.bg3,
+                                    transition: "border-color 0.15s, background 0.15s",
+                                }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "700", color: d.text }}>Drop image or PDF here</p>
+                                <p style={{ margin: 0, fontSize: "12px", color: d.muted }}>or click to browse — JPG, PNG, WEBP, PDF · max 10MB</p>
+                            </div>
+                            {uploadMenuFile && (
+                                <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
+                                    {uploadImagePreviewUrl ? (
+                                        <img alt="Menu preview" src={uploadImagePreviewUrl} style={{ width: "160px", maxHeight: "200px", objectFit: "cover", borderRadius: "10px", border: `1px solid ${d.border}` }} />
+                                    ) : (
+                                        <div style={{ width: "160px", minHeight: "100px", borderRadius: "10px", border: `1px solid ${d.border}`, backgroundColor: d.bg3, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", fontSize: "12px", fontWeight: "600", color: d.text, textAlign: "center", wordBreak: "break-word" }}>
+                                            {uploadMenuFile.name}
+                                        </div>
+                                    )}
+                                    <div style={{ flex: "1", minWidth: "200px" }}>
+                                        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "700", color: d.muted }}>Selected file</p>
+                                        <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: d.text }}>{uploadMenuFile.name}</p>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); menuFileInputRef.current?.click(); }} style={{ padding: "8px 14px", backgroundColor: "transparent", border: `1px solid ${accentBorder}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: accent, cursor: "pointer" }}>Change file</button>
+                                    </div>
+                                </div>
+                            )}
+                            {uploadMenuError && (
+                                <p style={{ margin: 0, fontSize: "12px", fontWeight: "600", color: "#dc2626" }}>{uploadMenuError}</p>
+                            )}
+                            {!uploadExtractLoading && uploadExtracted.length === 0 && (
+                                <button type="button" disabled={!uploadMenuFile} onClick={(e) => { e.stopPropagation(); extractMenuFromUpload(); }} style={{ alignSelf: "flex-start", padding: "11px 20px", backgroundColor: !uploadMenuFile ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: !uploadMenuFile ? "not-allowed" : "pointer", opacity: !uploadMenuFile ? 0.5 : 1 }}>
+                                    Extract Menu Items
+                                </button>
+                            )}
+                            {uploadExtractLoading && (
+                                <div style={{ padding: "20px", textAlign: "center", borderRadius: "12px", border: `1px solid ${d.border}`, backgroundColor: accentSoft }}>
+                                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: accent }}>Reading your menu...</p>
+                                </div>
+                            )}
+                            {!uploadExtractLoading && uploadExtracted.length > 0 && (
+                                <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.muted }}>{uploadExtracted.length} item(s) — edit if needed</p>
+                                    <div style={{ overflow: "auto", borderRadius: "10px", border: `1px solid ${d.border}`, maxHeight: "360px" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: d.bg3 }}>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Name</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "100px" }}>Price (GHS)</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "120px" }}>Category</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {uploadExtracted.map((row, idx) => (
+                                                    <tr key={row.rowKey || idx} style={{ borderTop: `1px solid ${d.border}` }}>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.name ?? ""} onChange={e => patchUploadExtractedRow(idx, { name: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input type="number" step="0.01" min="0" value={row.price ?? ""} onChange={e => patchUploadExtractedRow(idx, { price: e.target.value === "" ? "" : parseFloat(e.target.value) })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.category ?? ""} onChange={e => patchUploadExtractedRow(idx, { category: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.description ?? ""} onChange={e => patchUploadExtractedRow(idx, { description: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setUploadExtracted([]); setUploadMenuError(""); }} style={{ alignSelf: "flex-start", padding: "8px 12px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: d.muted, cursor: "pointer" }}>Extract again</button>
+                                </div>
+                            )}
+                            <div style={{ display: "flex", gap: "10px", paddingTop: "4px", flexWrap: "wrap" }}>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); closeUploadMenuModal(); }} style={{ flex: 1, padding: "11px", minWidth: "120px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
+                                {uploadExtracted.length > 0 && (
+                                    <button type="button" disabled={uploadSaveLoading} onClick={(e) => { e.stopPropagation(); saveExtractedMenuItems(); }} style={{ flex: 2, padding: "11px", minWidth: "180px", backgroundColor: uploadSaveLoading ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: uploadSaveLoading ? "wait" : "pointer" }}>
+                                        {uploadSaveLoading ? "Saving..." : "Save All to Menu"}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* EDIT MENU MODAL */}
                 {showEditModal && editItem && (
                     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setShowEditModal(false)}>
@@ -1354,8 +1454,10 @@ export default function App() {
                 <aside style={{ width: sidebarW, backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100, transition: "width 0.2s ease", overflow: "hidden" }}>
                     <div style={{ padding: sidebarCollapsed ? "18px 0" : "18px 14px", display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "space-between", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
                         {!sidebarCollapsed && <div style={{ fontSize: "15px", fontWeight: "800", color: d.text }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>}
-                        <button onClick={() => setSidebarCollapsed(c => !c)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.muted, fontSize: "11px", flexShrink: 0 }}>
-                            {sidebarCollapsed ? "┬╗" : "┬½"}
+                        <button type="button" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(prev => !prev)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.muted, flexShrink: 0 }}>
+                            {sidebarCollapsed
+                                ? <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
+                                : <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden><polyline points="15 18 9 12 15 6" /></svg>}
                         </button>
                     </div>
                     <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px", overflowY: "auto" }}>
