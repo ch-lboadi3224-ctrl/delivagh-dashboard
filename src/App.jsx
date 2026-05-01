@@ -76,6 +76,15 @@ export default function App() {
     const [menuFilter, setMenuFilter] = useState("All");
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showUploadMenuModal, setShowUploadMenuModal] = useState(false);
+    const [uploadMenuFile, setUploadMenuFile] = useState(null);
+    const [uploadImagePreviewUrl, setUploadImagePreviewUrl] = useState(null);
+    const [uploadExtracted, setUploadExtracted] = useState([]);
+    const [uploadExtractLoading, setUploadExtractLoading] = useState(false);
+    const [uploadSaveLoading, setUploadSaveLoading] = useState(false);
+    const [uploadMenuError, setUploadMenuError] = useState("");
+    const [uploadMenuDragActive, setUploadMenuDragActive] = useState(false);
+    const menuFileInputRef = useRef(null);
     const [settings, setSettings] = useState({ auto_accept: false, is_open: true, open_time: "08:00", close_time: "22:00" });
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [broadcastSending, setBroadcastSending] = useState(false);
@@ -578,6 +587,20 @@ export default function App() {
         }
     }, [isAdminLinkedVendor, menuItems]);
 
+    useEffect(() => {
+        if (!showUploadMenuModal || !uploadMenuFile) {
+            setUploadImagePreviewUrl(null);
+            return;
+        }
+        if (!uploadMenuFile.type.startsWith("image/")) {
+            setUploadImagePreviewUrl(null);
+            return;
+        }
+        const u = URL.createObjectURL(uploadMenuFile);
+        setUploadImagePreviewUrl(u);
+        return () => URL.revokeObjectURL(u);
+    }, [showUploadMenuModal, uploadMenuFile]);
+
     // ── FIX: fetchOrders filtered by business ──
     async function fetchOrders() {
         const name = businessNameRef.current;
@@ -640,6 +663,97 @@ export default function App() {
             await supabase.from("menus").delete().eq("id", id);
             await fetchMenuItems();
         }
+    }
+
+    const MENU_UPLOAD_MIMES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
+    function closeUploadMenuModal() {
+        setShowUploadMenuModal(false);
+        setUploadMenuFile(null);
+        setUploadExtracted([]);
+        setUploadMenuError("");
+        setUploadExtractLoading(false);
+        setUploadSaveLoading(false);
+        setUploadMenuDragActive(false);
+        if (menuFileInputRef.current) menuFileInputRef.current.value = "";
+    }
+
+    function pickUploadMenuFile(file) {
+        if (!file) return;
+        setUploadMenuError("");
+        setUploadExtracted([]);
+        if (!MENU_UPLOAD_MIMES.includes(file.type)) {
+            setUploadMenuError("Please use JPG, PNG, WEBP, or PDF.");
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            setUploadMenuError("File must be 10MB or smaller.");
+            return;
+        }
+        setUploadMenuFile(file);
+    }
+
+    async function extractMenuFromUpload() {
+        if (!uploadMenuFile) {
+            setUploadMenuError("Choose a menu image or PDF first.");
+            return;
+        }
+        setUploadExtractLoading(true);
+        setUploadMenuError("");
+        try {
+            const fd = new FormData();
+            fd.append("menuFile", uploadMenuFile);
+            const r = await fetch(API + "/api/menu/extract", { method: "POST", body: fd });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.error || ("Request failed (" + r.status + ")"));
+            const items = Array.isArray(j.items) ? j.items : [];
+            if (items.length === 0) throw new Error("No menu items found. Try a clearer scan.");
+            setUploadExtracted(items.map((it, i) => ({
+                ...it,
+                rowKey: "ex-" + i + "-" + String(it?.name ?? "").slice(0, 24)
+            })));
+        } catch (e) {
+            setUploadMenuError(String(e.message || e));
+        } finally {
+            setUploadExtractLoading(false);
+        }
+    }
+
+    async function saveExtractedMenuItems() {
+        const vendor = businessNameRef.current || businessName;
+        if (!vendor) {
+            addNotif("Could not resolve your business.", "error");
+            return;
+        }
+        const valid = uploadExtracted.filter(r => String(r.name ?? "").trim());
+        if (valid.length === 0) {
+            addNotif("Add at least one row with an item name before saving.", "error");
+            return;
+        }
+        setUploadSaveLoading(true);
+        try {
+            const payload = valid.map(r => ({
+                business_name: vendor,
+                item_name: String(r.name).trim(),
+                item_price: typeof r.price === "number" && Number.isFinite(r.price) ? r.price : parseFloat(String(r.price)) || 0,
+                item_description: String(r.description ?? "").trim(),
+                category: String(r.category ?? "").trim() || "Main",
+                available: true
+            }));
+            const { error } = await supabase.from("menus").insert(payload);
+            if (error) throw new Error(error.message);
+            addNotif("Saved " + payload.length + " item(s) to your menu.", "success");
+            closeUploadMenuModal();
+            await fetchMenuItems();
+        } catch (e) {
+            addNotif(String(e.message || e), "error");
+        } finally {
+            setUploadSaveLoading(false);
+        }
+    }
+
+    function patchUploadExtractedRow(idx, patch) {
+        setUploadExtracted(prev => prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
     }
 
     async function updateStatus(id, status, customerPhone, deliveryType) {
@@ -1267,7 +1381,106 @@ export default function App() {
                     </div>
                 )}
 
-                {/* EDIT MENU MODAL */}
+                {/* UPLOAD MENU MODAL */}
+                {showUploadMenuModal && (
+                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backdropFilter: "blur(4px)" }} onClick={closeUploadMenuModal}>
+                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "24px", width: "100%", maxWidth: "920px", maxHeight: "min(92vh, 840px)", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${accentBorder}`, display: "flex", flexDirection: "column", gap: "14px" }} onClick={e => e.stopPropagation()}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: d.text }}>Upload Menu</h2>
+                            <p style={{ margin: 0, fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>Upload a photo or PDF of your menu. We will read items with AI—you can edit them before saving to your storefront.</p>
+                            <input ref={menuFileInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" style={{ display: "none" }}
+                                onChange={e => { pickUploadMenuFile(e.target.files?.[0]); e.target.value = ""; }} />
+                            <div
+                                onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(true); }}
+                                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(false); }}
+                                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                                onDrop={e => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setUploadMenuDragActive(false);
+                                    pickUploadMenuFile(e.dataTransfer.files?.[0]);
+                                }}
+                                onClick={() => menuFileInputRef.current?.click()}
+                                style={{
+                                    border: `2px dashed ${uploadMenuDragActive ? accent : d.inputBorder}`,
+                                    borderRadius: "12px",
+                                    padding: "22px",
+                                    textAlign: "center",
+                                    cursor: "pointer",
+                                    backgroundColor: uploadMenuDragActive ? accentSoft : d.bg3,
+                                    transition: "border-color 0.15s, background 0.15s",
+                                }}>
+                                <p style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "700", color: d.text }}>Drop image or PDF here</p>
+                                <p style={{ margin: 0, fontSize: "12px", color: d.muted }}>or click to browse — JPG, PNG, WEBP, PDF · max 10MB</p>
+                            </div>
+                            {uploadMenuFile && (
+                                <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
+                                    {uploadImagePreviewUrl ? (
+                                        <img alt="Menu preview" src={uploadImagePreviewUrl} style={{ width: "160px", maxHeight: "200px", objectFit: "cover", borderRadius: "10px", border: `1px solid ${d.border}` }} />
+                                    ) : (
+                                        <div style={{ width: "160px", minHeight: "100px", borderRadius: "10px", border: `1px solid ${d.border}`, backgroundColor: d.bg3, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", fontSize: "12px", fontWeight: "600", color: d.text, textAlign: "center", wordBreak: "break-word" }}>
+                                            {uploadMenuFile.name}
+                                        </div>
+                                    )}
+                                    <div style={{ flex: "1", minWidth: "200px" }}>
+                                        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "700", color: d.muted }}>Selected file</p>
+                                        <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: d.text }}>{uploadMenuFile.name}</p>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); menuFileInputRef.current?.click(); }} style={{ padding: "8px 14px", backgroundColor: "transparent", border: `1px solid ${accentBorder}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: accent, cursor: "pointer" }}>Change file</button>
+                                    </div>
+                                </div>
+                            )}
+                            {uploadMenuError && (
+                                <p style={{ margin: 0, fontSize: "12px", fontWeight: "600", color: "#dc2626" }}>{uploadMenuError}</p>
+                            )}
+                            {!uploadExtractLoading && uploadExtracted.length === 0 && (
+                                <button type="button" disabled={!uploadMenuFile} onClick={(e) => { e.stopPropagation(); extractMenuFromUpload(); }} style={{ alignSelf: "flex-start", padding: "11px 20px", backgroundColor: !uploadMenuFile ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: !uploadMenuFile ? "not-allowed" : "pointer", opacity: !uploadMenuFile ? 0.5 : 1 }}>
+                                    Extract Menu Items
+                                </button>
+                            )}
+                            {uploadExtractLoading && (
+                                <div style={{ padding: "20px", textAlign: "center", borderRadius: "12px", border: `1px solid ${d.border}`, backgroundColor: accentSoft }}>
+                                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: accent }}>Reading your menu...</p>
+                                </div>
+                            )}
+                            {!uploadExtractLoading && uploadExtracted.length > 0 && (
+                                <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.muted }}>{uploadExtracted.length} item(s) — edit if needed</p>
+                                    <div style={{ overflow: "auto", borderRadius: "10px", border: `1px solid ${d.border}`, maxHeight: "360px" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: d.bg3 }}>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Name</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "100px" }}>Price (GHS)</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "120px" }}>Category</th>
+                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {uploadExtracted.map((row, idx) => (
+                                                    <tr key={row.rowKey || idx} style={{ borderTop: `1px solid ${d.border}` }}>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.name} onChange={e => patchUploadExtractedRow(idx, { name: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input type="number" step="0.01" min="0" value={Number(row.price ?? 0)} onChange={e => patchUploadExtractedRow(idx, { price: parseFloat(e.target.value) || 0 })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.category} onChange={e => patchUploadExtractedRow(idx, { category: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                        <td style={{ padding: "6px 8px" }}><input value={row.description} onChange={e => patchUploadExtractedRow(idx, { description: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setUploadExtracted([]); setUploadMenuError(""); }} style={{ alignSelf: "flex-start", padding: "8px 12px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: d.muted, cursor: "pointer" }}>Extract again</button>
+                                </div>
+                            )}
+                            <div style={{ display: "flex", gap: "10px", paddingTop: "4px", flexWrap: "wrap" }}>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); closeUploadMenuModal(); }} style={{ flex: 1, padding: "11px", minWidth: "120px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
+                                {uploadExtracted.length > 0 && (
+                                    <button type="button" disabled={uploadSaveLoading} onClick={(e) => { e.stopPropagation(); saveExtractedMenuItems(); }} style={{ flex: 2, padding: "11px", minWidth: "180px", backgroundColor: uploadSaveLoading ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: uploadSaveLoading ? "wait" : "pointer" }}>
+                                        {uploadSaveLoading ? "Saving..." : "Save All to Menu"}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {showEditModal && editItem && (
                     <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setShowEditModal(false)}>
                         <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "420px", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
@@ -1354,7 +1567,12 @@ export default function App() {
                             <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {activePage === "menu" && <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: accent, color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>+ Add Item</button>}
+                            {activePage === "menu" && (
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <button type="button" onClick={() => { setUploadMenuError(""); setShowUploadMenuModal(true); }} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: accent, padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: `1px solid ${accentBorder}`, cursor: "pointer" }}>Upload Menu</button>
+                                    <button type="button" onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: accent, color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>+ Add Item</button>
+                                </div>
+                            )}
                             {stats.pending > 0 && (
                                 <button onClick={() => { setActivePage("pending"); setActiveTab("pending"); }} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}>
                                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", animation: "blink 1.2s infinite" }} />{stats.pending} pending
