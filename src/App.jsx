@@ -113,6 +113,8 @@ export default function App() {
     const businessNameRef = useRef("");
     const notifIdRef = useRef(0);
     const sessionPolicySignOutLockRef = useRef(false);
+    const fetchedBusinessNameForUserRef = useRef(null);
+    const checkedAccountStatusForUserRef = useRef(null);
 
     const dm = darkMode;
     const d = dm ? {
@@ -158,6 +160,8 @@ export default function App() {
             setOrders([]);
             ordersRef.current = [];
             setSelectedOrder(null);
+            fetchedBusinessNameForUserRef.current = null;
+            checkedAccountStatusForUserRef.current = null;
             setPage("login");
             sessionPolicySignOutLockRef.current = false;
         }
@@ -297,7 +301,9 @@ export default function App() {
     }, [supabase, user?.id, signOutForSessionPolicy]);
 
     useEffect(() => {
-        if (!supabase || !user) return;
+        if (!supabase || !user?.id) return;
+        if (checkedAccountStatusForUserRef.current === user.id) return;
+        checkedAccountStatusForUserRef.current = user.id;
         let cancelled = false;
         (async () => {
             const { data } = await supabase.from("businesses").select("status").eq("user_id", user.id).limit(1);
@@ -324,11 +330,13 @@ export default function App() {
             }
         })();
         return () => { cancelled = true; };
-    }, [user, businessName]);
+    }, [supabase, user?.id]);
 
     // ── REAL-TIME — filtered by business ──
     useEffect(() => {
-        if (!user) return;
+        if (!supabase || !user?.id) return;
+        if (fetchedBusinessNameForUserRef.current === user.id) return;
+        fetchedBusinessNameForUserRef.current = user.id;
         fetchBusinessName();
 
         const poll = setInterval(() => {
@@ -336,7 +344,7 @@ export default function App() {
         }, 30000);
 
         return () => clearInterval(poll);
-    }, [user]);
+    }, [supabase, user?.id]);
 
     // Subscribe after businessName is known
     useEffect(() => {
@@ -414,6 +422,7 @@ export default function App() {
     }
 
     async function fetchBusinessName() {
+        if (!supabase || !user?.id) return;
         setOnboardingChecked(false);
         setNeedsVendorProfile(false);
         setIsAdminLinkedVendor(false);
@@ -428,28 +437,12 @@ export default function App() {
             biz = byUserId[0];
         } else {
             // Admin-created vendors may not be linked by user_id yet.
-            // Resolve business_name from registered_businesses via auth email/id (when present),
-            // with metadata fallback, then confirm it exists in businesses.
-            if (user.email) {
-                try {
-                    const { data: regByEmail } = await supabase
-                        .from("registered_businesses")
-                        .select("business_name")
-                        .eq("email", user.email)
-                        .limit(1);
-                    businessNameFromDirectory = regByEmail?.[0]?.business_name || null;
-                } catch (_) { /* email column may not exist in some environments */ }
-            }
-            if (!businessNameFromDirectory) {
-                try {
-                    const { data: regByUserId } = await supabase
-                        .from("registered_businesses")
-                        .select("business_name")
-                        .eq("user_id", user.id)
-                        .limit(1);
-                    businessNameFromDirectory = regByUserId?.[0]?.business_name || null;
-                } catch (_) { /* user_id column may not exist in some environments */ }
-            }
+            // Resolve business_name from registered_businesses without filtering by missing columns.
+            const { data: regData } = await supabase
+                .from("registered_businesses")
+                .select("business_name")
+                .limit(10);
+            businessNameFromDirectory = regData?.[0]?.business_name || null;
             if (!businessNameFromDirectory) {
                 businessNameFromDirectory = user.user_metadata?.business_name || null;
             }
@@ -485,8 +478,20 @@ export default function App() {
             const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
             if (menuData) setMenuItems(menuData);
 
-            const { data: sd } = await supabase.from("business_settings").select("*").eq("business_name", name).single();
-            if (sd) setSettings(sd);
+            const { data: sd } = await supabase
+                .from("business_settings")
+                .select("*")
+                .eq("business_name", name)
+                .maybeSingle();
+            if (sd) {
+                setSettings(prev => ({
+                    ...prev,
+                    auto_accept: !!sd.auto_accept,
+                    is_open: sd.is_open ?? true,
+                    open_time: sd.opening_time || prev.open_time,
+                    close_time: sd.closing_time || prev.close_time,
+                }));
+            }
 
             if (linkedViaDirectory) {
                 setIsAdminLinkedVendor(true);
@@ -542,8 +547,20 @@ export default function App() {
                         businessNameRef.current = name;
                         const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
                         if (menuData) setMenuItems(menuData);
-                        const { data: sd } = await supabase.from("business_settings").select("*").eq("business_name", name).single();
-                        if (sd) setSettings(sd);
+                        const { data: sd } = await supabase
+                            .from("business_settings")
+                            .select("*")
+                            .eq("business_name", name)
+                            .maybeSingle();
+                        if (sd) {
+                            setSettings(prev => ({
+                                ...prev,
+                                auto_accept: !!sd.auto_accept,
+                                is_open: sd.is_open ?? true,
+                                open_time: sd.opening_time || prev.open_time,
+                                close_time: sd.closing_time || prev.close_time,
+                            }));
+                        }
                         const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
                         if (done) {
                             setOnboardingDone(true);
@@ -808,18 +825,29 @@ export default function App() {
     }
 
     async function saveSettings() {
+        const name = businessNameRef.current || businessName;
+        if (!supabase || !name) return;
         try {
-            const name = businessNameRef.current || businessName;
-            const res = await fetch(API + "/whatsapp/settings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ businessName: name, ...settings })
-            });
-            if (!res.ok) throw new Error("Failed");
+            const payload = {
+                business_name: name,
+                opening_time: settings.open_time,
+                closing_time: settings.close_time,
+                is_open: settings.is_open,
+                auto_accept: settings.auto_accept,
+            };
+            const { error } = await supabase
+                .from("business_settings")
+                .upsert(payload, { onConflict: "business_name" })
+                .select("*");
+            if (error) throw error;
+            setSettings(prev => ({ ...prev }));
             setSettingsSaved(true);
             setTimeout(() => setSettingsSaved(false), 3000);
             addNotif("Settings saved", "success");
-        } catch (e) { alert("Failed to save settings: " + e.message); }
+        } catch (e) {
+            console.error("Failed to save settings:", e?.message || e);
+            alert("Failed to save settings: " + (e?.message || "Unknown error"));
+        }
     }
 
     async function sendBroadcast() {
@@ -840,6 +868,8 @@ export default function App() {
         setUser(null);
         setBusinessName("");
         businessNameRef.current = "";
+        fetchedBusinessNameForUserRef.current = null;
+        checkedAccountStatusForUserRef.current = null;
         setOnboardingChecked(false);
     }
 
