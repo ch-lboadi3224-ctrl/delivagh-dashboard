@@ -206,6 +206,9 @@ export default function App() {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             const u = session?.user ?? null;
             setUser(u);
+            if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+                setAuthLoading(false);
+            }
             const uid = u?.id;
             if (uid && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
                 console.log("[vendorSession] onAuthStateChange", event, { userId: uid });
