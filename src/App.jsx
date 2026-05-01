@@ -1091,6 +1091,16 @@ export default function App() {
     );
     if (!user) return <Login notice={authNotice} onLogin={u => { setAuthNotice(""); setUser(u); }} onSignup={() => { setAuthNotice(""); setPage("signup"); }} />;
 
+    console.log("[render] state:", {
+        user: !!user,
+        authLoading,
+        onboardingChecked,
+        onboardingDone,
+        businessName,
+        needsVendorProfile,
+        page,
+        accountStatus: !!accountStatus
+    });
     // Avoid flashing dashboard before onboarding decision finishes.
     if (user && !onboardingChecked) return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: d.bg }}>
