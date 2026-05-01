@@ -75,7 +75,7 @@ class ErrorBoundary extends React.Component {
 export default function App() {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
-    const [page, setPage] = useState("login");
+    const [page, setPage] = useState("dashboard");
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, delivered: 0, revenue: 0, unpaidRevenue: 0 });
