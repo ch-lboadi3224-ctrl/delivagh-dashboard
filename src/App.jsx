@@ -34,12 +34,10 @@ function ensureVendorSessionStartTimestamp(userId) {
         if (!raw || !Number.isFinite(parsed)) {
             const ts = String(Date.now());
             localStorage.setItem(VENDOR_SESSION_START_KEY, ts);
-            console.log("[vendorSession] delivagh_vendor_session_start set", { userId, ts });
-        } else {
-            console.log("[vendorSession] delivagh_vendor_session_start already present", { userId, raw });
+        
         }
     } catch (e) {
-        console.warn("[vendorSession] localStorage read/write failed", e);
+        
     }
 }
 
