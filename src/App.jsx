@@ -458,169 +458,176 @@ export default function App() {
         setIsAdminLinkedVendor(false);
         setShowEmptyMenuBanner(false);
 
-        let biz = null;
-        let linkedViaDirectory = false;
-        let businessNameFromDirectory = null;
+        try {
+            let biz = null;
+            let linkedViaDirectory = false;
+            let businessNameFromDirectory = null;
 
-        const { data: byUserId } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
-        if (byUserId && byUserId.length > 0) {
-            biz = byUserId[0];
-        } else {
-            // Admin-created vendors may not be linked by user_id yet.
-            // Resolve business_name from registered_businesses without filtering by missing columns.
-            const { data: regData } = await supabase
-                .from("registered_businesses")
-                .select("business_name")
-                .limit(10);
-            businessNameFromDirectory = regData?.[0]?.business_name || null;
-            if (!businessNameFromDirectory) {
-                businessNameFromDirectory = user.user_metadata?.business_name || null;
-            }
+            const { data: byUserId } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
+            console.log("[debug] byUserId result:", byUserId, "user.id:", user.id);
+            if (byUserId && byUserId.length > 0) {
+                biz = byUserId[0];
+            } else {
+                // Admin-created vendors may not be linked by user_id yet.
+                // Resolve business_name from registered_businesses without filtering by missing columns.
+                const { data: regData } = await supabase
+                    .from("registered_businesses")
+                    .select("business_name")
+                    .limit(10);
+                businessNameFromDirectory = regData?.[0]?.business_name || null;
+                if (!businessNameFromDirectory) {
+                    businessNameFromDirectory = user.user_metadata?.business_name || null;
+                }
 
-            if (businessNameFromDirectory) {
-                let byName = null;
-                const { data: bizByName } = await supabase
-                    .from("businesses")
-                    .select("*")
-                    .eq("name", businessNameFromDirectory)
-                    .limit(1);
-                byName = bizByName?.[0] || null;
-                if (!byName) {
-                    const { data: bizByBusinessName } = await supabase
+                if (businessNameFromDirectory) {
+                    let byName = null;
+                    const { data: bizByName } = await supabase
                         .from("businesses")
                         .select("*")
-                        .eq("business_name", businessNameFromDirectory)
+                        .eq("name", businessNameFromDirectory)
                         .limit(1);
-                    byName = bizByBusinessName?.[0] || null;
-                }
-                if (byName) {
-                    biz = byName;
-                    linkedViaDirectory = true;
+                    byName = bizByName?.[0] || null;
+                    if (!byName) {
+                        const { data: bizByBusinessName } = await supabase
+                            .from("businesses")
+                            .select("*")
+                            .eq("business_name", businessNameFromDirectory)
+                            .limit(1);
+                        byName = bizByBusinessName?.[0] || null;
+                    }
+                    if (byName) {
+                        biz = byName;
+                        linkedViaDirectory = true;
+                    }
                 }
             }
-        }
 
-        if (biz) {
-            const name = biz.name || biz.business_name || "";
-            setBusinessName(name);
-            businessNameRef.current = name;
+            if (biz) {
+                const name = biz.name || biz.business_name || "";
+                setBusinessName(name);
+                businessNameRef.current = name;
 
-            const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
-            if (menuData) setMenuItems(menuData);
+                const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
+                if (menuData) setMenuItems(menuData);
 
-            const { data: sd } = await supabase
-                .from("business_settings")
-                .select("*")
-                .eq("business_name", name)
-                .maybeSingle();
-            if (sd) {
-                setSettings(prev => ({
-                    ...prev,
-                    auto_accept: !!sd.auto_accept,
-                    is_open: sd.is_open ?? true,
-                    open_time: sd.opening_time || prev.open_time,
-                    close_time: sd.closing_time || prev.close_time,
-                }));
-            }
+                const { data: sd } = await supabase
+                    .from("business_settings")
+                    .select("*")
+                    .eq("business_name", name)
+                    .maybeSingle();
+                if (sd) {
+                    setSettings(prev => ({
+                        ...prev,
+                        auto_accept: !!sd.auto_accept,
+                        is_open: sd.is_open ?? true,
+                        open_time: sd.opening_time || prev.open_time,
+                        close_time: sd.closing_time || prev.close_time,
+                    }));
+                }
 
-            if (linkedViaDirectory) {
-                setIsAdminLinkedVendor(true);
-                localStorage.setItem("onboarding_done_" + user.id, "true");
-                setOnboardingDone(true);
-                const dismissed = localStorage.getItem("empty_menu_banner_dismissed_" + user.id) === "true";
-                const isMenuEmpty = !menuData || menuData.length === 0;
-                setShowEmptyMenuBanner(isMenuEmpty && !dismissed);
-            } else {
-                setIsAdminLinkedVendor(false);
-                // ── ONBOARDING CHECK ──
-                const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
-                if (done) {
+                if (linkedViaDirectory) {
+                    setIsAdminLinkedVendor(true);
+                    localStorage.setItem("onboarding_done_" + user.id, "true");
                     setOnboardingDone(true);
+                    const dismissed = localStorage.getItem("empty_menu_banner_dismissed_" + user.id) === "true";
+                    const isMenuEmpty = !menuData || menuData.length === 0;
+                    setShowEmptyMenuBanner(isMenuEmpty && !dismissed);
                 } else {
-                    // Existing vendors should not get forced back into onboarding.
-                    const hasMenu = !!(menuData && menuData.length > 0);
-                    const { data: existingOrders } = await supabase
-                        .from("orders")
-                        .select("id")
-                        .eq("business_name", name)
-                        .limit(1);
-                    const hasOrders = !!(existingOrders && existingOrders.length > 0);
-                    if (hasMenu || hasOrders) {
-                        localStorage.setItem("onboarding_done_" + user.id, "true");
+                    setIsAdminLinkedVendor(false);
+                    // ── ONBOARDING CHECK ──
+                    const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
+                    if (done) {
                         setOnboardingDone(true);
                     } else {
-                        setOnboardingDone(false);
-                    }
-                }
-            }
-            setOnboardingChecked(true);
-        } else {
-            const meta = user.user_metadata || {};
-            const pendingName = meta.pending_business_name;
-            const pendingPhone = meta.pending_business_phone;
-            if (pendingName && pendingPhone) {
-                const { error: insErr } = await supabase.from("businesses").insert([{
-                    name: String(pendingName).trim(),
-                    phone: String(pendingPhone).trim(),
-                    user_id: user.id,
-                    status: "pending",
-                }]);
-                if (!insErr) {
-                    await supabase.auth.updateUser({
-                        data: { pending_business_name: null, pending_business_phone: null },
-                    });
-                    const { data: data2 } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
-                    if (data2 && data2.length > 0) {
-                        const biz = data2[0];
-                        const name = biz.name;
-                        setBusinessName(name);
-                        businessNameRef.current = name;
-                        const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
-                        if (menuData) setMenuItems(menuData);
-                        const { data: sd } = await supabase
-                            .from("business_settings")
-                            .select("*")
+                        // Existing vendors should not get forced back into onboarding.
+                        const hasMenu = !!(menuData && menuData.length > 0);
+                        const { data: existingOrders } = await supabase
+                            .from("orders")
+                            .select("id")
                             .eq("business_name", name)
-                            .maybeSingle();
-                        if (sd) {
-                            setSettings(prev => ({
-                                ...prev,
-                                auto_accept: !!sd.auto_accept,
-                                is_open: sd.is_open ?? true,
-                                open_time: sd.opening_time || prev.open_time,
-                                close_time: sd.closing_time || prev.close_time,
-                            }));
-                        }
-                        const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
-                        if (done) {
+                            .limit(1);
+                        const hasOrders = !!(existingOrders && existingOrders.length > 0);
+                        if (hasMenu || hasOrders) {
+                            localStorage.setItem("onboarding_done_" + user.id, "true");
                             setOnboardingDone(true);
                         } else {
-                            const hasMenu = !!(menuData && menuData.length > 0);
-                            const { data: existingOrders } = await supabase
-                                .from("orders")
-                                .select("id")
-                                .eq("business_name", name)
-                                .limit(1);
-                            const hasOrders = !!(existingOrders && existingOrders.length > 0);
-                            if (hasMenu || hasOrders) {
-                                localStorage.setItem("onboarding_done_" + user.id, "true");
-                                setOnboardingDone(true);
-                            } else {
-                                setOnboardingDone(false);
-                            }
+                            setOnboardingDone(false);
                         }
-                        setOnboardingChecked(true);
-                        return;
                     }
                 }
+                setOnboardingChecked(true);
+            } else {
+                const meta = user.user_metadata || {};
+                const pendingName = meta.pending_business_name;
+                const pendingPhone = meta.pending_business_phone;
+                if (pendingName && pendingPhone) {
+                    const { error: insErr } = await supabase.from("businesses").insert([{
+                        name: String(pendingName).trim(),
+                        phone: String(pendingPhone).trim(),
+                        user_id: user.id,
+                        status: "pending",
+                    }]);
+                    if (!insErr) {
+                        await supabase.auth.updateUser({
+                            data: { pending_business_name: null, pending_business_phone: null },
+                        });
+                        const { data: data2 } = await supabase.from("businesses").select("*").eq("user_id", user.id).limit(1);
+                        if (data2 && data2.length > 0) {
+                            const biz = data2[0];
+                            const name = biz.name;
+                            setBusinessName(name);
+                            businessNameRef.current = name;
+                            const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
+                            if (menuData) setMenuItems(menuData);
+                            const { data: sd } = await supabase
+                                .from("business_settings")
+                                .select("*")
+                                .eq("business_name", name)
+                                .maybeSingle();
+                            if (sd) {
+                                setSettings(prev => ({
+                                    ...prev,
+                                    auto_accept: !!sd.auto_accept,
+                                    is_open: sd.is_open ?? true,
+                                    open_time: sd.opening_time || prev.open_time,
+                                    close_time: sd.closing_time || prev.close_time,
+                                }));
+                            }
+                            const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
+                            if (done) {
+                                setOnboardingDone(true);
+                            } else {
+                                const hasMenu = !!(menuData && menuData.length > 0);
+                                const { data: existingOrders } = await supabase
+                                    .from("orders")
+                                    .select("id")
+                                    .eq("business_name", name)
+                                    .limit(1);
+                                const hasOrders = !!(existingOrders && existingOrders.length > 0);
+                                if (hasMenu || hasOrders) {
+                                    localStorage.setItem("onboarding_done_" + user.id, "true");
+                                    setOnboardingDone(true);
+                                } else {
+                                    setOnboardingDone(false);
+                                }
+                            }
+                            setOnboardingChecked(true);
+                            return;
+                        }
+                    }
+                }
+                setBusinessName("");
+                businessNameRef.current = "";
+                setIsAdminLinkedVendor(false);
+                setShowEmptyMenuBanner(false);
+                setNeedsVendorProfile(true);
+                setOnboardingDone(true);
+                setOnboardingChecked(true);
             }
-            setBusinessName("");
-            businessNameRef.current = "";
-            setIsAdminLinkedVendor(false);
-            setShowEmptyMenuBanner(false);
-            setNeedsVendorProfile(true);
-            setOnboardingDone(true);
+        } catch (e) {
+            console.error("[fetchBusinessName] crashed:", e);
             setOnboardingChecked(true);
+            setNeedsVendorProfile(true);
         }
     }
 
