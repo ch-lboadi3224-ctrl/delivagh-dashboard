@@ -540,8 +540,8 @@ export default function App() {
                         ...prev,
                         auto_accept: !!sd.auto_accept,
                         is_open: sd.is_open ?? true,
-                        open_time: sd.opening_time || prev.open_time,
-                        close_time: sd.closing_time || prev.close_time,
+                        open_time: sd.open_time || prev.open_time,
+                        close_time: sd.close_time || prev.close_time,
                     }));
                 }
 
@@ -1207,6 +1207,7 @@ export default function App() {
                                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
                                     {[
                                         { label: "Customer", value: liveOrder.customer_phone?.replace("whatsapp:", "") },
+                                        ...(liveOrder.contact_phone && liveOrder.contact_phone !== liveOrder.customer_phone?.replace("whatsapp:+", "").replace(/\D/g,"") ? [{ label: "Call on", value: "+" + liveOrder.contact_phone }] : []),
                                         { label: "Items", value: liveOrder.items },
                                         { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
                                         ...(liveOrder.momo_number ? [{ label: "MoMo #", value: liveOrder.momo_number }] : []),
