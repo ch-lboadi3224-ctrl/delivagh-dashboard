@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 import Login from "./Login";
 import Signup from "./Signup";
@@ -7,6 +7,23 @@ import CompleteVendorProfile from "./CompleteVendorProfile";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://web-production-a167.up.railway.app";
 const API = BACKEND_URL;
+
+/** Wall-clock session length for vendor portal (7 days). */
+const VENDOR_SESSION_START_KEY = "delivagh_vendor_session_start";
+const VENDOR_MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const VENDOR_INACTIVITY_MS = 4 * 60 * 60 * 1000;
+const VENDOR_ACTIVITY_THROTTLE_MS = 1000;
+
+function clearVendorPersistedLocalStorage(userId) {
+    try {
+        localStorage.removeItem(VENDOR_SESSION_START_KEY);
+        if (userId) {
+            localStorage.removeItem("onboarding_done_" + userId);
+            localStorage.removeItem("onboarding_last_step_" + userId);
+            localStorage.removeItem("empty_menu_banner_dismissed_" + userId);
+        }
+    } catch (_) { /* ignore */ }
+}
 
 function waDigitsFromOrder(order) {
     return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
@@ -70,6 +87,7 @@ export default function App() {
     const audioCtxRef = useRef(null);
     const businessNameRef = useRef("");
     const notifIdRef = useRef(0);
+    const sessionPolicySignOutLockRef = useRef(false);
 
     const dm = darkMode;
     const d = dm ? {
@@ -92,6 +110,33 @@ export default function App() {
         const id = ++notifIdRef.current;
         setNotifications(prev => [{ id, message, type, time: new Date() }, ...prev.slice(0, 19)]);
     }
+
+    const signOutForSessionPolicy = useCallback(async (userId) => {
+        if (!supabase || sessionPolicySignOutLockRef.current) return;
+        sessionPolicySignOutLockRef.current = true;
+        try {
+            await supabase.auth.signOut();
+        } catch (e) {
+            console.warn("Session policy signOut:", e);
+        } finally {
+            clearVendorPersistedLocalStorage(userId);
+            setAuthNotice("You were signed out due to inactivity.");
+            setUser(null);
+            setBusinessName("");
+            businessNameRef.current = "";
+            setOnboardingChecked(false);
+            setOnboardingDone(false);
+            setNeedsVendorProfile(false);
+            setIsAdminLinkedVendor(false);
+            setShowEmptyMenuBanner(false);
+            setMenuItems([]);
+            setOrders([]);
+            ordersRef.current = [];
+            setSelectedOrder(null);
+            setPage("login");
+            sessionPolicySignOutLockRef.current = false;
+        }
+    }, [supabase]);
 
     // ── LOUD SOUND ──
     function playNotification() {
@@ -140,9 +185,66 @@ export default function App() {
         if (!supabase) return;
         // If vendor intentionally goes to signup while already logged in, switch account cleanly.
         if (page === "signup" && user) {
-            supabase.auth.signOut().finally(() => setUser(null));
+            const uid = user.id;
+            supabase.auth.signOut().finally(() => {
+                clearVendorPersistedLocalStorage(uid);
+                setUser(null);
+            });
         }
     }, [page, user]);
+
+    // ── Max session length (7 days) — checked whenever a vendor session is active ──
+    useEffect(() => {
+        if (!supabase || !user?.id) return;
+        const now = Date.now();
+        const raw = localStorage.getItem(VENDOR_SESSION_START_KEY);
+        if (!raw) {
+            localStorage.setItem(VENDOR_SESSION_START_KEY, String(now));
+            return;
+        }
+        const start = parseInt(raw, 10);
+        if (!Number.isFinite(start)) {
+            localStorage.setItem(VENDOR_SESSION_START_KEY, String(now));
+            return;
+        }
+        if (now - start <= VENDOR_MAX_SESSION_MS) return;
+        const uid = user.id;
+        void signOutForSessionPolicy(uid);
+    }, [supabase, user?.id, signOutForSessionPolicy]);
+
+    // ── Inactivity timeout (4 hours) ──
+    useEffect(() => {
+        if (!supabase || !user?.id) return;
+        const uid = user.id;
+        let inactivityTimerId = null;
+        let lastThrottle = 0;
+
+        function bumpActivity() {
+            const t = Date.now();
+            if (t - lastThrottle < VENDOR_ACTIVITY_THROTTLE_MS) return;
+            lastThrottle = t;
+            if (inactivityTimerId != null) clearTimeout(inactivityTimerId);
+            inactivityTimerId = setTimeout(() => {
+                void signOutForSessionPolicy(uid);
+            }, VENDOR_INACTIVITY_MS);
+        }
+
+        bumpActivity();
+
+        const opts = { capture: true };
+        window.addEventListener("mousemove", bumpActivity, opts);
+        window.addEventListener("keydown", bumpActivity, opts);
+        window.addEventListener("click", bumpActivity, opts);
+        window.addEventListener("scroll", bumpActivity, opts);
+
+        return () => {
+            if (inactivityTimerId != null) clearTimeout(inactivityTimerId);
+            window.removeEventListener("mousemove", bumpActivity, opts);
+            window.removeEventListener("keydown", bumpActivity, opts);
+            window.removeEventListener("click", bumpActivity, opts);
+            window.removeEventListener("scroll", bumpActivity, opts);
+        };
+    }, [supabase, user?.id, signOutForSessionPolicy]);
 
     useEffect(() => {
         if (!supabase || !user) return;
@@ -162,6 +264,7 @@ export default function App() {
                 setAccountStatus({ type: status, message: msg });
                 setNeedsVendorProfile(false);
                 await supabase.auth.signOut();
+                clearVendorPersistedLocalStorage(user.id);
                 if (!cancelled) {
                     setUser(null);
                     setBusinessName("");
@@ -575,7 +678,15 @@ export default function App() {
         setBroadcastSending(false);
     }
 
-    async function handleLogout() { await supabase.auth.signOut(); setUser(null); }
+    async function handleLogout() {
+        const uid = user?.id;
+        await supabase.auth.signOut();
+        clearVendorPersistedLocalStorage(uid);
+        setUser(null);
+        setBusinessName("");
+        businessNameRef.current = "";
+        setOnboardingChecked(false);
+    }
 
     function StatusBadge({ status }) {
         const cfg = {
