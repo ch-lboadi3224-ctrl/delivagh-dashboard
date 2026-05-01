@@ -889,8 +889,8 @@ export default function App() {
         try {
             const payload = {
                 business_name: name,
-                opening_time: settings.open_time,
-                closing_time: settings.close_time,
+                open_time: settings.open_time,
+                close_time: settings.close_time,
                 is_open: settings.is_open,
                 auto_accept: settings.auto_accept,
             };
