@@ -25,6 +25,24 @@ function clearVendorPersistedLocalStorage(userId) {
     } catch (_) { /* ignore */ }
 }
 
+/** Ensure 7-day wall clock exists as soon as we have a confirmed auth user id (idempotent). */
+function ensureVendorSessionStartTimestamp(userId) {
+    if (!userId) return;
+    try {
+        const raw = localStorage.getItem(VENDOR_SESSION_START_KEY);
+        const parsed = raw != null ? parseInt(raw, 10) : NaN;
+        if (!raw || !Number.isFinite(parsed)) {
+            const ts = String(Date.now());
+            localStorage.setItem(VENDOR_SESSION_START_KEY, ts);
+            console.log("[vendorSession] delivagh_vendor_session_start set", { userId, ts });
+        } else {
+            console.log("[vendorSession] delivagh_vendor_session_start already present", { userId, raw });
+        }
+    } catch (e) {
+        console.warn("[vendorSession] localStorage read/write failed", e);
+    }
+}
+
 function waDigitsFromOrder(order) {
     return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
 }
@@ -174,12 +192,27 @@ export default function App() {
             setAuthLoading(false);
             return;
         }
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            const u = session?.user ?? null;
+            setUser(u);
+            const uid = u?.id;
+            if (uid && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+                console.log("[vendorSession] onAuthStateChange", event, { userId: uid });
+                ensureVendorSessionStartTimestamp(uid);
+            }
+        });
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
+            const u = session?.user ?? null;
+            setUser(u);
+            const uid = u?.id;
+            if (uid) {
+                console.log("[vendorSession] getSession resolved", { userId: uid });
+                ensureVendorSessionStartTimestamp(uid);
+            }
             setAuthLoading(false);
         });
-        supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
-    }, []);
+        return () => subscription.unsubscribe();
+    }, [supabase]);
 
     useEffect(() => {
         if (!supabase) return;
@@ -195,20 +228,30 @@ export default function App() {
 
     // ── Max session length (7 days) — checked whenever a vendor session is active ──
     useEffect(() => {
-        if (!supabase || !user?.id) return;
+        if (!supabase) {
+            console.log("[vendorSession] maxSession effect skip: no supabase");
+            return;
+        }
+        const uid = user?.id;
+        if (!uid) {
+            console.log("[vendorSession] maxSession effect skip: no user.id yet");
+            return;
+        }
+        console.log("[vendorSession] maxSession effect run", { userId: uid });
         const now = Date.now();
-        const raw = localStorage.getItem(VENDOR_SESSION_START_KEY);
-        if (!raw) {
-            localStorage.setItem(VENDOR_SESSION_START_KEY, String(now));
+        let raw;
+        try {
+            raw = localStorage.getItem(VENDOR_SESSION_START_KEY);
+        } catch (e) {
+            console.warn("[vendorSession] maxSession read localStorage failed", e);
+            return;
+        }
+        if (!raw || !Number.isFinite(parseInt(raw, 10))) {
+            ensureVendorSessionStartTimestamp(uid);
             return;
         }
         const start = parseInt(raw, 10);
-        if (!Number.isFinite(start)) {
-            localStorage.setItem(VENDOR_SESSION_START_KEY, String(now));
-            return;
-        }
         if (now - start <= VENDOR_MAX_SESSION_MS) return;
-        const uid = user.id;
         void signOutForSessionPolicy(uid);
     }, [supabase, user?.id, signOutForSessionPolicy]);
 
