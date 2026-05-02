@@ -726,9 +726,18 @@ export default function App() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
+        const error = params.get('error');
+        const errorCode = params.get('error_code');
+
+        if (error === 'access_denied' || errorCode === 'otp_expired') {
+            window.history.replaceState({}, '', '/');
+            setAuthNotice("Your password reset link has expired. Please request a new one.");
+            setPage('login');
+            setAuthLoading(false);
+            return;
+        }
+
         if (params.get('reset') === 'true') {
-            // Don't set reset mode yet — wait for PASSWORD_RECOVERY event from Supabase
-            // Just show a loading screen while Supabase establishes the session
             setAuthLoading(true);
             window.history.replaceState({}, '', '/');
         }
