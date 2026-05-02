@@ -130,6 +130,12 @@ export default function App() {
     const [profilePicture, setProfilePicture] = useState("");
     const [newProfilePic, setNewProfilePic] = useState(null);
     const [contactNumber, setContactNumber] = useState("");
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [passwordError, setPasswordError] = useState("");
+    const [passwordSuccess, setPasswordSuccess] = useState(false);
+    const [passwordLoading, setPasswordLoading] = useState(false);
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -695,6 +701,14 @@ export default function App() {
         setUploadImagePreviewUrl(u);
         return () => URL.revokeObjectURL(u);
     }, [showUploadMenuModal, uploadMenuFile]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('reset') === 'true') {
+            setActivePage('settings');
+            window.history.replaceState({}, '', '/');
+        }
+    }, []);
 
     // ── FIX: fetchOrders filtered by business ──
     async function fetchOrders() {
@@ -2051,6 +2065,73 @@ export default function App() {
                                         <div onClick={() => setSettings(s => ({ ...s, auto_accept: !s.auto_accept }))} style={{ width: "44px", height: "22px", backgroundColor: settings.auto_accept ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                                             <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings.auto_accept ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
                                         </div>
+                                    </div>
+                                </div>
+                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
+                                    <h2 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: "700", color: d.text }}>Change Password</h2>
+                                    <p style={{ margin: "0 0 14px", fontSize: "11px", color: d.muted }}>You must enter your current password to set a new one</p>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                        <input
+                                            type="password"
+                                            value={currentPassword}
+                                            onChange={e => setCurrentPassword(e.target.value)}
+                                            placeholder="Current password"
+                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
+                                        />
+                                        <input
+                                            type="password"
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            placeholder="New password (min 6 characters)"
+                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
+                                        />
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={e => setConfirmPassword(e.target.value)}
+                                            placeholder="Confirm new password"
+                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
+                                        />
+                                        {passwordError && <p style={{ margin: 0, fontSize: "11px", color: "#dc2626", fontWeight: "600" }}>{passwordError}</p>}
+                                        {passwordSuccess && <p style={{ margin: 0, fontSize: "11px", color: "#16a34a", fontWeight: "600" }}>✓ Password updated successfully</p>}
+                                        <button onClick={async () => {
+                                            setPasswordError("");
+                                            setPasswordSuccess(false);
+                                            if (!currentPassword) { setPasswordError("Please enter your current password."); return; }
+                                            if (!newPassword) { setPasswordError("Please enter a new password."); return; }
+                                            if (newPassword.length < 6) { setPasswordError("New password must be at least 6 characters."); return; }
+                                            if (newPassword !== confirmPassword) { setPasswordError("New passwords do not match."); return; }
+                                            if (currentPassword === newPassword) { setPasswordError("New password must be different from your current password."); return; }
+                                            setPasswordLoading(true);
+                                            try {
+                                                const { error: signInError } = await supabase.auth.signInWithPassword({
+                                                    email: user.email,
+                                                    password: currentPassword
+                                                });
+                                                if (signInError) {
+                                                    setPasswordError("Current password is incorrect.");
+                                                    setPasswordLoading(false);
+                                                    return;
+                                                }
+                                                const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+                                                if (updateError) {
+                                                    setPasswordError(updateError.message);
+                                                    setPasswordLoading(false);
+                                                    return;
+                                                }
+                                                setPasswordSuccess(true);
+                                                setCurrentPassword("");
+                                                setNewPassword("");
+                                                setConfirmPassword("");
+                                                setTimeout(() => setPasswordSuccess(false), 4000);
+                                            } catch (e) {
+                                                setPasswordError("Something went wrong. Please try again.");
+                                            }
+                                            setPasswordLoading(false);
+                                        }} disabled={passwordLoading}
+                                            style={{ padding: "10px 20px", backgroundColor: passwordLoading ? d.border : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: passwordLoading ? "not-allowed" : "pointer", alignSelf: "flex-start" }}>
+                                            {passwordLoading ? "Verifying..." : "Update Password"}
+                                        </button>
                                     </div>
                                 </div>
                                 <button onClick={saveSettings} style={{ padding: "12px", backgroundColor: settingsSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "13px", cursor: "pointer", transition: "background 0.3s" }}>

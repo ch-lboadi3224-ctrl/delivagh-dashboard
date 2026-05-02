@@ -32,6 +32,10 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
     const [resendLoading, setResendLoading] = useState(false);
     const [resendMsg, setResendMsg] = useState("");
     const [showResendButton, setShowResendButton] = useState(false);
+    const [forgotMode, setForgotMode] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState("");
+    const [forgotSent, setForgotSent] = useState(false);
+    const [forgotLoading, setForgotLoading] = useState(false);
 
     function loginErrorSuggestsUnconfirmedEmail(message) {
         const m = (message || "").toLowerCase();
@@ -155,41 +159,95 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                         {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px 14px", borderRadius: "10px", marginBottom: "20px", fontSize: "13px" }}>{error}</div>}
                         {resendMsg && <div style={{ backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", color: "#86efac", padding: "12px 14px", borderRadius: "10px", marginBottom: "14px", fontSize: "13px" }}>{resendMsg}</div>}
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "18px" }}>
-                            <button type="button" style={googleButtonStyle()} onClick={handleGoogle}>
-                                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.283 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c5.265 0 9.61-3.527 11.191-8.36l6.57 5.045C40.556 39.661 32.831 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
-                                Continue with Google
-                            </button>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "rgba(255,255,255,0.25)", fontSize: "11px" }}>
-                                <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
-                                or email
-                                <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                        {forgotMode ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                <h2 style={{ margin: "0 0 4px", fontSize: "24px", fontWeight: "800", color: "white" }}>Reset Password</h2>
+                                <p style={{ margin: "0 0 6px", fontSize: "13px", color: "rgba(255,255,255,0.55)" }}>
+                                    Enter your email and we'll send you a reset link.
+                                </p>
+                                {forgotSent ? (
+                                    <>
+                                        <p style={{ color: "#22c55e", fontWeight: "700", fontSize: "14px", margin: 0 }}>✓ Check your email</p>
+                                        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "13px", margin: 0 }}>
+                                            We sent a password reset link to <strong>{forgotEmail}</strong>
+                                        </p>
+                                        <button onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail(""); }}
+                                            style={{ width: "100%", padding: "13px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "14px", cursor: "pointer", marginTop: "6px" }}>
+                                            Back to Login
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="email"
+                                            value={forgotEmail}
+                                            onChange={e => setForgotEmail(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && !forgotLoading && document.getElementById('forgot-btn').click()}
+                                            placeholder="your@email.com"
+                                            style={{ padding: "12px 14px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", width: "100%", boxSizing: "border-box" }}
+                                        />
+                                        <button id="forgot-btn" onClick={async () => {
+                                            if (!forgotEmail.trim()) return;
+                                            setForgotLoading(true);
+                                            const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+                                                redirectTo: window.location.origin + '/?reset=true'
+                                            });
+                                            setForgotLoading(false);
+                                            if (!error) {
+                                                setForgotSent(true);
+                                            } else {
+                                                alert('Error: ' + error.message);
+                                            }
+                                        }} disabled={forgotLoading}
+                                            style={{ width: "100%", padding: "13px", backgroundColor: forgotLoading ? "rgba(255,255,255,0.1)" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "14px", cursor: forgotLoading ? "not-allowed" : "pointer" }}>
+                                            {forgotLoading ? "Sending..." : "Send Reset Link"}
+                                        </button>
+                                        <button onClick={() => { setForgotMode(false); setForgotEmail(""); }}
+                                            style={{ width: "100%", padding: "13px", backgroundColor: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}>
+                                            Back to Login
+                                        </button>
+                                    </>
+                                )}
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "18px" }}>
+                                    <button type="button" style={googleButtonStyle()} onClick={handleGoogle}>
+                                        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.283 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.591 6.115 29.018 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c5.265 0 9.61-3.527 11.191-8.36l6.57 5.045C40.556 39.661 32.831 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+                                        Continue with Google
+                                    </button>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "rgba(255,255,255,0.25)", fontSize: "11px" }}>
+                                        <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                                        or email
+                                        <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.12)" }} />
+                                    </div>
+                                </div>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
-                            <div>
-                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Email</label>
-                                <input className="ai" type="email" value={email} onChange={e => { setShowResendButton(false); setEmail(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" autoComplete="email" />
-                            </div>
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
-                                    <label style={{ fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Password</label>
-                                    <span style={{ fontSize: "12px", color: "#22c55e", cursor: "pointer", fontWeight: "500" }}>Forgot?</span>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "24px" }}>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Email</label>
+                                        <input className="ai" type="email" value={email} onChange={e => { setShowResendButton(false); setEmail(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="your@email.com" autoComplete="email" />
+                                    </div>
+                                    <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "7px" }}>
+                                            <label style={{ fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Password</label>
+                                            <span style={{ fontSize: "12px", color: "#22c55e", cursor: "pointer", fontWeight: "500" }} onClick={() => setForgotMode(true)}>Forgot?</span>
+                                        </div>
+                                        <div style={{ position: "relative" }}>
+                                            <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => { setShowResendButton(false); setPassword(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} autoComplete="current-password" />
+                                            <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div style={{ position: "relative" }}>
-                                    <input className="ai" type={showPass ? "text" : "password"} value={password} onChange={e => { setShowResendButton(false); setPassword(e.target.value); }} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" style={{ paddingRight: "54px" }} autoComplete="current-password" />
-                                    <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans',sans-serif", fontWeight: "500" }}>{showPass ? "Hide" : "Show"}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <button className="ab" onClick={handleLogin} disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
-                        {showResendButton && (
-                            <button type="button" onClick={handleResendConfirmation} disabled={resendLoading} style={{ width: "100%", marginTop: "10px", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
-                                {resendLoading ? "Sending…" : "Resend confirmation email"}
-                            </button>
+                                <button className="ab" onClick={handleLogin} disabled={loading}>{loading ? "Signing in..." : "Sign In"}</button>
+                                {showResendButton && (
+                                    <button type="button" onClick={handleResendConfirmation} disabled={resendLoading} style={{ width: "100%", marginTop: "10px", padding: "11px", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(255,255,255,0.55)", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+                                        {resendLoading ? "Sending…" : "Resend confirmation email"}
+                                    </button>
+                                )}
+                                <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<span onClick={onSignup} style={{ color: "#22c55e", fontWeight: "600", cursor: "pointer" }}>Create one free</span></p>
+                            </>
                         )}
-                        <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<span onClick={onSignup} style={{ color: "#22c55e", fontWeight: "600", cursor: "pointer" }}>Create one free</span></p>
                     </div>
                 </div>
                 <div className="rp" style={{ flex: 1, position: "relative", overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
