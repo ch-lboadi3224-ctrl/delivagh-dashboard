@@ -190,7 +190,7 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                                             if (!forgotEmail.trim()) return;
                                             setForgotLoading(true);
                                             const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
-                                                redirectTo: 'https://delivagh.app/?reset=true'
+                                                redirectTo: 'https://delivagh.app/reset-password'
                                             });
                                             setForgotLoading(false);
                                             if (!error) {

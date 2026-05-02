@@ -727,12 +727,14 @@ export default function App() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const hash = window.location.hash;
-        const hashParams = new URLSearchParams(hash.replace('#', ''));
 
-        // Handle expired/invalid link error
-        const error = params.get('error') || hashParams.get('error');
-        const errorCode = params.get('error_code') || hashParams.get('error_code');
+        // Handle PKCE code exchange for password reset
+        const code = params.get('code');
+        const next = params.get('next') || '';
+
+        // Handle error from Supabase
+        const error = params.get('error');
+        const errorCode = params.get('error_code');
         if (error === 'access_denied' || errorCode === 'otp_expired') {
             window.history.replaceState({}, '', '/');
             setAuthNotice("Your password reset link has expired. Please request a new one.");
@@ -740,14 +742,15 @@ export default function App() {
             return;
         }
 
-        // Detect recovery token in hash
+        // Handle hash-based flow (fallback)
+        const hash = window.location.hash;
+        const hashParams = new URLSearchParams(hash.replace('#', ''));
         const type = hashParams.get('type');
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
 
         if (type === 'recovery' && accessToken) {
             window.history.replaceState({}, '', '/');
-            // Set the session manually so Supabase can fire PASSWORD_RECOVERY
             supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken || ''
@@ -763,10 +766,19 @@ export default function App() {
             return;
         }
 
-        // Handle ?reset=true from redirectTo
-        if (params.get('reset') === 'true') {
-            setAuthLoading(true);
+        // Handle PKCE code param — exchange code for session
+        if (code && window.location.pathname === '/reset-password') {
             window.history.replaceState({}, '', '/');
+            supabase.auth.exchangeCodeForSession(code).then(({ error: exchError }) => {
+                if (exchError) {
+                    setAuthNotice("Your reset link has expired. Please request a new one.");
+                    setAuthLoading(false);
+                } else {
+                    setIsPasswordResetMode(true);
+                    setAuthLoading(false);
+                }
+            });
+            return;
         }
     }, []);
 
