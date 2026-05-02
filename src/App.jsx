@@ -726,17 +726,43 @@ export default function App() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const error = params.get('error');
-        const errorCode = params.get('error_code');
+        const hash = window.location.hash;
+        const hashParams = new URLSearchParams(hash.replace('#', ''));
 
+        // Handle expired/invalid link error
+        const error = params.get('error') || hashParams.get('error');
+        const errorCode = params.get('error_code') || hashParams.get('error_code');
         if (error === 'access_denied' || errorCode === 'otp_expired') {
             window.history.replaceState({}, '', '/');
             setAuthNotice("Your password reset link has expired. Please request a new one.");
-            setPage('login');
             setAuthLoading(false);
             return;
         }
 
+        // Detect recovery token in hash
+        const type = hashParams.get('type');
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        if (type === 'recovery' && accessToken) {
+            window.history.replaceState({}, '', '/');
+            // Set the session manually so Supabase can fire PASSWORD_RECOVERY
+            supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken || ''
+            }).then(({ error: sessionError }) => {
+                if (sessionError) {
+                    setAuthNotice("Your reset link has expired. Please request a new one.");
+                    setAuthLoading(false);
+                } else {
+                    setIsPasswordResetMode(true);
+                    setAuthLoading(false);
+                }
+            });
+            return;
+        }
+
+        // Handle ?reset=true from redirectTo
         if (params.get('reset') === 'true') {
             setAuthLoading(true);
             window.history.replaceState({}, '', '/');
