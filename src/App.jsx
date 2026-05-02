@@ -130,6 +130,12 @@ export default function App() {
     const [profilePicture, setProfilePicture] = useState("");
     const [newProfilePic, setNewProfilePic] = useState(null);
     const [contactNumber, setContactNumber] = useState("");
+    const [isPasswordResetMode, setIsPasswordResetMode] = useState(false);
+    const [resetPassword, setResetPassword] = useState("");
+    const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+    const [resetPasswordError, setResetPasswordError] = useState("");
+    const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+    const [resetPasswordDone, setResetPasswordDone] = useState(false);
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -252,6 +258,9 @@ export default function App() {
                 setAuthLoading(false);
             } else {
                 setAuthLoading(false);
+            }
+            if (event === 'PASSWORD_RECOVERY') {
+                setIsPasswordResetMode(true);
             }
             const uid = u?.id;
             if (uid && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
@@ -705,7 +714,7 @@ export default function App() {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('reset') === 'true') {
-            setActivePage('settings');
+            setIsPasswordResetMode(true);
             window.history.replaceState({}, '', '/');
         }
     }, []);
@@ -1114,6 +1123,76 @@ export default function App() {
             </div>
         </div>
     );
+
+    if (isPasswordResetMode && !resetPasswordDone) {
+        return (
+            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
+                <div style={{ width: "100%", maxWidth: "420px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "32px" }}>
+                    <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
+                        Delivagh<span style={{ color: "#22c55e" }}>.</span>
+                    </div>
+                    <h2 style={{ margin: "0 0 6px", fontSize: "22px", color: "#ecfdf3", fontFamily: "'Playfair Display', serif" }}>Set New Password</h2>
+                    <p style={{ margin: "0 0 24px", color: "rgba(236,253,243,0.55)", fontSize: "13px" }}>Choose a strong password for your account.</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <input
+                            type="password"
+                            value={resetPassword}
+                            onChange={e => setResetPassword(e.target.value)}
+                            placeholder="New password (min 6 characters)"
+                            style={{ padding: "12px 14px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", width: "100%", boxSizing: "border-box" }}
+                        />
+                        <input
+                            type="password"
+                            value={resetConfirmPassword}
+                            onChange={e => setResetConfirmPassword(e.target.value)}
+                            placeholder="Confirm new password"
+                            style={{ padding: "12px 14px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", width: "100%", boxSizing: "border-box" }}
+                        />
+                        {resetPasswordError && (
+                            <p style={{ margin: 0, fontSize: "12px", color: "#f87171", fontWeight: "600" }}>{resetPasswordError}</p>
+                        )}
+                        <button onClick={async () => {
+                            setResetPasswordError("");
+                            if (!resetPassword) { setResetPasswordError("Please enter a new password."); return; }
+                            if (resetPassword.length < 6) { setResetPasswordError("Password must be at least 6 characters."); return; }
+                            if (resetPassword !== resetConfirmPassword) { setResetPasswordError("Passwords do not match."); return; }
+                            setResetPasswordLoading(true);
+                            const { error } = await supabase.auth.updateUser({ password: resetPassword });
+                            if (error) {
+                                setResetPasswordError(error.message);
+                                setResetPasswordLoading(false);
+                                return;
+                            }
+                            await supabase.auth.signOut({ scope: 'others' });
+                            setResetPasswordDone(true);
+                            setResetPasswordLoading(false);
+                            setTimeout(async () => {
+                                await supabase.auth.signOut();
+                                setIsPasswordResetMode(false);
+                                setUser(null);
+                                setPage('login');
+                            }, 3000);
+                        }} disabled={resetPasswordLoading}
+                            style={{ padding: "13px", backgroundColor: resetPasswordLoading ? "rgba(255,255,255,0.1)" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "14px", cursor: resetPasswordLoading ? "not-allowed" : "pointer", width: "100%" }}>
+                            {resetPasswordLoading ? "Saving..." : "Set New Password"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (isPasswordResetMode && resetPasswordDone) {
+        return (
+            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
+                <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "16px", fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
+                    <p style={{ color: "#22c55e", fontSize: "18px", fontWeight: "700", margin: "0 0 8px" }}>✓ Password updated!</p>
+                    <p style={{ color: "rgba(236,253,243,0.55)", fontSize: "13px", margin: 0 }}>Redirecting you to login...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (!user && page === "signup") return <Signup onSignup={(opts) => {
         if (opts?.kind === "verify_email") {
