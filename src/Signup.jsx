@@ -63,7 +63,7 @@ export default function Signup({ onSignup, onLogin }) {
     }
     const pwS = getPasswordStrength(password);
     const pwLabel = ["", "Weak", "Fair", "Good", "Strong"][pwS];
-    const pwColor = ["", "#ef4444", "#f59e0b", "#3b82f6", "#22c55e"][pwS];
+    const pwColor = ["", "#ef4444", "#f59e0b", "#22c55e", "#15803d"][pwS];
 
     const redirectUrl = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin + "/" : undefined);
 

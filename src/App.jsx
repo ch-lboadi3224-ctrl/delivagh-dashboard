@@ -123,6 +123,7 @@ export default function App() {
     const [onboardingChecked, setOnboardingChecked] = useState(false);
     const [isAdminLinkedVendor, setIsAdminLinkedVendor] = useState(false);
     const [showEmptyMenuBanner, setShowEmptyMenuBanner] = useState(false);
+    const [waLinkCopied, setWaLinkCopied] = useState(false);
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -989,6 +990,7 @@ export default function App() {
 
     const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString());
     const todayRevenue = todayOrders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
+    const DELIVAGH_WA_LINK = "https://wa.me/233276295769?text=Hi";
     const filteredOrders = activeTab === "all" ? orders : orders.filter(o => o.status === activeTab);
     const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => i.category === menuFilter);
     const customers = Object.values(
@@ -1599,6 +1601,28 @@ export default function App() {
                                             <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: s.c, lineHeight: 1 }}>{s.value}</p>
                                         </div>
                                     ))}
+                                </div>
+                                {/* SHARE & INVITE */}
+                                <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, padding: "16px" }}>
+                                    <p style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: "700", color: d.text }}>Share with Customers</p>
+                                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: d.muted, lineHeight: "1.5" }}>Send this link to customers — they tap it and WhatsApp opens ready to order</p>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                                        <code style={{ flex: "1 1 200px", padding: "9px 13px", backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "8px", fontSize: "13px", color: "#22c55e", fontFamily: "monospace", wordBreak: "break-all", userSelect: "all" }}>
+                                            {DELIVAGH_WA_LINK}
+                                        </code>
+                                        <button
+                                            onClick={() => { navigator.clipboard.writeText(DELIVAGH_WA_LINK); setWaLinkCopied(true); setTimeout(() => setWaLinkCopied(false), 2000); }}
+                                            style={{ padding: "9px 16px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                                        >
+                                            {waLinkCopied ? "Copied! ✓" : "Copy Link"}
+                                        </button>
+                                        <button
+                                            onClick={() => window.open(DELIVAGH_WA_LINK, "_blank")}
+                                            style={{ padding: "9px 16px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.30)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                                        >
+                                            Open in WhatsApp
+                                        </button>
+                                    </div>
                                 </div>
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "14px" }}>
                                     <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
