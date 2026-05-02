@@ -2166,6 +2166,19 @@ export default function App() {
                                             <input type="file" accept="image/*" onChange={e => setNewProfilePic(e.target.files?.[0] || null)}
                                                 style={{ fontSize: "11px", color: d.muted }} />
                                             {newProfilePic && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ Ready to save</p>}
+                                            {profilePicture && !newProfilePic && (
+                                                <button onClick={async () => {
+                                                    try {
+                                                        await supabase.from('businesses').update({ profile_picture: null }).eq('name', businessNameRef.current || businessName);
+                                                        setProfilePicture("");
+                                                        addNotif("Profile picture removed", "success");
+                                                    } catch (e) {
+                                                        addNotif("Failed to remove picture", "error");
+                                                    }
+                                                }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
+                                                    Remove Photo
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                     {/* Contact number */}
