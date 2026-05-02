@@ -249,6 +249,13 @@ export default function App() {
         }
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             const u = session?.user ?? null;
+            if (event === 'PASSWORD_RECOVERY') {
+                setIsPasswordResetMode(true);
+                setUser(u);
+                setAuthLoading(false);
+                window.history.replaceState({}, '', '/');
+                return;
+            }
             setUser(u);
             if (event === "SIGNED_IN") {
                 setAuthLoading(false);
@@ -258,12 +265,6 @@ export default function App() {
                 setAuthLoading(false);
             } else {
                 setAuthLoading(false);
-            }
-            if (event === 'PASSWORD_RECOVERY') {
-                setIsPasswordResetMode(true);
-                setUser(session?.user ?? null);
-                setAuthLoading(false);
-                window.history.replaceState({}, '', '/');
             }
             const uid = u?.id;
             if (uid && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
