@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
+const DELIVAGH_WA_NUMBER = "233276295769";
+const DELIVAGH_WA_LINK = `https://wa.me/${DELIVAGH_WA_NUMBER}?text=Hi`;
+
 export default function Onboarding({ user, businessName, menuItems, onComplete }) {
     const [step, setStep] = useState(1);
     const initializedRef = useRef(false);
@@ -129,10 +132,10 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
         onComplete();
     }
 
-    function copyNumber() {
-        navigator.clipboard.writeText("+14155238886");
+    function copyLink() {
+        navigator.clipboard.writeText(DELIVAGH_WA_LINK);
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setTimeout(() => setCopied(false), 2000);
     }
 
     const stepDot = (n) => {
@@ -281,28 +284,47 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                             </div>
                         )}
 
-                        {/* STEP 2 — Share Number */}
+                        {/* STEP 3 — Share Link */}
                         {step === 3 && (
                             <div>
                                 <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", marginBottom: "16px" }}>📱</div>
-                                <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Share your WhatsApp number</h2>
+                                <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Share your WhatsApp link</h2>
                                 <p style={{ margin: "0 0 24px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>
-                                    Customers message this number to order from <strong style={{ color: "white" }}>{businessName}</strong>.
+                                    Share this link with your customers to start receiving orders on WhatsApp.
                                 </p>
 
                                 <div style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "20px", border: "1px solid rgba(255,255,255,0.10)", marginBottom: "20px" }}>
-                                    <p style={{ margin: "0 0 6px", fontSize: "10px", fontWeight: "700", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Your DelivaGH WhatsApp Number</p>
-                                    <p style={{ margin: "0 0 12px", fontSize: "22px", fontWeight: "800", color: "#22c55e", fontFamily: "monospace" }}>+1 415 523 8886</p>
-                                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: "rgba(236,253,243,0.55)" }}>Customers send <strong style={{ color: "white" }}>"Hi"</strong> to start ordering</p>
-                                    <button onClick={copyNumber}
-                                        style={{ padding: "8px 16px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                        {copied ? "Copied!" : "Copy Number"}
-                                    </button>
-                                </div>
-
-                                <div style={{ backgroundColor: "rgba(34,197,94,0.10)", borderRadius: "10px", padding: "14px 16px", border: "1px solid rgba(34,197,94,0.25)", marginBottom: "20px" }}>
-                                    <p style={{ margin: 0, fontSize: "12px", color: "#86efac", lineHeight: "1.6" }}>
-                                        <strong>Note:</strong> This is the Twilio sandbox number. You'll get a dedicated number once you upgrade to Meta WhatsApp Cloud API.
+                                    <p style={{ margin: "0 0 10px", fontSize: "10px", fontWeight: "700", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Your DelivaGH WhatsApp Link</p>
+                                    <a
+                                        href={DELIVAGH_WA_LINK}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ display: "block", margin: "0 0 16px", fontSize: "14px", fontWeight: "700", color: "#22c55e", wordBreak: "break-all", textDecoration: "underline" }}
+                                    >
+                                        {DELIVAGH_WA_LINK}
+                                    </a>
+                                    <div style={{ display: "flex", gap: "10px" }}>
+                                        <button
+                                            onClick={copyLink}
+                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                        >
+                                            {copied ? "Copied! ✓" : "Copy Link"}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (navigator.share) {
+                                                    navigator.share({ title: "Order from us on WhatsApp", url: DELIVAGH_WA_LINK });
+                                                } else {
+                                                    copyLink();
+                                                }
+                                            }}
+                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.35)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                        >
+                                            Share Link
+                                        </button>
+                                    </div>
+                                    <p style={{ margin: "14px 0 0", fontSize: "12px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>
+                                        Customers tap this link → WhatsApp opens → they send Hi → ordering starts 🚀
                                     </p>
                                 </div>
 
@@ -324,7 +346,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                                 <div style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(255,255,255,0.10)", marginBottom: "24px", textAlign: "left" }}>
                                     <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: "700", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.06em" }}>What happens next</p>
                                     {[
-                                        "Customer messages +1 415 523 8886",
+                                        "Customer taps your WhatsApp link",
                                         "Bot shows your menu & takes order",
                                         "You get a notification on your dashboard",
                                         "Accept order → customer gets payment link",
