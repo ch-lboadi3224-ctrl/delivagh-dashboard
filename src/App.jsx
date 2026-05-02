@@ -1555,8 +1555,10 @@ export default function App() {
                                 </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", padding: "0 2px" }}>
-                                <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0 }}>
-                                    {(businessName || user.email || "?").charAt(0).toUpperCase()}
+                                <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0, overflow: "hidden" }}>
+                                    {profilePicture
+                                        ? <img src={profilePicture} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        : (businessName || user.email || "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div style={{ overflow: "hidden" }}>
                                     <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{businessName || user.email?.split("@")[0]}</p>
