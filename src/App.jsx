@@ -7,6 +7,7 @@ import CompleteVendorProfile from "./CompleteVendorProfile";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 /** Wall-clock session length for vendor portal (7 days). */
 const VENDOR_SESSION_START_KEY = "delivagh_vendor_session_start";
@@ -124,6 +125,11 @@ export default function App() {
     const [isAdminLinkedVendor, setIsAdminLinkedVendor] = useState(false);
     const [showEmptyMenuBanner, setShowEmptyMenuBanner] = useState(false);
     const [waLinkCopied, setWaLinkCopied] = useState(false);
+    const [newItemImage, setNewItemImage] = useState(null);
+    const [editItemImage, setEditItemImage] = useState(null);
+    const [profilePicture, setProfilePicture] = useState("");
+    const [newProfilePic, setNewProfilePic] = useState(null);
+    const [contactNumber, setContactNumber] = useState("");
 
     const ordersRef = useRef([]);
     const audioCtxRef = useRef(null);
@@ -132,6 +138,15 @@ export default function App() {
     const sessionPolicySignOutLockRef = useRef(false);
     const fetchedBusinessNameForUserRef = useRef(null);
     const checkedAccountStatusForUserRef = useRef(null);
+
+    async function uploadImageToStorage(file, path) {
+        const { data, error } = await supabase.storage
+            .from('delivagh-media')
+            .upload(path, file, { upsert: true, contentType: file.type });
+        if (error) throw new Error(error.message);
+        const { data: urlData } = supabase.storage.from('delivagh-media').getPublicUrl(path);
+        return urlData.publicUrl;
+    }
 
     const dm = darkMode;
     const d = dm ? {
@@ -526,6 +541,9 @@ export default function App() {
                 setBusinessName(name);
                 businessNameRef.current = name;
 
+                setProfilePicture(biz.profile_picture || "");
+                setContactNumber(biz.contact_number || "");
+
                 const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
                 console.log("[debug] checkpoint 1 - after menu fetch");
                 if (menuData) setMenuItems(menuData);
@@ -708,13 +726,22 @@ export default function App() {
     async function addMenuItem() {
         if (!newItem.item_name || !newItem.item_price) return;
         const name = businessNameRef.current || businessName;
+        let imageUrl = null;
+        if (newItemImage) {
+            try {
+                const ext = newItemImage.name.split('.').pop();
+                const path = `menu-items/${name}/${Date.now()}.${ext}`;
+                imageUrl = await uploadImageToStorage(newItemImage, path);
+            } catch (e) { console.error('Image upload failed:', e.message); }
+        }
         const { data, error } = await supabase.from("menus").insert([{
             business_name: name, item_name: newItem.item_name.trim(),
             item_price: parseFloat(newItem.item_price), item_description: newItem.item_description.trim(),
-            category: newItem.category, available: true
+            category: newItem.category, available: true, image_url: imageUrl
         }]).select();
         if (error) { alert("Error: " + error.message); return; }
         setNewItem({ item_name: "", item_price: "", item_description: "", category: "Main" });
+        setNewItemImage(null);
         setShowAddModal(false);
         if (data && data.length > 0) setMenuItems(prev => [data[0], ...prev]);
         await fetchMenuItems();
@@ -722,11 +749,21 @@ export default function App() {
 
     async function saveEditItem() {
         if (!editItem?.item_name || !editItem?.item_price) return;
+        let imageUrl = editItem.image_url || null;
+        if (editItemImage) {
+            try {
+                const name = businessNameRef.current || businessName;
+                const ext = editItemImage.name.split('.').pop();
+                const path = `menu-items/${name}/${Date.now()}.${ext}`;
+                imageUrl = await uploadImageToStorage(editItemImage, path);
+            } catch (e) { console.error('Image upload failed:', e.message); }
+        }
         await supabase.from("menus").update({
             item_name: editItem.item_name, item_price: parseFloat(editItem.item_price),
-            item_description: editItem.item_description, category: editItem.category
+            item_description: editItem.item_description, category: editItem.category,
+            image_url: imageUrl
         }).eq("id", editItem.id);
-        setShowEditModal(false); setEditItem(null);
+        setShowEditModal(false); setEditItem(null); setEditItemImage(null);
         await fetchMenuItems();
     }
 
@@ -900,6 +937,21 @@ export default function App() {
                 .upsert(payload, { onConflict: "business_name" })
                 .select("*");
             if (error) throw error;
+            // Upload new profile pic if selected
+            if (newProfilePic) {
+                try {
+                    const ext = newProfilePic.name.split('.').pop();
+                    const path = `profiles/${name}/${Date.now()}.${ext}`;
+                    const url = await uploadImageToStorage(newProfilePic, path);
+                    setProfilePicture(url);
+                    await supabase.from('businesses').update({ profile_picture: url }).eq('name', name);
+                    setNewProfilePic(null);
+                } catch (e) { console.error('Profile pic upload failed:', e.message); }
+            }
+            // Save contact number
+            if (contactNumber !== undefined) {
+                await supabase.from('businesses').update({ contact_number: contactNumber }).eq('name', name);
+            }
             setSettings(prev => ({ ...prev }));
             setSettingsSaved(true);
             setTimeout(() => setSettingsSaved(false), 3000);
@@ -1321,6 +1373,12 @@ export default function App() {
                                     </select>
                                 </div>
                                 <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
+                                <div>
+                                    <label style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>Item Photo (optional)</label>
+                                    <input type="file" accept="image/*" onChange={e => setNewItemImage(e.target.files?.[0] || null)}
+                                        style={{ marginTop: "5px", fontSize: "12px", color: d.muted, width: "100%" }} />
+                                    {newItemImage && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ {newItemImage.name}</p>}
+                                </div>
                                 <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
                                     <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
                                     <button onClick={addMenuItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Item</button>
@@ -1444,6 +1502,13 @@ export default function App() {
                                     </select>
                                 </div>
                                 <textarea value={editItem.item_description} onChange={e => setEditItem({ ...editItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
+                                <div>
+                                    <label style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>Item Photo (optional)</label>
+                                    {editItem.image_url && !editItemImage && <img src={editItem.image_url} alt="Current" style={{ display: "block", width: "100%", height: "80px", objectFit: "cover", borderRadius: "6px", margin: "5px 0" }} />}
+                                    <input type="file" accept="image/*" onChange={e => setEditItemImage(e.target.files?.[0] || null)}
+                                        style={{ marginTop: "5px", fontSize: "12px", color: d.muted, width: "100%" }} />
+                                    {editItemImage && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ {editItemImage.name}</p>}
+                                </div>
                                 <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
                                     <button onClick={() => { setShowEditModal(false); setEditItem(null); }} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
                                     <button onClick={saveEditItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Changes</button>
@@ -1843,6 +1908,10 @@ export default function App() {
                                             <div key={item.id} style={{ backgroundColor: d.card, padding: "18px", borderRadius: "12px", border: `1px solid ${d.border}`, opacity: item.available ? 1 : 0.55, transition: "all 0.15s" }}
                                                 onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.transform = "translateY(-2px)"; }}
                                                 onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.transform = ""; }}>
+                                                {item.image_url && (
+                                                    <img src={item.image_url} alt={item.item_name}
+                                                        style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "8px", marginBottom: "10px" }} />
+                                                )}
                                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                                                     <div>
                                                         <span style={{ fontSize: "9px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.1em", color: d.muted }}>{item.category || "Main"}</span>
@@ -1924,6 +1993,31 @@ export default function App() {
                         {/* SETTINGS */}
                         {activePage === "settings" && (
                             <div style={{ maxWidth: "520px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                                {/* BUSINESS PROFILE */}
+                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}`, marginBottom: "0" }}>
+                                    <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Business Profile</h2>
+                                    {/* Profile picture */}
+                                    <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "16px" }}>
+                                        <div style={{ width: "64px", height: "64px", borderRadius: "50%", overflow: "hidden", border: `2px solid ${d.border}`, flexShrink: 0, backgroundColor: d.bg3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                            {profilePicture
+                                                ? <img src={profilePicture} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                : <span style={{ fontSize: "24px", fontWeight: "800", color: "#22c55e" }}>{(businessName || "?").charAt(0).toUpperCase()}</span>}
+                                        </div>
+                                        <div>
+                                            <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "600", color: d.text }}>Profile Picture</p>
+                                            <input type="file" accept="image/*" onChange={e => setNewProfilePic(e.target.files?.[0] || null)}
+                                                style={{ fontSize: "11px", color: d.muted }} />
+                                            {newProfilePic && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ Ready to save</p>}
+                                        </div>
+                                    </div>
+                                    {/* Contact number */}
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Contact Number (shown to customers)</label>
+                                        <input value={contactNumber} onChange={e => setContactNumber(e.target.value)}
+                                            placeholder="e.g. 0241234567" style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }} />
+                                        <p style={{ margin: "4px 0 0", fontSize: "10px", color: d.muted }}>Customers can use this to call or message you directly</p>
+                                    </div>
+                                </div>
                                 <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
                                     <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Business Hours</h2>
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
