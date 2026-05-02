@@ -261,6 +261,9 @@ export default function App() {
             }
             if (event === 'PASSWORD_RECOVERY') {
                 setIsPasswordResetMode(true);
+                setUser(session?.user ?? null);
+                setAuthLoading(false);
+                window.history.replaceState({}, '', '/');
             }
             const uid = u?.id;
             if (uid && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
@@ -287,6 +290,16 @@ export default function App() {
         const timer = setTimeout(() => setAuthLoading(false), 5000);
         return () => clearTimeout(timer);
     }, []);
+
+    useEffect(() => {
+        if (!authLoading || isPasswordResetMode) return;
+        const timer = setTimeout(() => {
+            setAuthLoading(false);
+            setAuthNotice("Your reset link has expired. Please request a new one.");
+            setPage('login');
+        }, 10000);
+        return () => clearTimeout(timer);
+    }, [authLoading, isPasswordResetMode]);
 
     useEffect(() => {
         if (!supabase) return;
@@ -714,7 +727,9 @@ export default function App() {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('reset') === 'true') {
-            setIsPasswordResetMode(true);
+            // Don't set reset mode yet — wait for PASSWORD_RECOVERY event from Supabase
+            // Just show a loading screen while Supabase establishes the session
+            setAuthLoading(true);
             window.history.replaceState({}, '', '/');
         }
     }, []);
