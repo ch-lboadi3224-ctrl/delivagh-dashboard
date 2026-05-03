@@ -48,6 +48,12 @@ export default function Admin() {
     const [learningsFilter, setLearningsFilter] = useState("pending");
     const [learningsBiz, setLearningsBiz] = useState("all");
 
+    // Bot Control
+    const [botActive, setBotActive] = useState(true);
+    const [botOfflineMessage, setBotOfflineMessage] = useState("Sorry, we are currently unavailable. Please try again later. 🙏");
+    const [botSwitchLoading, setBotSwitchLoading] = useState(false);
+    const [botSwitchSaved, setBotSwitchSaved] = useState(false);
+
     const themes = {
         dark: {
             bg: "#080f0a", bg2: "#0d1610", bg3: "#122019", card: "#101b14",
@@ -137,6 +143,11 @@ export default function Admin() {
         if (ord) {
             setOrders(ord);
             setLastOrder(ord[0] || null);
+        }
+        const { data: botSettings } = await supabase.from('bot_settings').select('*').eq('id', 1).maybeSingle();
+        if (botSettings) {
+            setBotActive(botSettings.bot_active ?? true);
+            setBotOfflineMessage(botSettings.offline_message || "Sorry, we are currently unavailable. Please try again later. 🙏");
         }
         setLoading(false);
     }
@@ -368,6 +379,19 @@ export default function Admin() {
         return out;
     }
 
+    async function saveBotSwitch() {
+        setBotSwitchLoading(true);
+        await supabase.from('bot_settings').upsert({
+            id: 1,
+            bot_active: botActive,
+            offline_message: botOfflineMessage,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+        setBotSwitchLoading(false);
+        setBotSwitchSaved(true);
+        setTimeout(() => setBotSwitchSaved(false), 3000);
+    }
+
     function openCreateVendorModal() {
         setCreateVendorMsg("");
         setCreateVendorErr("");
@@ -498,6 +522,7 @@ export default function Admin() {
         botconfig: "Bot Configuration",
         payments: "Payment Settings",
         learnings: "Bot Learnings",
+        botcontrol: "Bot Control",
     };
 
     const navItems = [
@@ -509,6 +534,7 @@ export default function Admin() {
         { id: "health", label: "System Health", icon: "❤" },
         { id: "analytics", label: "Analytics", icon: "📊" },
         { id: "learnings", label: "Bot Learnings", icon: "🧠", badge: pendingLearnings },
+        { id: "botcontrol", label: "Bot Control", icon: "🤖" },
     ];
 
     function outcomeStyle(o) {
@@ -1374,6 +1400,50 @@ export default function Admin() {
                             )}
                         </div>
                     )}
+
+                        {activePage === "botcontrol" && (
+                            <div style={{ maxWidth: "560px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                                <div style={{ backgroundColor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "24px" }}>
+                                    <h2 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: "700", color: "white" }}>Global Bot Switch</h2>
+                                    <p style={{ margin: "0 0 20px", fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                                        Turn off the bot to stop it from responding to ALL customers across ALL businesses.
+                                        Customers will receive the offline message below instead.
+                                    </p>
+
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px", backgroundColor: botActive ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", borderRadius: "10px", border: `1px solid ${botActive ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, marginBottom: "16px" }}>
+                                        <div>
+                                            <p style={{ margin: "0 0 3px", fontSize: "14px", fontWeight: "700", color: "white" }}>
+                                                Bot is currently <span style={{ color: botActive ? "#22c55e" : "#ef4444" }}>{botActive ? "ONLINE ✅" : "OFFLINE ❌"}</span>
+                                            </p>
+                                            <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
+                                                {botActive ? "Responding to all customer messages" : "All messages getting offline reply"}
+                                            </p>
+                                        </div>
+                                        <div onClick={() => setBotActive(prev => !prev)}
+                                            style={{ width: "52px", height: "28px", backgroundColor: botActive ? "#22c55e" : "#ef4444", borderRadius: "14px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                                            <div style={{ position: "absolute", width: "20px", height: "20px", backgroundColor: "white", borderRadius: "50%", top: "4px", left: botActive ? "28px" : "4px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ marginBottom: "16px" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>
+                                            Offline Message (sent to customers when bot is off)
+                                        </label>
+                                        <textarea
+                                            value={botOfflineMessage}
+                                            onChange={e => setBotOfflineMessage(e.target.value)}
+                                            rows={3}
+                                            style={{ width: "100%", padding: "10px 12px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px", fontSize: "13px", color: "white", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+                                        />
+                                    </div>
+
+                                    <button onClick={saveBotSwitch} disabled={botSwitchLoading}
+                                        style={{ width: "100%", padding: "12px", backgroundColor: botSwitchSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: botSwitchLoading ? "not-allowed" : "pointer" }}>
+                                        {botSwitchLoading ? "Saving..." : botSwitchSaved ? "✓ Saved!" : "Save Bot Settings"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                 </main>
             </div>
