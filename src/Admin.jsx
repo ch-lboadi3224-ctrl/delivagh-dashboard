@@ -144,6 +144,7 @@ export default function Admin() {
         let userMap = {};
         if (biz && biz.length > 0) {
             try {
+                console.log("Fetching user emails from:", API + "/admin/user-emails");
                 const response = await fetch(API + "/admin/user-emails", {
                     method: "GET",
                     headers: {
@@ -152,12 +153,16 @@ export default function Admin() {
                     }
                 });
                 
+                console.log("User emails response status:", response.status);
+                
                 if (response.ok) {
                     const data = await response.json();
+                    console.log("User emails response data:", data);
                     userMap = data.userMap || {};
-                    console.log("Fetched user emails:", Object.keys(userMap).length, "users");
+                    console.log("Fetched user emails:", Object.keys(userMap).length, "users", userMap);
                 } else {
-                    console.error("Failed to fetch user emails:", response.status);
+                    const errorText = await response.text();
+                    console.error("Failed to fetch user emails:", response.status, errorText);
                 }
             } catch (err) {
                 console.error("Could not fetch user emails:", err);
@@ -168,9 +173,9 @@ export default function Admin() {
         if (biz) {
             const businessesWithEmails = biz.map(b => ({
                 ...b,
-                email: userMap[b.user_id] || "—"
+                email: userMap[b.user_id] || b.user_id || "—"
             }));
-            console.log("Businesses with emails:", businessesWithEmails.slice(0, 3));
+            console.log("Businesses with emails (first 3):", businessesWithEmails.slice(0, 3).map(b => ({ name: b.name, email: b.email, user_id: b.user_id })));
             setBusinesses(businessesWithEmails);
         }
         
