@@ -456,7 +456,8 @@ export default function App() {
                     computeInsights(updated);
                     return updated;
                 });
-                if (payload.new.status === "pending") {
+                // Play sound for new orders (pending OR auto-accepted confirmed orders)
+                if (payload.new.status === "pending" || payload.new.status === "confirmed") {
                     playNotification();
                     setNewOrderAlert(true);
                     setTimeout(() => setNewOrderAlert(false), 8000);
