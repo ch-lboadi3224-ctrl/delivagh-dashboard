@@ -1661,7 +1661,22 @@ export default function App() {
                                 <textarea value={editItem.item_description} onChange={e => setEditItem({ ...editItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
                                 <div>
                                     <label style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>Item Photo (optional)</label>
-                                    {editItem.image_url && !editItemImage && <img src={editItem.image_url} alt="Current" style={{ display: "block", width: "100%", height: "80px", objectFit: "cover", borderRadius: "6px", margin: "5px 0" }} />}
+                                    {editItem.image_url && !editItemImage && (
+                                        <>
+                                            <img src={editItem.image_url} alt="Current" style={{ display: "block", width: "100%", height: "80px", objectFit: "cover", borderRadius: "6px", margin: "5px 0" }} />
+                                            <button onClick={async () => {
+                                                try {
+                                                    await supabase.from('menus').update({ image_url: null }).eq('id', editItem.id);
+                                                    setEditItem({ ...editItem, image_url: null });
+                                                    addNotif("Photo removed", "success");
+                                                } catch (e) {
+                                                    addNotif("Failed to remove photo", "error");
+                                                }
+                                            }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
+                                                Remove Photo
+                                            </button>
+                                        </>
+                                    )}
                                     <input type="file" accept="image/*" onChange={e => setEditItemImage(e.target.files?.[0] || null)}
                                         style={{ marginTop: "5px", fontSize: "12px", color: d.muted, width: "100%" }} />
                                     {editItemImage && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ {editItemImage.name}</p>}
