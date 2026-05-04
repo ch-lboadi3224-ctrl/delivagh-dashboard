@@ -139,7 +139,31 @@ export default function Admin() {
             supabase.from("businesses").select("*").order("created_at", { ascending: false }),
             supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
         ]);
-        if (biz) setBusinesses(biz);
+        
+        // Fetch user emails from Supabase Auth
+        let userMap = {};
+        if (biz && biz.length > 0) {
+            try {
+                const { data: { users } } = await supabase.auth.admin.listUsers();
+                if (users) {
+                    users.forEach(u => {
+                        userMap[u.id] = u.email;
+                    });
+                }
+            } catch (err) {
+                console.error("Could not fetch user emails:", err);
+            }
+        }
+        
+        // Attach email to each business
+        if (biz) {
+            const businessesWithEmails = biz.map(b => ({
+                ...b,
+                email: userMap[b.user_id] || b.user_id || "—"
+            }));
+            setBusinesses(businessesWithEmails);
+        }
+        
         if (ord) {
             setOrders(ord);
             setLastOrder(ord[0] || null);
@@ -729,7 +753,7 @@ export default function Admin() {
                                                 <tr key={biz.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
                                                     <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</td>
                                                     <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted }}>{biz.user_id?.substring(0, 20)}...</td>
+                                                    <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted }}>{biz.email || "—"}</td>
                                                     <td style={{ padding: "11px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
                                                     <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: d.text }}>{bizOrders(biz.name).length}</td>
                                                     <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
@@ -774,7 +798,7 @@ export default function Admin() {
                                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", maxWidth: "400px" }}>
                                                         {[
                                                             { label: "Phone", value: biz.phone || "Not provided" },
-                                                            { label: "User ID", value: biz.user_id?.substring(0, 16) + "..." },
+                                                            { label: "Email", value: biz.email || "Not provided" },
                                                         ].map(row => (
                                                             <div key={row.label} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "10px 12px", border: `1px solid ${d.border}` }}>
                                                                 <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px" }}>{row.label}</p>
@@ -821,7 +845,7 @@ export default function Admin() {
                                 <div style={{ overflowX: "auto" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
                                         <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Phone", "Status", "Subaccount", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
+                                            {["Business", "Phone", "Email", "Status", "Subaccount", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
                                                 <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
                                             ))}
                                         </tr></thead>
@@ -835,6 +859,7 @@ export default function Admin() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
+                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.email || "—"}</td>
                                                     <td style={{ padding: "12px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>{biz.subaccount_code || "—"}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>
