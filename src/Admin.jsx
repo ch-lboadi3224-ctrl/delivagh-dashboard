@@ -140,15 +140,24 @@ export default function Admin() {
             supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
         ]);
         
-        // Fetch user emails from Supabase Auth
+        // Fetch user emails from backend (which has service role access)
         let userMap = {};
         if (biz && biz.length > 0) {
             try {
-                const { data: { users } } = await supabase.auth.admin.listUsers();
-                if (users) {
-                    users.forEach(u => {
-                        userMap[u.id] = u.email;
-                    });
+                const response = await fetch(API + "/admin/user-emails", {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-admin-key": ADMIN_PASSWORD
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userMap = data.userMap || {};
+                    console.log("Fetched user emails:", Object.keys(userMap).length, "users");
+                } else {
+                    console.error("Failed to fetch user emails:", response.status);
                 }
             } catch (err) {
                 console.error("Could not fetch user emails:", err);
@@ -159,8 +168,9 @@ export default function Admin() {
         if (biz) {
             const businessesWithEmails = biz.map(b => ({
                 ...b,
-                email: userMap[b.user_id] || b.user_id || "—"
+                email: userMap[b.user_id] || "—"
             }));
+            console.log("Businesses with emails:", businessesWithEmails.slice(0, 3));
             setBusinesses(businessesWithEmails);
         }
         
