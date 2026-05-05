@@ -217,11 +217,29 @@ export default function App() {
     // ── LOUD SOUND ──
     function playNotification() {
         try {
+            // Ensure AudioContext exists
             if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
                 audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
             }
             const ctx = audioCtxRef.current;
-            if (ctx.state === "suspended") ctx.resume();
+            
+            // Resume if suspended (browser autoplay policy)
+            if (ctx.state === "suspended") {
+                ctx.resume().then(() => {
+                    console.log("[sound] AudioContext resumed");
+                    playSound(ctx);
+                }).catch(e => console.log("[sound] Resume failed:", e));
+            } else {
+                playSound(ctx);
+            }
+        } catch (e) { 
+            console.log("[sound] Error:", e); 
+        }
+    }
+    
+    function playSound(ctx) {
+        try {
+            console.log("[sound] Playing notification sound");
             [[523, 0], [659, 0.18], [784, 0.36], [1047, 0.54]].forEach(([freq, start]) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -233,16 +251,32 @@ export default function App() {
                 osc.start(ctx.currentTime + start);
                 osc.stop(ctx.currentTime + start + 0.2);
             });
-        } catch (e) { console.log("Sound error:", e); }
+        } catch (e) {
+            console.log("[sound] Playback error:", e);
+        }
     }
 
     useEffect(() => {
         const unlock = () => {
-            if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                console.log("[sound] AudioContext created on user interaction");
+            }
+            if (audioCtxRef.current.state === "suspended") {
+                audioCtxRef.current.resume().then(() => {
+                    console.log("[sound] AudioContext unlocked");
+                });
+            }
         };
+        // Listen for multiple interaction types to ensure unlock
         document.addEventListener("click", unlock, { once: true });
-        return () => document.removeEventListener("click", unlock);
+        document.addEventListener("touchstart", unlock, { once: true });
+        document.addEventListener("keydown", unlock, { once: true });
+        return () => {
+            document.removeEventListener("click", unlock);
+            document.removeEventListener("touchstart", unlock);
+            document.removeEventListener("keydown", unlock);
+        };
     }, []);
 
     useEffect(() => {
@@ -450,7 +484,7 @@ export default function App() {
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
                 // FIX: Only process orders belonging to this business
                 if (payload.new.business_name !== businessNameRef.current) return;
-                console.log("RT INSERT:", payload.new.id);
+                console.log("RT INSERT:", payload.new.id, "status:", payload.new.status);
                 setOrders(prev => {
                     if (prev.find(o => o.id === payload.new.id)) return prev;
                     const updated = [payload.new, ...prev];
@@ -461,6 +495,7 @@ export default function App() {
                 });
                 // Play sound for new orders (pending OR auto-accepted confirmed orders)
                 if (payload.new.status === "pending" || payload.new.status === "confirmed") {
+                    console.log("[notification] Playing sound for new order");
                     playNotification();
                     setNewOrderAlert(true);
                     setTimeout(() => setNewOrderAlert(false), 8000);
