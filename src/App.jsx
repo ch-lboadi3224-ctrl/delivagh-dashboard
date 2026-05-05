@@ -53,8 +53,11 @@ function callDigitsForOrder(order) {
 }
 
 function formatCallDisplay(order) {
-    const d = callDigitsForOrder(order);
-    return d || "—";
+    const raw = (order.contact_phone || "").replace(/\D/g, '');
+    if (!raw) return null;
+    if (raw.startsWith('233')) return '+' + raw;
+    if (raw.startsWith('0')) return '+233' + raw.slice(1);
+    return '+' + raw;
 }
 
 class ErrorBoundary extends React.Component {
@@ -1417,8 +1420,16 @@ export default function App() {
                                 </div>
                                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
                                     {[
-                                        { label: "Customer", value: liveOrder.customer_phone?.replace("whatsapp:", "") },
-                                        ...(liveOrder.contact_phone && liveOrder.contact_phone !== liveOrder.customer_phone?.replace("whatsapp:+", "").replace(/\D/g,"") ? [{ label: "Call on", value: "+" + liveOrder.contact_phone }] : []),
+                                        { label: "Customer", value: liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") },
+                                        ...(() => {
+                                            const callDisplay = formatCallDisplay(liveOrder);
+                                            const waDigits = waDigitsFromOrder(liveOrder);
+                                            // Only show "Call on" if there's a contact_phone AND it's different from WhatsApp number
+                                            if (callDisplay && liveOrder.contact_phone && liveOrder.contact_phone.replace(/\D/g, '') !== waDigits) {
+                                                return [{ label: "Call on", value: callDisplay }];
+                                            }
+                                            return [];
+                                        })(),
                                         { label: "Items", value: liveOrder.items },
                                         { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
                                         ...(liveOrder.momo_number ? [{ label: "MoMo #", value: liveOrder.momo_number }] : []),
@@ -1970,7 +1981,7 @@ export default function App() {
                                                                         {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.bg3, color: isToday ? "#22c55e" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
                                                                         <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
                                                                             <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_phone?.replace("whatsapp:", "")}</td>
+                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_name || order.customer_phone?.replace("whatsapp:", "")}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                                             <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
