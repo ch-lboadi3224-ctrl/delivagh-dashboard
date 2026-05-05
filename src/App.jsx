@@ -1423,9 +1423,8 @@ export default function App() {
                                         { label: "Customer", value: liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") },
                                         ...(() => {
                                             const callDisplay = formatCallDisplay(liveOrder);
-                                            const waDigits = waDigitsFromOrder(liveOrder);
-                                            // Only show "Call on" if there's a contact_phone AND it's different from WhatsApp number
-                                            if (callDisplay && liveOrder.contact_phone && liveOrder.contact_phone.replace(/\D/g, '') !== waDigits) {
+                                            // Always show contact phone if it exists (for both pickup and delivery)
+                                            if (callDisplay && liveOrder.contact_phone) {
                                                 return [{ label: "Call on", value: callDisplay }];
                                             }
                                             return [];
