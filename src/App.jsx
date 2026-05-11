@@ -133,6 +133,7 @@ export default function App() {
     const [profilePicture, setProfilePicture] = useState("");
     const [newProfilePic, setNewProfilePic] = useState(null);
     const [contactNumber, setContactNumber] = useState("");
+    const [momoNumber, setMomoNumber] = useState("");
     const [isPasswordResetMode, setIsPasswordResetMode] = useState(false);
     const [resetPassword, setResetPassword] = useState("");
     const [resetConfirmPassword, setResetConfirmPassword] = useState("");
@@ -611,6 +612,7 @@ export default function App() {
 
                 setProfilePicture(biz.profile_picture || "");
                 setContactNumber(biz.contact_number || "");
+                setMomoNumber(biz.momo_number || "");
 
                 const { data: menuData } = await supabase.from("menus").select("*").eq("business_name", name).order("created_at", { ascending: false });
                 console.log("[debug] checkpoint 1 - after menu fetch");
@@ -1041,7 +1043,29 @@ export default function App() {
         setButtonLoading(prev => ({ ...prev, [id + "_pay"]: true }));
         setOrders(prev => { const u = prev.map(o => o.id === id ? { ...o, payment_status: "paid" } : o); ordersRef.current = u; updateStats(u); return u; });
         setSelectedOrder(sel => sel?.id === id ? { ...sel, payment_status: "paid" } : sel);
-        try { await supabase.from("orders").update({ payment_status: "paid" }).eq("id", id); addNotif("Payment marked as received", "success"); }
+        try { 
+            await supabase.from("orders").update({ payment_status: "paid" }).eq("id", id); 
+            
+            // Get order details for customer notification
+            const order = orders.find(o => o.id === id);
+            if (order?.customer_phone) {
+                // Send WhatsApp notification to customer
+                try {
+                    await fetch(API + '/whatsapp/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: order.customer_phone,
+                            message: '✅ Payment confirmed!\n\nYour order is being prepared. Thank you! 🎉'
+                        })
+                    });
+                } catch (notifyError) {
+                    console.error('Failed to send customer notification:', notifyError);
+                }
+            }
+            
+            addNotif("Payment marked as received", "success"); 
+        }
         catch (e) { fetchOrders(); }
         finally { setButtonLoading(prev => ({ ...prev, [id + "_pay"]: false })); }
     }
@@ -1076,6 +1100,10 @@ export default function App() {
             // Save contact number
             if (contactNumber !== undefined) {
                 await supabase.from('businesses').update({ contact_number: contactNumber }).eq('name', name);
+            }
+            // Save MoMo number
+            if (momoNumber !== undefined) {
+                await supabase.from('businesses').update({ momo_number: momoNumber }).eq('name', name);
             }
             setSettings(prev => ({ ...prev }));
             setSettingsSaved(true);
@@ -1488,6 +1516,26 @@ export default function App() {
                                             {paymentOptions.map(opt => <span key={opt} style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, color: d.text, padding: "4px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>{opt}</span>)}
                                         </div>
                                     </div>
+                                    {/* Payment Screenshot */}
+                                    {liveOrder.payment_method === 'manual_momo' && liveOrder.payment_screenshot_url && (
+                                        <div style={{ padding: "11px 13px", backgroundColor: d.bg3, borderRadius: "8px", border: `1px solid ${d.border}` }}>
+                                            <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase" }}>Payment Screenshot</p>
+                                            <a href={liveOrder.payment_screenshot_url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                                                <img 
+                                                    src={liveOrder.payment_screenshot_url} 
+                                                    alt="Payment screenshot" 
+                                                    style={{ 
+                                                        maxWidth: "100%", 
+                                                        maxHeight: "300px", 
+                                                        borderRadius: "8px",
+                                                        border: `1px solid ${d.border}`,
+                                                        cursor: "pointer"
+                                                    }} 
+                                                />
+                                            </a>
+                                            <p style={{ margin: "8px 0 0", fontSize: "10px", color: d.muted }}>Click to view full size</p>
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ display: "flex", gap: "9px" }}>
                                     <div style={{ flex: 1 }}>{getNextAction(liveOrder.id)}</div>
@@ -2248,6 +2296,13 @@ export default function App() {
                                         <input value={contactNumber} onChange={e => setContactNumber(e.target.value)}
                                             placeholder="e.g. 0241234567" style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }} />
                                         <p style={{ margin: "4px 0 0", fontSize: "10px", color: d.muted }}>Customers can use this to call or message you directly</p>
+                                    </div>
+                                    {/* MoMo number */}
+                                    <div style={{ marginTop: "16px" }}>
+                                        <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>MoMo Number for Payments</label>
+                                        <input value={momoNumber} onChange={e => setMomoNumber(e.target.value)}
+                                            placeholder="e.g. 0241234567" style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }} />
+                                        <p style={{ margin: "4px 0 0", fontSize: "10px", color: d.muted }}>This number will be shown to customers for direct MoMo payments (can be different from contact number)</p>
                                     </div>
                                 </div>
                                 <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
