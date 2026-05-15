@@ -106,6 +106,13 @@ export default function App() {
     const [uploadMenuDragActive, setUploadMenuDragActive] = useState(false);
     const menuFileInputRef = useRef(null);
     const [settings, setSettings] = useState({ auto_accept: false, is_open: true, open_time: "08:00", close_time: "22:00" });
+    const [botConfig, setBotConfig] = useState({
+        bot_name: "",
+        bot_greeting: "",
+        bot_persona: "",
+        bot_special_instructions: "",
+    });
+    const [botConfigSaved, setBotConfigSaved] = useState(false);
     const [broadcastMsg, setBroadcastMsg] = useState("");
     const [broadcastSending, setBroadcastSending] = useState(false);
     const [broadcastResult, setBroadcastResult] = useState(null);
@@ -634,6 +641,13 @@ export default function App() {
                     }));
                 }
 
+                setBotConfig({
+                    bot_name: biz.bot_name || "",
+                    bot_greeting: biz.bot_greeting || "",
+                    bot_persona: biz.bot_persona || "",
+                    bot_special_instructions: biz.bot_special_instructions || "",
+                });
+
                 if (linkedViaDirectory) {
                     setIsAdminLinkedVendor(true);
                     localStorage.setItem("onboarding_done_" + user.id, "true");
@@ -1112,6 +1126,25 @@ export default function App() {
         } catch (e) {
             console.error("Failed to save settings:", e?.message || e);
             alert("Failed to save settings: " + (e?.message || "Unknown error"));
+        }
+    }
+
+    async function saveBotConfig() {
+        const name = businessNameRef.current || businessName;
+        if (!supabase || !name) return;
+        try {
+            const { error } = await supabase.from("businesses").update({
+                bot_name: botConfig.bot_name,
+                bot_greeting: botConfig.bot_greeting,
+                bot_persona: botConfig.bot_persona,
+                bot_special_instructions: botConfig.bot_special_instructions,
+            }).eq("name", name);
+            if (error) throw error;
+            setBotConfigSaved(true);
+            setTimeout(() => setBotConfigSaved(false), 3000);
+            addNotif("Bot configuration saved", "success");
+        } catch (e) {
+            alert("Failed to save bot config: " + (e?.message || "Unknown error"));
         }
     }
 
@@ -2323,6 +2356,60 @@ export default function App() {
                                                 <input type="time" value={settings[f.key]} onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.value }))} style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: d.text, outline: "none", boxSizing: "border-box" }} />
                                             </div>
                                         ))}
+                                    </div>
+                                </div>
+                                {/* ── BOT CONFIGURATION ── */}
+                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: d.text }}>Bot Configuration</h2>
+                                        <span style={{ fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "20px", backgroundColor: "#dcfce7", color: "#15803d" }}>Active</span>
+                                    </div>
+                                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: d.muted }}>Customise how your AI ordering bot behaves and introduces itself</p>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Bot Name</label>
+                                            <input
+                                                value={botConfig.bot_name}
+                                                onChange={e => setBotConfig(s => ({ ...s, bot_name: e.target.value }))}
+                                                placeholder="e.g. Kojo, Ama, DelivaBot"
+                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Welcome Greeting</label>
+                                            <textarea
+                                                value={botConfig.bot_greeting}
+                                                onChange={e => setBotConfig(s => ({ ...s, bot_greeting: e.target.value }))}
+                                                placeholder="e.g. Hey! Welcome to Kelewele Hub 🔥 I'm Kojo, your ordering assistant. What can I get for you today?"
+                                                rows={3}
+                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Bot Persona</label>
+                                            <input
+                                                value={botConfig.bot_persona}
+                                                onChange={e => setBotConfig(s => ({ ...s, bot_persona: e.target.value }))}
+                                                placeholder="e.g. Friendly, energetic, speaks Ghanaian slang"
+                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Special Instructions</label>
+                                            <textarea
+                                                value={botConfig.bot_special_instructions}
+                                                onChange={e => setBotConfig(s => ({ ...s, bot_special_instructions: e.target.value }))}
+                                                placeholder="e.g. Always upsell drinks. Never mention competitors. Remind customers of free delivery on orders above GHS 50."
+                                                rows={3}
+                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={saveBotConfig}
+                                            style={{ padding: "10px 20px", backgroundColor: botConfigSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer", alignSelf: "flex-start", transition: "background 0.3s" }}
+                                        >
+                                            {botConfigSaved ? "✓ Saved!" : "Save Bot Config"}
+                                        </button>
                                     </div>
                                 </div>
                                 <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
