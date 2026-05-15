@@ -105,7 +105,16 @@ export default function App() {
     const [uploadMenuError, setUploadMenuError] = useState("");
     const [uploadMenuDragActive, setUploadMenuDragActive] = useState(false);
     const menuFileInputRef = useRef(null);
-    const [settings, setSettings] = useState({ auto_accept: false, is_open: true, open_time: "08:00", close_time: "22:00" });
+    const [settings, setSettings] = useState({
+        auto_accept: false,
+        is_open: true,
+        open_time: "08:00",
+        close_time: "22:00",
+        delivery_enabled: true,
+        pickup_enabled: true,
+        pay_directly_enabled: true,
+        pay_online_enabled: true,
+    });
     const [botConfig, setBotConfig] = useState({
         bot_name: "",
         bot_greeting: "",
@@ -638,6 +647,10 @@ export default function App() {
                         is_open: sd.is_open ?? true,
                         open_time: sd.open_time || prev.open_time,
                         close_time: sd.close_time || prev.close_time,
+                        delivery_enabled: sd.delivery_enabled ?? true,
+                        pickup_enabled: sd.pickup_enabled ?? true,
+                        pay_directly_enabled: sd.pay_directly_enabled ?? true,
+                        pay_online_enabled: sd.pay_online_enabled ?? true,
                     }));
                 }
 
@@ -1094,6 +1107,10 @@ export default function App() {
                 close_time: settings.close_time,
                 is_open: settings.is_open,
                 auto_accept: settings.auto_accept,
+                delivery_enabled: settings.delivery_enabled,
+                pickup_enabled: settings.pickup_enabled,
+                pay_directly_enabled: settings.pay_directly_enabled,
+                pay_online_enabled: settings.pay_online_enabled,
             };
             const { error } = await supabase
                 .from("business_settings")
@@ -2422,6 +2439,43 @@ export default function App() {
                                         </div>
                                         <div onClick={() => setSettings(s => ({ ...s, auto_accept: !s.auto_accept }))} style={{ width: "44px", height: "22px", backgroundColor: settings.auto_accept ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
                                             <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings.auto_accept ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* ── DELIVERY & PAYMENT OPTIONS ── */}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
+                                        <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Delivery Options</h2>
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                            {[
+                                                { label: "Delivery", key: "delivery_enabled" },
+                                                { label: "Pick Up", key: "pickup_enabled" },
+                                            ].map(({ label, key }) => (
+                                                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: d.text }}>{label}</p>
+                                                    <div onClick={() => setSettings(s => ({ ...s, [key]: !s[key] }))}
+                                                        style={{ width: "44px", height: "22px", backgroundColor: settings[key] ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                                                        <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings[key] ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
+                                        <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Payment Options</h2>
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                            {[
+                                                { label: "Pay Directly", key: "pay_directly_enabled" },
+                                                { label: "Pay Online", key: "pay_online_enabled" },
+                                            ].map(({ label, key }) => (
+                                                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: d.text }}>{label}</p>
+                                                    <div onClick={() => setSettings(s => ({ ...s, [key]: !s[key] }))}
+                                                        style={{ width: "44px", height: "22px", backgroundColor: settings[key] ? "#22c55e" : "#ef4444", borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                                                        <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings[key] ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
