@@ -37,6 +37,7 @@ export default function Admin() {
         phone: "",
         password: "",
     });
+    const [registeredCustomers, setRegisteredCustomers] = useState([]);
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [webhookLogsError, setWebhookLogsError] = useState("");
     const [webhookFilter, setWebhookFilter] = useState("");
@@ -135,10 +136,12 @@ export default function Admin() {
 
     async function fetchAll() {
         setLoading(true);
-        const [{ data: biz }, { data: ord }] = await Promise.all([
+        const [{ data: biz }, { data: ord }, { data: custRows }] = await Promise.all([
             supabase.from("businesses").select("*").order("created_at", { ascending: false }),
             supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
+            supabase.from("customers").select("*").order("registered_at", { ascending: false }).limit(500),
         ]);
+        setRegisteredCustomers(custRows || []);
         
         // Fetch user emails from backend (which has service role access)
         let userMap = {};
@@ -562,11 +565,13 @@ export default function Admin() {
         payments: "Payment Settings",
         learnings: "Bot Learnings",
         botcontrol: "Bot Control",
+        customers: "Customers",
     };
 
     const navItems = [
         { id: "overview", label: "Overview", icon: "▦" },
         { id: "approvals", label: "Approvals", icon: "✓", badge: pending.length },
+        { id: "customers", label: "Customers", icon: "👤" },
         { id: "businesses", label: "Businesses", icon: "🏪" },
         { id: "webhooks", label: "Webhook Logs", icon: "📡" },
         { id: "payments", label: "Payments", icon: "💳" },
@@ -840,6 +845,46 @@ export default function Admin() {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* ── CUSTOMERS (WhatsApp Flow registration) ── */}
+                    {activePage === "customers" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
+                            <div>
+                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Registered Customers</h1>
+                                <p style={{ fontSize: "12px", color: d.muted }}>{registeredCustomers.length} customers via WhatsApp Flow signup</p>
+                            </div>
+                            <div style={cardStyle}>
+                                {registeredCustomers.length === 0 ? (
+                                    <p style={{ padding: "24px", textAlign: "center", color: d.muted, fontSize: "13px", margin: 0 }}>No registered customers yet. They appear here after completing the WhatsApp registration flow.</p>
+                                ) : (
+                                    <div style={{ overflowX: "auto" }}>
+                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+                                            <thead>
+                                                <tr style={{ backgroundColor: d.bg3 }}>
+                                                    {["Name", "First name", "Phone", "Email", "Registered"].map(h => (
+                                                        <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {registeredCustomers.map(c => (
+                                                    <tr key={c.id || c.phone} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
+                                                        <td style={{ padding: "12px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{c.full_name || "—"}</td>
+                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{c.first_name || "—"}</td>
+                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{(c.phone || "").replace(/^whatsapp:/i, "")}</td>
+                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{c.email || "—"}</td>
+                                                        <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>
+                                                            {c.registered_at ? new Date(c.registered_at).toLocaleString("en-GH") : "—"}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
