@@ -57,20 +57,20 @@ export default function Admin() {
 
     const themes = {
         dark: {
-            bg: "#080f0a", bg2: "#0d1610", bg3: "#122019", card: "#101b14",
-            border: "rgba(255,255,255,0.10)", text: "#ecfdf3", muted: "rgba(236,253,243,0.62)", strongMuted: "rgba(236,253,243,0.8)",
-            hover: "rgba(255,255,255,0.06)", input: "rgba(255,255,255,0.06)", inputBorder: "rgba(255,255,255,0.12)", shadow: "0 8px 20px rgba(0,0,0,0.28)",
+            bg: "#0a0e1a", bg2: "#0f1524", bg3: "#141929", card: "#0f1524",
+            border: "rgba(255,255,255,0.07)", text: "#e2e8f0", muted: "rgba(226,232,240,0.5)", strongMuted: "rgba(226,232,240,0.75)",
+            hover: "rgba(255,255,255,0.04)", input: "rgba(255,255,255,0.05)", inputBorder: "rgba(255,255,255,0.1)", shadow: "0 4px 24px rgba(0,0,0,0.4)",
         },
         light: {
-            bg: "#f0fdf4", bg2: "#ffffff", bg3: "#f7fff9", card: "#ffffff",
-            border: "#d1fae5", text: "#052e16", muted: "#166534", strongMuted: "#065f46",
-            hover: "#ecfdf5", input: "#ffffff", inputBorder: "#a7f3d0", shadow: "0 8px 20px rgba(6,95,70,0.08)",
+            bg: "#f8fafc", bg2: "#ffffff", bg3: "#f1f5f9", card: "#ffffff",
+            border: "#e2e8f0", text: "#0f172a", muted: "#64748b", strongMuted: "#334155",
+            hover: "#f8fafc", input: "#ffffff", inputBorder: "#cbd5e1", shadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)",
         },
     };
     const d = themes[theme] || themes.dark;
     const isDark = theme === "dark";
-    const accent = "#22c55e";
-    const accentSoft = isDark ? "rgba(34,197,94,0.12)" : "#ecfdf5";
+    const accent = "#16a34a";
+    const accentSoft = isDark ? "rgba(22,163,74,0.15)" : "#f0fdf4";
 
     function handleLogin() {
         if (pwInput === ADMIN_PASSWORD) {
@@ -553,7 +553,12 @@ export default function Admin() {
     }
 
     const inp = (extra = {}) => ({ padding: "10px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", ...extra });
-    const cardStyle = { backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px" };
+    const cardStyle = {
+        backgroundColor: d.card,
+        border: `1px solid ${d.border}`,
+        borderRadius: "12px",
+        boxShadow: d.shadow,
+    };
     const pageNames = {
         overview: "Overview",
         approvals: "Pending Approvals",
@@ -569,16 +574,16 @@ export default function Admin() {
     };
 
     const navItems = [
-        { id: "overview", label: "Overview", icon: "▦" },
-        { id: "approvals", label: "Approvals", icon: "✓", badge: pending.length },
-        { id: "customers", label: "Customers", icon: "👤" },
-        { id: "businesses", label: "Businesses", icon: "🏪" },
-        { id: "webhooks", label: "Webhook Logs", icon: "📡" },
-        { id: "payments", label: "Payments", icon: "💳" },
-        { id: "health", label: "System Health", icon: "❤" },
-        { id: "analytics", label: "Analytics", icon: "📊" },
-        { id: "learnings", label: "Bot Learnings", icon: "🧠", badge: pendingLearnings },
-        { id: "botcontrol", label: "Bot Control", icon: "🤖" },
+        { id: "overview", icon: "▪", label: "Overview", badge: 0 },
+        { id: "approvals", icon: "▪", label: "Approvals", badge: pending.length },
+        { id: "customers", icon: "▪", label: "Customers", badge: 0 },
+        { id: "businesses", icon: "▪", label: "Businesses", badge: 0 },
+        { id: "webhooks", icon: "▪", label: "Webhook Logs", badge: 0 },
+        { id: "payments", icon: "▪", label: "Payments", badge: 0 },
+        { id: "health", icon: "▪", label: "System Health", badge: 0 },
+        { id: "analytics", icon: "▪", label: "Analytics", badge: 0 },
+        { id: "learnings", icon: "▪", label: "Bot Learnings", badge: 0 },
+        { id: "botcontrol", icon: "▪", label: "Bot Control", badge: 0 },
     ];
 
     function outcomeStyle(o) {
@@ -611,11 +616,11 @@ export default function Admin() {
 
     if (!authed) return (
         <>
-            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-            <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", color: d.text }}>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+            <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif", color: d.text }}>
                 <div style={{ width: "100%", maxWidth: "360px", padding: "20px" }}>
                     <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                        <div style={{ fontSize: "20px", fontWeight: "800", color: d.text, marginBottom: "4px", fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
+                        <div style={{ fontSize: "20px", fontWeight: "800", color: d.text, marginBottom: "4px" }}>Delivagh<span style={{ color: accent }}>.</span></div>
                         <p style={{ fontSize: "12px", color: d.muted }}>Admin Portal</p>
                     </div>
                     <div style={{ ...cardStyle, borderRadius: "16px", padding: "32px", boxShadow: d.shadow }}>
@@ -640,27 +645,37 @@ export default function Admin() {
 
     return (
         <>
-            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
             <style>{`
-                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
+                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
                 body { background: ${d.bg}; }
-                ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 2px; }
-                .row-h:hover td { background: ${d.hover} !important; }
-                @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+                ::-webkit-scrollbar { width: 5px; height: 5px; } 
+                ::-webkit-scrollbar-track { background: transparent; }
+                ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 3px; }
+                .row-h:hover td { background: ${d.hover} !important; transition: background 0.1s; }
+                @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+                input, button, textarea { font-family: inherit; }
             `}</style>
 
             <div style={{ display: "flex", minHeight: "100vh", backgroundColor: d.bg, color: d.text }}>
 
                 {/* SIDEBAR */}
                 <aside style={{ width: "220px", backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, position: "fixed", top: 0, left: 0, bottom: 0, display: "flex", flexDirection: "column", zIndex: 50 }}>
-                    <div style={{ padding: "20px 16px", borderBottom: `1px solid ${d.border}` }}>
-                        <div style={{ fontSize: "15px", fontWeight: "800", color: d.text, fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
-                        <p style={{ fontSize: "10px", color: d.muted, marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.1em" }}>Admin Portal</p>
+                    <div style={{ padding: "24px 20px", borderBottom: `1px solid ${d.border}` }}>
+                        <div style={{ fontSize: "16px", fontWeight: "800", color: d.text, letterSpacing: "-0.5px" }}>Delivagh<span style={{ color: accent }}>.</span></div>
+                        <p style={{ fontSize: "10px", color: d.muted, marginTop: "3px", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: "600" }}>Admin Portal</p>
                     </div>
                     <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px" }}>
                         {navItems.map(item => (
                             <button key={item.id} onClick={() => setActivePage(item.id)}
-                                style={{ display: "flex", alignItems: "center", gap: "9px", padding: "10px 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "12px", textAlign: "left", backgroundColor: activePage === item.id ? accentSoft : "transparent", color: activePage === item.id ? accent : d.muted, transition: "all 0.12s" }}>
+                                style={{ 
+                                    display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", 
+                                    borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: activePage === item.id ? "700" : "500", 
+                                    fontSize: "13px", textAlign: "left", width: "100%",
+                                    backgroundColor: activePage === item.id ? accentSoft : "transparent", 
+                                    color: activePage === item.id ? accent : d.muted, 
+                                    transition: "all 0.15s"
+                                }}>
                                 <span>{item.icon}</span>
                                 <span style={{ flex: 1 }}>{item.label}</span>
                                 {item.badge > 0 && <span style={{ backgroundColor: "#ef4444", color: "white", fontSize: "9px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800" }}>{item.badge}</span>}
@@ -718,7 +733,7 @@ export default function Admin() {
                                 ].map((s, i) => (
                                     <div key={i} style={{ ...cardStyle, padding: "18px", borderColor: s.alert ? "rgba(245,158,11,0.3)" : d.border }}>
                                         <p style={{ fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>{s.label}</p>
-                                        <p style={{ fontSize: "28px", fontWeight: "800", color: s.color, lineHeight: 1, marginBottom: "4px" }}>{s.value}</p>
+                                        <p style={{ fontSize: "32px", fontWeight: "800", color: s.color, lineHeight: 1, marginBottom: "6px", letterSpacing: "-1px" }}>{s.value}</p>
                                         <p style={{ fontSize: "11px", color: d.muted }}>{s.sub}</p>
                                     </div>
                                 ))}
@@ -796,7 +811,7 @@ export default function Admin() {
                             </div>
                             {pending.length === 0 ? (
                                 <div style={{ ...cardStyle, padding: "64px", textAlign: "center" }}>
-                                    <p style={{ fontSize: "32px", marginBottom: "12px" }}>✅</p>
+                                    <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "rgba(22,163,74,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", color: "#16a34a", fontSize: "18px", fontWeight: "700" }}>✓</div>
                                     <p style={{ fontSize: "14px", fontWeight: "600", color: d.text, marginBottom: "4px" }}>All caught up!</p>
                                     <p style={{ fontSize: "12px", color: d.muted }}>No pending approvals right now</p>
                                 </div>
@@ -836,7 +851,7 @@ export default function Admin() {
                                                         {actionLoading[biz.id] === "rejecting" ? "..." : "Reject"}
                                                     </button>
                                                     <button onClick={() => approveBusiness(biz.id)} disabled={actionLoading[biz.id] === "approving"}
-                                                        style={{ padding: "8px 20px", backgroundColor: "#22c55e", border: "none", borderRadius: "8px", color: "#0a0d12", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
+                                                        style={{ padding: "8px 20px", backgroundColor: "#16a34a", border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
                                                         {actionLoading[biz.id] === "approving" ? "..." : "Approve"}
                                                     </button>
                                                 </div>
@@ -1294,24 +1309,24 @@ export default function Admin() {
                                         <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))} placeholder="e.g. Mama's Bot" style={inp()} />
                                     </div>
                                     <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🎭 Persona & Vibe</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Persona & Vibe</label>
                                         <textarea value={botConfig.bot_persona || ""} onChange={e => setBotConfig(p => ({ ...p, bot_persona: e.target.value }))}
                                             placeholder="e.g. Warm and motherly. Speaks like a friendly Ghanaian aunty."
                                             style={{ ...inp({ height: "80px", resize: "none" }) }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📍 Location & Pickup Info</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Location & Pickup Info</label>
                                         <input value={botConfig.bot_location || ""} onChange={e => setBotConfig(p => ({ ...p, bot_location: e.target.value }))}
                                             placeholder="e.g. Behind the Engineering Block, UMaT." style={inp()} />
                                     </div>
                                     <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>📌 Special Instructions</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Special Instructions</label>
                                         <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
                                             placeholder="e.g. Closed on Sundays. Delivery is GHS 5."
                                             style={{ ...inp({ height: "80px", resize: "none" }) }} />
                                     </div>
                                     <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>🚫 Boundaries</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Boundaries</label>
                                         <input value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(p => ({ ...p, bot_boundaries: e.target.value }))}
                                             placeholder="e.g. Only sell food items. Do not discuss other businesses." style={inp()} />
                                     </div>
@@ -1322,7 +1337,7 @@ export default function Admin() {
                                             style={{ ...inp({ height: "70px", resize: "none" }) }} />
                                     </div>
                                     <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>⚙️ Advanced: Full AI Context Override</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Advanced: Full AI Context Override</label>
                                         <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
                                             placeholder="Optional: Write a full custom AI system prompt. Overrides all structured fields above."
                                             style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
@@ -1350,7 +1365,7 @@ export default function Admin() {
                                     style={{ padding: "12px 28px", backgroundColor: saving ? d.muted : accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer" }}>
                                     {saving ? "Saving..." : "Save Configuration"}
                                 </button>
-                                {saveMsg && <span style={{ fontSize: "13px", color: "#22c55e", fontWeight: "600" }}>✓ {saveMsg}</span>}
+                                {saveMsg && <span style={{ fontSize: "13px", color: "#22c55e", fontWeight: "600" }}>{saveMsg}</span>}
                             </div>
                         </div>
                     )}
@@ -1360,12 +1375,12 @@ export default function Admin() {
                         <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
                                 <div>
-                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>🧠 Bot Learnings</h1>
+                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Bot Learnings</h1>
                                     <p style={{ fontSize: "12px", color: d.muted }}>Review what the bot learned from real conversations. Approve to activate, reject to discard.</p>
                                 </div>
                                 <button onClick={fetchLearnings}
                                     style={{ padding: "8px 16px", backgroundColor: accentSoft, color: accent, border: `1px solid ${accent}`, borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                    ↻ Refresh
+                                    Refresh
                                 </button>
                             </div>
 
@@ -1456,18 +1471,18 @@ export default function Admin() {
                                                             <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
                                                                 <button onClick={() => approveLearning(learning.id)}
                                                                     style={{ padding: "7px 14px", backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                                    ✓ Approve
+                                                                    Approve
                                                                 </button>
                                                                 <button onClick={() => rejectLearning(learning.id)}
                                                                     style={{ padding: "7px 14px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                                    ✗ Reject
+                                                                    Reject
                                                                 </button>
                                                             </div>
                                                         )}
                                                         {learning.status !== "pending" && (
                                                             <button onClick={() => deleteLearning(learning.id)}
                                                                 style={{ padding: "7px 12px", backgroundColor: "transparent", color: d.muted, border: `1px solid ${d.border}`, borderRadius: "7px", fontSize: "11px", cursor: "pointer" }}>
-                                                                🗑 Delete
+                                                                Delete
                                                             </button>
                                                         )}
                                                     </div>
@@ -1476,7 +1491,7 @@ export default function Admin() {
                                         })}
                                     {learnings.filter(l => learningsFilter === "all" || l.status === learningsFilter).filter(l => learningsBiz === "all" || l.business_name === learningsBiz).length === 0 && (
                                         <div style={{ textAlign: "center", padding: "40px", color: d.muted }}>
-                                            <p style={{ fontSize: "32px", margin: "0 0 8px" }}>🧠</p>
+                                            <p style={{ fontSize: "32px", margin: "0 0 8px" }}>▪</p>
                                             <p style={{ fontSize: "14px", fontWeight: "600" }}>No learnings yet</p>
                                             <p style={{ fontSize: "12px", margin: "4px 0 0" }}>The bot will start learning as customers interact with it.</p>
                                         </div>
@@ -1488,19 +1503,19 @@ export default function Admin() {
 
                         {activePage === "botcontrol" && (
                             <div style={{ maxWidth: "560px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ backgroundColor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "24px" }}>
-                                    <h2 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: "700", color: "white" }}>Global Bot Switch</h2>
-                                    <p style={{ margin: "0 0 20px", fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                                <div style={{ backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px", padding: "24px" }}>
+                                    <h2 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: "700", color: d.text }}>Global Bot Switch</h2>
+                                    <p style={{ margin: "0 0 20px", fontSize: "12px", color: d.muted }}>
                                         Turn off the bot to stop it from responding to ALL customers across ALL businesses.
                                         Customers will receive the offline message below instead.
                                     </p>
 
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px", backgroundColor: botActive ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", borderRadius: "10px", border: `1px solid ${botActive ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, marginBottom: "16px" }}>
                                         <div>
-                                            <p style={{ margin: "0 0 3px", fontSize: "14px", fontWeight: "700", color: "white" }}>
-                                                Bot is currently <span style={{ color: botActive ? "#22c55e" : "#ef4444" }}>{botActive ? "ONLINE ✅" : "OFFLINE ❌"}</span>
+                                            <p style={{ margin: "0 0 3px", fontSize: "14px", fontWeight: "700", color: d.text }}>
+                                                Bot is currently <span style={{ color: botActive ? "#22c55e" : "#ef4444" }}>{botActive ? "ONLINE" : "OFFLINE"}</span>
                                             </p>
-                                            <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
+                                            <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>
                                                 {botActive ? "Responding to all customer messages" : "All messages getting offline reply"}
                                             </p>
                                         </div>
@@ -1511,20 +1526,20 @@ export default function Admin() {
                                     </div>
 
                                     <div style={{ marginBottom: "16px" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>
                                             Offline Message (sent to customers when bot is off)
                                         </label>
                                         <textarea
                                             value={botOfflineMessage}
                                             onChange={e => setBotOfflineMessage(e.target.value)}
                                             rows={3}
-                                            style={{ width: "100%", padding: "10px 12px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px", fontSize: "13px", color: "white", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+                                            style={{ width: "100%", padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", resize: "vertical", boxSizing: "border-box" }}
                                         />
                                     </div>
 
                                     <button onClick={saveBotSwitch} disabled={botSwitchLoading}
-                                        style={{ width: "100%", padding: "12px", backgroundColor: botSwitchSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: botSwitchLoading ? "not-allowed" : "pointer" }}>
-                                        {botSwitchLoading ? "Saving..." : botSwitchSaved ? "✓ Saved!" : "Save Bot Settings"}
+                                        style={{ width: "100%", padding: "12px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "9px", fontWeight: "600", fontSize: "13px", cursor: botSwitchLoading ? "not-allowed" : "pointer", letterSpacing: "0.01em" }}>
+                                        {botSwitchLoading ? "Saving..." : botSwitchSaved ? "Saved!" : "Save Bot Settings"}
                                     </button>
                                 </div>
                             </div>
