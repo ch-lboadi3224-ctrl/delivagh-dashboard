@@ -143,10 +143,10 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
         const done = step > n;
         return (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: done || active ? "#16a34a" : "rgba(255,255,255,0.06)", border: `2px solid ${done || active ? "#16a34a" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: done || active ? "white" : "rgba(255,255,255,0.45)", transition: "all 0.3s" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: done || active ? "#22c55e" : "rgba(255,255,255,0.06)", border: `2px solid ${done || active ? "#22c55e" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: done || active ? "white" : "rgba(255,255,255,0.45)", transition: "all 0.3s" }}>
                     {done ? "✓" : n}
                 </div>
-                <span style={{ fontSize: "10px", color: active ? "#16a34a" : "rgba(255,255,255,0.45)", fontWeight: "600" }}>
+                <span style={{ fontSize: "10px", color: active ? "#22c55e" : "rgba(255,255,255,0.45)", fontWeight: "600" }}>
                     {n === 1 ? "Profile" : n === 2 ? "Menu" : n === 3 ? "Share" : "Go Live"}
                 </span>
             </div>
@@ -155,15 +155,15 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
 
     return (
         <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
             <style>{`
-                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
                 body { background: #080f0a; }
-                .ob-input { width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 14px; color: #ecfdf3; outline: none; transition: border-color 0.2s; font-family: 'Inter', sans-serif; }
+                .ob-input { width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 14px; color: #ecfdf3; outline: none; transition: border-color 0.2s; font-family: 'DM Sans', sans-serif; }
                 .ob-input::placeholder { color: rgba(236,253,243,0.4); }
-                .ob-input:focus { border-color: #16a34a; background: rgba(34,197,94,0.08); }
-                .ob-btn { width: 100%; padding: 14px; background: #16a34a; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif; }
-                .ob-btn:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
+                .ob-input:focus { border-color: #22c55e; background: rgba(34,197,94,0.08); }
+                .ob-btn { width: 100%; padding: 14px; background: #16a34a; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
+                .ob-btn:hover:not(:disabled) { background: #22c55e; transform: translateY(-1px); }
                 .ob-btn:disabled { opacity: 0.5; cursor: not-allowed; }
             `}</style>
 
@@ -172,20 +172,20 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
 
                     {/* Header */}
                     <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Inter', sans-serif" }}>
-                            Delivagh<span style={{ color: "#16a34a" }}>.</span>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
+                            Delivagh<span style={{ color: "#22c55e" }}>.</span>
                         </div>
-                        <p style={{ color: "rgba(236,253,243,0.55)", fontSize: "13px" }}>Let's get {businessName} set up</p>
+                        <p style={{ color: "rgba(236,253,243,0.55)", fontSize: "13px" }}>Let's get {businessName} set up 🚀</p>
                     </div>
 
                     {/* Progress */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "40px" }}>
                         {stepDot(1)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 1 ? "#16a34a" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
+                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 1 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
                         {stepDot(2)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 2 ? "#16a34a" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
+                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 2 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
                         {stepDot(3)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 3 ? "#16a34a" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
+                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 3 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
                         {stepDot(4)}
                     </div>
 
@@ -195,50 +195,36 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                         {/* STEP 1 — Business Profile */}
                         {step === 1 && (
                             <div>
-                                <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(22,163,74,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px" }}>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                                </div>
+                                <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", marginBottom: "16px" }}>🏪</div>
                                 <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Set up your business profile</h2>
                                 <p style={{ margin: "0 0 24px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>These settings improve delivery checks and customer experience in chat.</p>
 
                                 {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px" }}>{error}</div>}
 
                                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Delivery zones</label>
-                                        <input
-                                            className="ob-input"
-                                            value={deliveryZones}
-                                            onChange={e => setDeliveryZones(e.target.value)}
-                                            placeholder="e.g. Dansoman, Kaneshie, Lapaz"
-                                        />
-                                        <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Areas you deliver to — the bot uses this to check if a customer is in range</p>
-                                    </div>
-                                   <div>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Minimum order amount (GHS) <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>— optional</span></label>
-    <input
-        className="ob-input"
-        type="number"
-        min="0"
-        step="0.01"
-        value={minOrderAmount}
-        onChange={e => setMinOrderAmount(e.target.value)}
-        placeholder="0"
-    />
-    <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Customers will be told if their order is below this amount</p>
-<div>
-    <div>
-    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Welcome greeting <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>— optional</span></label>
-    <textarea
-        className="ob-input"
-        rows={3}
-        value={botGreeting}
-        onChange={e => setBotGreeting(e.target.value)}
-        placeholder={`e.g. Welcome to ${businessName}! What can I get for you today?`}
-        style={{ resize: "vertical" }}
-    />
-    <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>The bot sends this when a customer first selects your business</p>
-</div>
+                                    <input
+                                        className="ob-input"
+                                        type="text"
+                                        value={deliveryZones}
+                                        onChange={e => setDeliveryZones(e.target.value)}
+                                        placeholder="Delivery zones (e.g. UMaT, Tarkwa Station, New Atuabo)"
+                                    />
+                                    <input
+                                        className="ob-input"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={minOrderAmount}
+                                        onChange={e => setMinOrderAmount(e.target.value)}
+                                        placeholder="Minimum order amount (GHS) — optional"
+                                    />
+                                    <textarea
+                                        className="ob-input"
+                                        value={botGreeting}
+                                        onChange={e => setBotGreeting(e.target.value)}
+                                        placeholder={`Greeting message (optional) e.g. Welcome to ${businessName}!`}
+                                        style={{ height: "86px", resize: "none" }}
+                                    />
                                     <button className="ob-btn" onClick={saveBusinessProfile} disabled={profileSaving}>
                                         {profileSaving ? "Saving..." : hasExistingMenu ? "Save & Continue →" : "Save & Add Menu →"}
                                     </button>
@@ -313,7 +299,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                                         href={DELIVAGH_WA_LINK}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        style={{ display: "block", margin: "0 0 16px", fontSize: "14px", fontWeight: "700", color: "#16a34a", wordBreak: "break-all", textDecoration: "underline" }}
+                                        style={{ display: "block", margin: "0 0 16px", fontSize: "14px", fontWeight: "700", color: "#22c55e", wordBreak: "break-all", textDecoration: "underline" }}
                                     >
                                         {DELIVAGH_WA_LINK}
                                     </a>
@@ -332,7 +318,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                                                     copyLink();
                                                 }
                                             }}
-                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "rgba(34,197,94,0.15)", color: "#16a34a", border: "1px solid rgba(34,197,94,0.35)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
+                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.35)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
                                         >
                                             Share Link
                                         </button>
@@ -367,7 +353,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
                                         "Customer pays → order confirmed"
                                     ].map((s, i) => (
                                         <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "#16a34a", color: "white", fontSize: "10px", fontWeight: "800", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+                                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "#22c55e", color: "white", fontSize: "10px", fontWeight: "800", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
                                             <span style={{ fontSize: "13px", color: "#ecfdf3" }}>{s}</span>
                                         </div>
                                     ))}
