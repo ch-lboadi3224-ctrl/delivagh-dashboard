@@ -201,30 +201,43 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
 
                                 {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px" }}>{error}</div>}
 
-                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                    <input
-                                        className="ob-input"
-                                        type="text"
-                                        value={deliveryZones}
-                                        onChange={e => setDeliveryZones(e.target.value)}
-                                        placeholder="Delivery zones (e.g. UMaT, Tarkwa Station, New Atuabo)"
-                                    />
-                                    <input
-                                        className="ob-input"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={minOrderAmount}
-                                        onChange={e => setMinOrderAmount(e.target.value)}
-                                        placeholder="Minimum order amount (GHS) — optional"
-                                    />
-                                    <textarea
-                                        className="ob-input"
-                                        value={botGreeting}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                                    <div style={{ display: "flex", flexDirection: "column" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>DELIVERY ZONES</label>
+                                        <input
+                                            className="ob-input"
+                                            type="text"
+                                            value={deliveryZones}
+                                            onChange={e => setDeliveryZones(e.target.value)}
+                                            placeholder="Delivery zones (e.g. UMaT, Tarkwa Station, New Atuabo)"
+                                        />
+                                        <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Areas you deliver to - the bot uses this to check if a customer is in range</p>
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>MINIMUM ORDER AMOUNT (GHS) <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>— optional</span></label>
+                                        <input
+                                            className="ob-input"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={minOrderAmount}
+                                            onChange={e => setMinOrderAmount(e.target.value)}
+                                            placeholder="0"
+                                        />
+                                        <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Customers will be told if their order is below this amount</p>
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column" }}>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>WELCOME GREETING <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>optional</span></label>
+                                        <textarea
+                                            className="ob-input"
+                                            rows={3}
+                                            value={botGreeting}
                                         onChange={e => setBotGreeting(e.target.value)}
-                                        placeholder={`Greeting message (optional) e.g. Welcome to ${businessName}!`}
-                                        style={{ height: "86px", resize: "none" }}
-                                    />
+        placeholder={`e.g. Welcome to ${businessName}! What can I get for you today?`}
+        style={{ resize: "vertical" }}
+    />
+    <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>The bot sends this when a customer first selects your business</p>
+</div>
                                     <button className="ob-btn" onClick={saveBusinessProfile} disabled={profileSaving}>
                                         {profileSaving ? "Saving..." : hasExistingMenu ? "Save & Continue →" : "Save & Add Menu →"}
                                     </button>
