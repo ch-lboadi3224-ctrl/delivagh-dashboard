@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import "./Landing.css";
 
 export default function Landing() {
@@ -267,7 +267,7 @@ export default function Landing() {
             Create your free account
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </a>
-          <p className="cta-note">First month free &​nbsp;·&​nbsp; No setup fees &​nbsp;·&​nbsp; Cancel anytime</p>
+          <p className="cta-note">First month free {'\u00A0'}·{'\u00A0'} No setup fees {'\u00A0'}·{'\u00A0'} Cancel anytime</p>
         </div>
       </section>
 
@@ -276,7 +276,7 @@ export default function Landing() {
           <span className="footer-logo-text">DelivaGH</span>
           <span className="footer-logo-dot"></span>
         </div>
-        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &​nbsp;·&​nbsp; delivagh.app</p>
+        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana {'\u00A0'}·{'\u00A0'} delivagh.app</p>
         <div className="footer-links">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
