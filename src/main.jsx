@@ -18,9 +18,27 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import Admin from './Admin.jsx'
+import Landing from './Landing.jsx'
+import Login from './Login.jsx'
+import Signup from './Signup.jsx'
+import Onboarding from './Onboarding.jsx'
+import Privacy from './Privacy.jsx'
+import Terms from './Terms.jsx'
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootComponent = normalizedPath === '/admin' ? Admin : App
+
+const componentMap = {
+  '/':            Landing,
+  '/login':       Login,
+  '/signup':      Signup,
+  '/onboarding':  Onboarding,
+  '/dashboard':   App,
+  '/admin':       Admin,
+  '/privacy':     Privacy,
+  '/terms':       Terms,
+}
+
+const RootComponent = componentMap[normalizedPath] ?? Login
 
 class RootErrorBoundary extends Component {
   constructor(props) {

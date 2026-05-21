@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivagh — Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#111;font-family:'DM Sans',sans-serif;color:#fff}
+
+.page{display:flex;min-height:100vh}
+
+/* ── LEFT: DARK FORM PANEL ── */
+.left{width:520px;min-width:520px;background:#111;display:flex;flex-direction:column;justify-content:center;padding:60px 72px;position:relative}
+
+.wordmark{position:absolute;top:40px;left:72px;display:flex;align-items:baseline;gap:2px}
+.wordmark-text{font-family:'DM Serif Display',serif;font-size:22px;color:#fff;letter-spacing:-0.3px}
+.wordmark-dot{width:6px;height:6px;background:#1a7a3c;border-radius:50%;margin-left:1px;margin-bottom:3px;flex-shrink:0}
+.wordmark-sub{position:absolute;top:64px;left:72px;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:0.04em;text-transform:uppercase;font-weight:500}
+
+.form-container{max-width:360px;width:100%}
+
+.form-heading{font-family:'DM Serif Display',serif;font-size:34px;color:#fff;letter-spacing:-0.5px;line-height:1.2;margin-bottom:6px}
+.form-sub{font-size:14px;color:rgba(255,255,255,.4);margin-bottom:32px;line-height:1.6}
+
+.google-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;font-size:14px;font-weight:500;color:rgba(255,255,255,.85);cursor:pointer;transition:background 0.15s,border-color 0.15s;font-family:'DM Sans',sans-serif;margin-bottom:24px}
+.google-btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
+.google-btn svg{flex-shrink:0}
+
+.divider{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.divider-line{flex:1;height:1px;background:rgba(255,255,255,.1)}
+.divider-text{font-size:12px;color:rgba(255,255,255,.3);white-space:nowrap}
+
+.field{margin-bottom:16px}
+.field-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.field-label{font-size:12px;font-weight:500;color:rgba(255,255,255,.5);letter-spacing:0.02em}
+.field-forgot{font-size:12px;color:#1a7a3c;font-weight:500;text-decoration:none;cursor:pointer}
+.field-forgot:hover{color:#22a04e}
+
+.field-input{width:100%;padding:11px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:14px;color:#fff;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.15s,background 0.15s;-webkit-appearance:none}
+.field-input:focus{border-color:#1a7a3c;background:rgba(255,255,255,.08);box-shadow:0 0 0 3px rgba(26,122,60,0.15)}
+.field-input::placeholder{color:rgba(255,255,255,.2)}
+
+.pw-wrap{position:relative}
+.pw-wrap .field-input{padding-right:56px}
+.pw-toggle{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:500;color:rgba(255,255,255,.4);cursor:pointer;user-select:none;background:none;border:none;font-family:'DM Sans',sans-serif}
+.pw-toggle:hover{color:rgba(255,255,255,.7)}
+
+.submit-btn{width:100%;padding:13px;background:#1a7a3c;border:none;border-radius:8px;font-size:14px;font-weight:500;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;transition:background 0.15s;letter-spacing:0.01em}
+.submit-btn:hover{background:#155c2e}
+.submit-btn:active{transform:scale(0.995)}
+
+.signup-link{text-align:center;margin-top:24px;font-size:13px;color:rgba(255,255,255,.35)}
+.signup-link a{color:#1a7a3c;font-weight:500;text-decoration:none}
+.signup-link a:hover{color:#22a04e}
+
+.left-footer{position:absolute;bottom:40px;left:72px;font-size:11px;color:rgba(255,255,255,.2);line-height:1.6}
+
+/* ── RIGHT: GREEN BRAND PANEL ── */
+.right{flex:1;background:#0d5c2e;display:flex;flex-direction:column;justify-content:flex-end;padding:60px 64px;position:relative;overflow:hidden}
+
+/* subtle texture */
+.right-noise{position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");opacity:.5}
+.right-gradient{position:absolute;inset:0;background:radial-gradient(ellipse at 70% 20%, rgba(34,160,78,.35) 0%, transparent 60%)}
+.right-fade{position:absolute;bottom:0;left:0;right:0;height:60%;background:linear-gradient(to top,#0d5c2e 30%,transparent)}
+
+.right-content{position:relative;z-index:1}
+
+.right-tag{display:inline-block;border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:500;color:rgba(255,255,255,.6);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:28px}
+
+.right-headline{font-family:'DM Serif Display',serif;font-size:46px;color:#fff;line-height:1.1;letter-spacing:-0.5px;margin-bottom:16px}
+.right-headline em{color:rgba(255,255,255,.5);font-style:normal}
+
+.right-sub{font-size:13px;color:rgba(255,255,255,.55);line-height:1.8;margin-bottom:44px;max-width:340px}
+
+/* order notification card */
+.order-card{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:18px 20px;backdrop-filter:blur(8px);margin-bottom:40px;max-width:340px}
+.order-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.order-card-title{font-size:13px;font-weight:500;color:#fff}
+.order-badge{font-size:10px;font-weight:600;color:#fff;background:rgba(255,255,255,.2);border-radius:4px;padding:2px 8px;letter-spacing:0.04em}
+.order-card-items{font-size:12px;color:rgba(255,255,255,.55);margin-bottom:14px;line-height:1.6}
+.order-progress{height:3px;background:rgba(255,255,255,.15);border-radius:2px;overflow:hidden}
+.order-progress-fill{height:100%;width:30%;background:#fff;border-radius:2px}
+.order-progress-label{font-size:10px;color:rgba(255,255,255,.35);margin-top:6px;letter-spacing:0.02em}
+
+.stats-row{display:flex;gap:40px}
+.stat{display:flex;flex-direction:column;gap:4px}
+.stat-val{font-family:'DM Serif Display',serif;font-size:32px;color:#fff;letter-spacing:-0.5px;line-height:1}
+.stat-label{font-size:11px;color:rgba(255,255,255,.4);letter-spacing:0.04em;text-transform:uppercase}
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- LEFT: FORM -->
+  <div class="left">
+    <div class="wordmark">
+      <span class="wordmark-text">Delivagh</span>
+      <span class="wordmark-dot"></span>
+    </div>
+    <div class="wordmark-sub">Vendor Portal</div>
+
+    <div class="form-container">
+      <h1 class="form-heading">Welcome back</h1>
+      <p class="form-sub">Sign in to manage your orders and menu.</p>
+
+      <button class="google-btn">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+        Continue with Google
+      </button>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">or sign in with email</span>
+        <div class="divider-line"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-header">
+          <span class="field-label">Email address</span>
+        </div>
+        <input class="field-input" type="email" placeholder="you@example.com">
+      </div>
+
+      <div class="field">
+        <div class="field-header">
+          <span class="field-label">Password</span>
+          <a href="#" class="field-forgot">Forgot password?</a>
+        </div>
+        <div class="pw-wrap">
+          <input class="field-input" type="password" placeholder="Your password" id="pw">
+          <button class="pw-toggle" onclick="toggle('pw',this)" type="button">Show</button>
+        </div>
+      </div>
+
+      <button class="submit-btn">Sign in</button>
+
+      <p class="signup-link">No account? <a href="#">Create one free</a></p>
+    </div>
+
+    <p class="left-footer">DelivaGH &mdash; First month free, no setup fees.</p>
+  </div>
+
+  <!-- RIGHT: BRAND PANEL -->
+  <div class="right">
+    <div class="right-noise"></div>
+    <div class="right-gradient"></div>
+    <div class="right-fade"></div>
+
+    <div class="right-content">
+      <div class="right-tag">Live orders</div>
+
+      <h2 class="right-headline">Receive orders<br>on WhatsApp,<br><em>manage everything.</em></h2>
+      <p class="right-sub">Your menu, orders, payments, and customer messages — all in one dashboard built for Ghanaian food businesses.</p>
+
+      <div class="order-card">
+        <div class="order-card-header">
+          <span class="order-card-title">New Order &mdash; GHS 75.00</span>
+          <span class="order-badge">Pending</span>
+        </div>
+        <div class="order-card-items">2x Jollof Rice &nbsp;&middot;&nbsp; 1x Grilled Chicken<br>Pay on pickup &nbsp;&middot;&nbsp; Kasoa</div>
+        <div class="order-progress"><div class="order-progress-fill"></div></div>
+        <div class="order-progress-label">Order progress &mdash; Step 1 of 4</div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat">
+          <span class="stat-val">24/7</span>
+          <span class="stat-label">Bot active</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">5 min</span>
+          <span class="stat-label">To set up</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val">0%</span>
+          <span class="stat-label">Commission</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+function toggle(id,btn){
+  const i=document.getElementById(id);
+  if(i.type==='password'){i.type='text';btn.textContent='Hide';}
+  else{i.type='password';btn.textContent='Show';}
+}
+</script>
+</body>
+</html>

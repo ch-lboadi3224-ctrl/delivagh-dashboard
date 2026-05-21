@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { supabase } from "./supabase";
 import { normalizeEmail } from "./authValidators";
 
@@ -245,7 +245,7 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                                         {resendLoading ? "Sending…" : "Resend confirmation email"}
                                     </button>
                                 )}
-                                <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<span onClick={onSignup} style={{ color: "#16a34a", fontWeight: "600", cursor: "pointer" }}>Create one free</span></p>
+                                <p style={{ textAlign: "center", marginTop: "24px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>No account?{" "}<a href='/signup' style={{ color: '#16a34a', fontWeight: '600', textDecoration: 'none' }}>Create one free</a></p>
                             </>
                         )}
                     </div>

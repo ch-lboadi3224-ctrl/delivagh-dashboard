@@ -360,7 +360,7 @@ export default function Signup({ onSignup, onLogin }) {
                         </div>
 
                         <p style={{ textAlign: "center", marginTop: "16px", fontSize: "14px", color: "rgba(255,255,255,0.35)" }}>
-                            Already have an account?{" "}<span onClick={onLogin} style={{ color: "#16a34a", fontWeight: "600", cursor: "pointer" }}>Sign in</span>
+                            Already have an account?{" "}<a href='/login' style={{ color: '#16a34a', fontWeight: '600', textDecoration: 'none' }}>Sign in</a>
                         </p>
                     </div>
                 </div>
