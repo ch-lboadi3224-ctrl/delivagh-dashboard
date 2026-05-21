@@ -1,48 +1,49 @@
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;color:#111;background:#faf9f6;line-height:1.7}
-nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:0 60px;height:64px;display:flex;align-items:center;justify-content:space-between;background:rgba(250,249,246,0.95);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,0,0,0.06)}
-.nav-logo{display:flex;align-items:baseline;gap:2px;text-decoration:none}
-.nav-logo-text{font-family:'DM Serif Display',serif;font-size:20px;color:#111;letter-spacing:-0.3px}
-.nav-logo-dot{width:5px;height:5px;background:#1a7a3c;border-radius:50%;margin-left:1px;margin-bottom:2px;flex-shrink:0}
-.nav-back{font-size:13px;color:#666;text-decoration:none;display:flex;align-items:center;gap:6px;transition:color 0.15s}
-.nav-back:hover{color:#111}
-.nav-back svg{width:14px;height:14px}
+.privacy-root{box-sizing:border-box;margin:0;padding:0;font-family:'DM Sans',sans-serif;color:#111;background:#faf9f6;line-height:1.7}
+.privacy-root *{box-sizing:border-box}
 
-.page{max-width:720px;margin:0 auto;padding:120px 40px 100px}
-.doc-label{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#1a7a3c;margin-bottom:12px}
-.doc-title{font-family:'DM Serif Display',serif;font-size:42px;letter-spacing:-0.5px;color:#111;margin-bottom:12px;line-height:1.1}
-.doc-meta{font-size:13px;color:#999;margin-bottom:48px;padding-bottom:32px;border-bottom:1px solid #e5e5e5}
-.doc-meta strong{color:#555}
+.privacy-root nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:0 60px;height:64px;display:flex;align-items:center;justify-content:space-between;background:rgba(250,249,246,0.95);backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,0,0,0.06)}
+.privacy-root .nav-logo{display:flex;align-items:baseline;gap:2px;text-decoration:none}
+.privacy-root .nav-logo-text{font-family:'DM Serif Display',serif;font-size:20px;color:#111;letter-spacing:-0.3px}
+.privacy-root .nav-logo-dot{width:5px;height:5px;background:#1a7a3c;border-radius:50%;margin-left:1px;margin-bottom:2px;flex-shrink:0}
+.privacy-root .nav-back{font-size:13px;color:#666;text-decoration:none;display:flex;align-items:center;gap:6px;transition:color 0.15s}
+.privacy-root .nav-back:hover{color:#111}
+.privacy-root .nav-back svg{width:14px;height:14px}
 
-.toc{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:24px 28px;margin-bottom:48px}
-.toc-title{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;margin-bottom:14px}
-.toc ol{padding-left:18px}
-.toc li{margin-bottom:6px}
-.toc a{font-size:13px;color:#1a7a3c;text-decoration:none;font-weight:500}
-.toc a:hover{text-decoration:underline}
+.privacy-root .page{max-width:720px;margin:0 auto;padding:120px 40px 100px}
+.privacy-root .doc-label{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#1a7a3c;margin-bottom:12px}
+.privacy-root .doc-title{font-family:'DM Serif Display',serif;font-size:42px;letter-spacing:-0.5px;color:#111;margin-bottom:12px;line-height:1.1}
+.privacy-root .doc-meta{font-size:13px;color:#999;margin-bottom:48px;padding-bottom:32px;border-bottom:1px solid #e5e5e5}
+.privacy-root .doc-meta strong{color:#555}
 
-h2{font-family:'DM Serif Display',serif;font-size:24px;color:#111;margin:48px 0 16px;letter-spacing:-0.3px;scroll-margin-top:80px}
-h3{font-size:15px;font-weight:500;color:#111;margin:24px 0 10px}
-p{font-size:15px;color:#444;margin-bottom:16px}
-ul,ol{padding-left:20px;margin-bottom:16px}
-li{font-size:15px;color:#444;margin-bottom:6px;line-height:1.7}
-strong{color:#111;font-weight:500}
-a{color:#1a7a3c;text-decoration:none}
-a:hover{text-decoration:underline}
+.privacy-root .toc{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:24px 28px;margin-bottom:48px}
+.privacy-root .toc-title{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;margin-bottom:14px}
+.privacy-root .toc ol{padding-left:18px}
+.privacy-root .toc li{margin-bottom:6px}
+.privacy-root .toc a{font-size:13px;color:#1a7a3c;text-decoration:none;font-weight:500}
+.privacy-root .toc a:hover{text-decoration:underline}
 
-.highlight{background:#e8f5ee;border-left:3px solid #1a7a3c;border-radius:0 8px 8px 0;padding:16px 20px;margin:24px 0}
-.highlight p{margin:0;font-size:14px;color:#155c2e}
+.privacy-root h2{font-family:'DM Serif Display',serif;font-size:24px;color:#111;margin:48px 0 16px;letter-spacing:-0.3px;scroll-margin-top:80px}
+.privacy-root h3{font-size:15px;font-weight:500;color:#111;margin:24px 0 10px}
+.privacy-root p{font-size:15px;color:#444;margin-bottom:16px}
+.privacy-root ul,ol{padding-left:20px;margin-bottom:16px}
+.privacy-root li{font-size:15px;color:#444;margin-bottom:6px;line-height:1.7}
+.privacy-root strong{color:#111;font-weight:500}
+.privacy-root a{color:#1a7a3c;text-decoration:none}
+.privacy-root a:hover{text-decoration:underline}
 
-table{width:100%;border-collapse:collapse;margin:20px 0 24px;font-size:14px}
-th{text-align:left;padding:10px 14px;background:#f5f5f0;font-weight:500;color:#555;font-size:12px;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e5e5}
-td{padding:12px 14px;border-bottom:1px solid #f0f0f0;color:#444;vertical-align:top}
-tr:last-child td{border-bottom:none}
+.privacy-root .highlight{background:#e8f5ee;border-left:3px solid #1a7a3c;border-radius:0 8px 8px 0;padding:16px 20px;margin:24px 0}
+.privacy-root .highlight p{margin:0;font-size:14px;color:#155c2e}
 
-footer{background:#111;padding:40px 60px;display:flex;align-items:center;justify-content:space-between}
-.footer-logo{display:flex;align-items:baseline;gap:2px}
-.footer-logo-text{font-family:'DM Serif Display',serif;font-size:18px;color:#fff;letter-spacing:-0.3px}
-.footer-logo-dot{width:5px;height:5px;background:#1a7a3c;border-radius:50%;margin-left:1px;margin-bottom:2px;flex-shrink:0}
-.footer-text{font-size:12px;color:rgba(255,255,255,0.3);text-align:center;line-height:1.7}
-.footer-links{display:flex;gap:20px}
-.footer-links a{font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;transition:color 0.15s}
-.footer-links a:hover{color:rgba(255,255,255,0.7)}
+.privacy-root table{width:100%;border-collapse:collapse;margin:20px 0 24px;font-size:14px}
+.privacy-root th{text-align:left;padding:10px 14px;background:#f5f5f0;font-weight:500;color:#555;font-size:12px;letter-spacing:0.03em;text-transform:uppercase;border-bottom:1px solid #e5e5e5}
+.privacy-root td{padding:12px 14px;border-bottom:1px solid #f0f0f0;color:#444;vertical-align:top}
+.privacy-root tr:last-child td{border-bottom:none}
+
+.privacy-root footer{background:#111;padding:40px 60px;display:flex;align-items:center;justify-content:space-between}
+.privacy-root .footer-logo{display:flex;align-items:baseline;gap:2px}
+.privacy-root .footer-logo-text{font-family:'DM Serif Display',serif;font-size:18px;color:#fff;letter-spacing:-0.3px}
+.privacy-root .footer-logo-dot{width:5px;height:5px;background:#1a7a3c;border-radius:50%;margin-left:1px;margin-bottom:2px;flex-shrink:0}
+.privacy-root .footer-text{font-size:12px;color:rgba(255,255,255,0.3);text-align:center;line-height:1.7}
+.privacy-root .footer-links{display:flex;gap:20px}
+.privacy-root .footer-links a{font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;transition:color 0.15s}
+.privacy-root .footer-links a:hover{color:rgba(255,255,255,0.7)}
