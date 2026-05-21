@@ -107,7 +107,7 @@ export default function Signup({ onSignup, onLogin }) {
         await supabase.auth.updateUser({
             data: { pending_business_name: null, pending_business_phone: null },
         });
-        onSignup({ kind: "pending_admin" });
+        window.location.replace('/onboarding');
         return true;
     }
 
@@ -177,7 +177,7 @@ export default function Signup({ onSignup, onLogin }) {
         const session = data.session;
 
         if (!session) {
-            onSignup({ kind: "verify_email", email: em });
+            window.location.replace('/onboarding');
             setLoading(false);
             return;
         }

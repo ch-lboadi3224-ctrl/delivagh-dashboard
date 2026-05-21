@@ -126,7 +126,7 @@ export default function Login({ onLogin, onSignup, notice = "" }) {
                 return;
             }
         }
-        onLogin(data.user);
+        window.location.replace('/dashboard');
         setLoading(false);
     }
 
