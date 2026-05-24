@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import { handleAuthError } from "./authUtils";
 
 const DELIVAGH_WA_NUMBER = "233276295769";
 const DELIVAGH_WA_LINK = `https://wa.me/${DELIVAGH_WA_NUMBER}?text=Hi`;
@@ -84,6 +85,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
         };
         const { error: e } = await supabase.from("businesses").update(payload).eq("user_id", user.id);
         if (e) {
+            if (await handleAuthError(e)) return;
             const missingColumnError = typeof e.message === "string" && e.message.includes("Could not find the");
             if (!missingColumnError) {
                 setError(e.message);
@@ -120,7 +122,7 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
             category: itemCategory,
             available: true
         }]);
-        if (e) { setError(e.message); setSaving(false); return; }
+        if (e) { if (await handleAuthError(e)) return; setError(e.message); setSaving(false); return; }
         setStep(3);
         setSaving(false);
     }

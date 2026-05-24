@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { handleAuthError } from "./authUtils";
 
 /**
  * Business Settings Component
@@ -44,6 +45,7 @@ export default function BusinessSettings({ user, darkMode = true }) {
                 setMomoNumber(data.momo_number || "");
             }
         } catch (e) {
+            if (await handleAuthError(e)) return;
             console.error("Error fetching business data:", e);
             setError("Failed to load business data");
         } finally {
@@ -70,6 +72,7 @@ export default function BusinessSettings({ user, darkMode = true }) {
             setMessage("Settings saved successfully!");
             setTimeout(() => setMessage(""), 3000);
         } catch (e) {
+            if (await handleAuthError(e)) return;
             console.error("Error saving settings:", e);
             setError("Failed to save settings: " + e.message);
             setTimeout(() => setError(""), 5000);

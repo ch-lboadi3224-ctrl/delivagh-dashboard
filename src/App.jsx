@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
+import { handleAuthError } from "./authUtils";
 import Login from "./Login";
 import Signup from "./Signup";
 import Onboarding from "./Onboarding";
@@ -893,7 +894,7 @@ export default function App() {
             item_price: parseFloat(newItem.item_price), item_description: newItem.item_description.trim(),
             category: newItem.category, available: true, image_url: imageUrl
         }]).select();
-        if (error) { alert("Error: " + error.message); return; }
+        if (error) { if (await handleAuthError(error)) return; alert("Error: " + error.message); return; }
         setNewItem({ item_name: "", item_price: "", item_description: "", category: "Main" });
         setNewItemImage(null);
         setShowAddModal(false);
@@ -1014,6 +1015,7 @@ export default function App() {
             closeUploadMenuModal();
             await fetchMenuItems();
         } catch (e) {
+            if (await handleAuthError(e)) return;
             addNotif(String(e.message || e), "error");
         } finally {
             setUploadSaveLoading(false);
@@ -1059,6 +1061,7 @@ export default function App() {
             }
             addNotif(msgs[status] || "Order updated", "success");
         } catch (e) {
+            if (await handleAuthError(e)) return;
             console.log("Notify failed:", e?.message || e);
             addNotif(e?.message ? ("Notify failed: " + e.message) : "Notify failed", "error");
             fetchOrders();
@@ -1093,7 +1096,7 @@ export default function App() {
             
             addNotif("Payment marked as received", "success"); 
         }
-        catch (e) { fetchOrders(); }
+        catch (e) { if (await handleAuthError(e)) return; fetchOrders(); }
         finally { setButtonLoading(prev => ({ ...prev, [id + "_pay"]: false })); }
     }
 
@@ -1141,6 +1144,7 @@ export default function App() {
             setTimeout(() => setSettingsSaved(false), 3000);
             addNotif("Settings saved", "success");
         } catch (e) {
+            if (await handleAuthError(e)) return;
             console.error("Failed to save settings:", e?.message || e);
             alert("Failed to save settings: " + (e?.message || "Unknown error"));
         }
@@ -1161,6 +1165,7 @@ export default function App() {
             setTimeout(() => setBotConfigSaved(false), 3000);
             addNotif("Bot configuration saved", "success");
         } catch (e) {
+            if (await handleAuthError(e)) return;
             alert("Failed to save bot config: " + (e?.message || "Unknown error"));
         }
     }
@@ -1188,7 +1193,7 @@ export default function App() {
         setOnboardingChecked(false);
     }
 
-    function StatusBadge({ status }) {
+    function StatusBadge({ status, cancelledBy }) {
         const cfg = {
             pending: { bg: "#fef3c7", c: "#92400e", dot: "#f59e0b", label: "Pending" },
             confirmed: { bg: "#dcfce7", c: "#166534", dot: "#22c55e", label: "Confirmed" },
@@ -1196,7 +1201,15 @@ export default function App() {
             ready: { bg: "#ede9fe", c: "#5b21b6", dot: "#8b5cf6", label: "Ready" },
             delivered: { bg: "#dcfce7", c: "#14532d", dot: "#22c55e", label: "Delivered" },
             rejected: { bg: "#fee2e2", c: "#7f1d1d", dot: "#ef4444", label: "Rejected" },
+            cancelled: { bg: "#fee2e2", c: "#7f1d1d", dot: "#ef4444", label: "Cancelled" },
         };
+        if (status === 'cancelled' && cancelledBy === 'customer') {
+            return (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap" }}>
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", flexShrink: 0 }} />Cancelled by customer
+                </span>
+            );
+        }
         const s = cfg[status] || { bg: "#f3f4f6", c: "#374151", dot: "#9ca3af", label: status || "—" };
         return (
             <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: s.bg, color: s.c, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap" }}>
@@ -1523,7 +1536,7 @@ export default function App() {
                                     <button onClick={() => setSelectedOrder(null)} style={{ background: d.hover, border: `1px solid ${d.border}`, borderRadius: "7px", padding: "5px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: d.muted }}>Close</button>
                                 </div>
                                 <div style={{ display: "flex", gap: "7px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-                                    <StatusBadge status={liveOrder.status} />
+                                    <StatusBadge status={liveOrder.status} cancelledBy={liveOrder.cancelled_by} />
                                     <PaymentBadge status={liveOrder.payment_status} paymentMethod={liveOrder.payment_method} orderId={liveOrder.id} showMarkPaid={true} />
                                     {liveOrder.payment_method && (
                                         <span style={{ backgroundColor: d.hover, color: d.muted, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>
@@ -1647,7 +1660,7 @@ export default function App() {
                                                     <span style={{ fontFamily: "monospace", fontSize: "11px", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</span>
                                                     <span style={{ fontSize: "11px", color: d.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{order.items}</span>
                                                     <span style={{ fontSize: "11px", fontWeight: "700", color: "#22c55e" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</span>
-                                                    <StatusBadge status={order.status} />
+                                                    <StatusBadge status={order.status} cancelledBy={order.cancelled_by} />
                                                     <button onClick={() => { setSelectedCustomer(null); setSelectedOrder(order); }} style={{ padding: "4px 8px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.22)", borderRadius: "6px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>Open</button>
                                                 </div>
                                             ))}
@@ -2026,7 +2039,7 @@ export default function App() {
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
                                                             <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
-                                                            <td style={{ padding: "10px 14px" }}><StatusBadge status={order.status} /></td>
+                                                            <td style={{ padding: "10px 14px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
                                                             <td style={{ padding: "10px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
                                                         </tr>
                                                     ))}
@@ -2126,7 +2139,7 @@ export default function App() {
                                                                                 </span>
                                                                             </td>
                                                                             <td style={{ padding: "11px 13px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
-                                                                            <td style={{ padding: "11px 13px" }}><StatusBadge status={order.status} /></td>
+                                                                            <td style={{ padding: "11px 13px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}</td>
                                                                             <td style={{ padding: "11px 13px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
                                                                         </tr>

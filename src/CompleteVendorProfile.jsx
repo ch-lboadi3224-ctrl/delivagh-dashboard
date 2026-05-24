@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "./supabase";
+import { handleAuthError } from "./authUtils";
 import { normalizeGhanaPhone, validateBusinessName } from "./authValidators";
 
 export default function CompleteVendorProfile({ user, onRegistered }) {
@@ -43,6 +44,7 @@ export default function CompleteVendorProfile({ user, onRegistered }) {
         }]);
 
         if (ins) {
+            if (await handleAuthError(ins)) return;
             setError(ins.message);
             setLoading(false);
             return;

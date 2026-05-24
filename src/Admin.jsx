@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
+import { handleAuthError } from "./authUtils";
 
 const ADMIN_PASSWORD = "delivagh_admin_2024";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
@@ -381,6 +382,7 @@ export default function Admin() {
         };
         const { error } = await supabase.from("businesses").update(payload).eq("id", selectedBiz.id);
         if (error) {
+            if (await handleAuthError(error)) return;
             setPaymentMsg("Could not save: " + error.message);
             setPaymentSaving(false);
             return;
@@ -407,6 +409,7 @@ export default function Admin() {
             }
             setTimeout(() => setSaveMsg(""), 5000);
         } catch (e) {
+            if (await handleAuthError(e)) return;
             setSaveMsg("Bot resync failed: " + e.message);
             setTimeout(() => setSaveMsg(""), 5000);
         } finally {
@@ -490,6 +493,7 @@ export default function Admin() {
                 setCreateVendorMsg("");
             }, 900);
         } catch (err) {
+            if (await handleAuthError(err)) return;
             setCreateVendorErr(err.message || "Could not create vendor.");
         } finally {
             setCreatingVendor(false);
