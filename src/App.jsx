@@ -115,6 +115,7 @@ export default function App() {
         pickup_enabled: true,
         pay_directly_enabled: true,
         pay_online_enabled: true,
+        delivery_fee: 0,
     });
     const [botConfig, setBotConfig] = useState({
         bot_name: "",
@@ -652,6 +653,7 @@ export default function App() {
                         pickup_enabled: sd.pickup_enabled ?? true,
                         pay_directly_enabled: sd.pay_directly_enabled ?? true,
                         pay_online_enabled: sd.pay_online_enabled ?? true,
+                        delivery_fee: sd.delivery_fee ?? 0,
                     }));
                 }
 
@@ -1114,6 +1116,7 @@ export default function App() {
                 pickup_enabled: settings.pickup_enabled,
                 pay_directly_enabled: settings.pay_directly_enabled,
                 pay_online_enabled: settings.pay_online_enabled,
+                delivery_fee: parseFloat(settings.delivery_fee) || 0,
             };
             const { error } = await supabase
                 .from("business_settings")
@@ -2472,6 +2475,19 @@ export default function App() {
                                                     </div>
                                                 </div>
                                             ))}
+                                        </div>
+                                        <div style={{ marginTop: "14px", borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
+                                            <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: d.text }}>Delivery Fee (GHS)</p>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.50"
+                                                value={settings.delivery_fee}
+                                                onChange={e => setSettings(s => ({ ...s, delivery_fee: e.target.value }))}
+                                                placeholder="0.00"
+                                                style={{ padding: "8px 10px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box" }}
+                                            />
+                                            <p style={{ margin: "4px 0 0", fontSize: "11px", color: d.muted }}>Added to order total for delivery orders. Set 0 for free delivery.</p>
                                         </div>
                                     </div>
                                     <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
