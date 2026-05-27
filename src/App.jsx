@@ -1567,10 +1567,10 @@ export default function App() {
                                             <span style={{ fontSize: "12px", fontWeight: "600", color: d.text, textAlign: "right" }}>{item.value}</span>
                                         </div>
                                     ))}
-                                    {liveOrder.notes && (
+                                    {liveOrder.special_instructions && (
                                         <div style={{ padding: "11px 13px", backgroundColor: "#fefce8", borderRadius: "8px", border: "1px solid #fde68a" }}>
                                             <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: "#92400e", textTransform: "uppercase" }}>Special Instructions</p>
-                                            <p style={{ margin: 0, fontSize: "13px", color: "#78350f" }}>{liveOrder.notes}</p>
+                                            <p style={{ margin: 0, fontSize: "13px", color: "#78350f" }}>{liveOrder.special_instructions}</p>
                                         </div>
                                     )}
                                     <div style={{ padding: "11px 13px", backgroundColor: d.hover, borderRadius: "8px" }}>
