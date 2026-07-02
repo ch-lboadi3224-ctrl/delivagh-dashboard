@@ -10,6 +10,17 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.ap
 const API = BACKEND_URL;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
+/**
+ * Authorization header for backend calls that require a logged-in vendor.
+ * Sends the current Supabase access token so the server can verify identity
+ * (via requireVendor middleware). No admin secret is ever used here.
+ */
+async function vendorAuthHeader() {
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 /** Wall-clock session length for vendor portal (7 days). */
 const VENDOR_SESSION_START_KEY = "delivagh_vendor_session_start";
 const VENDOR_MAX_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -974,7 +985,7 @@ export default function App() {
         try {
             const fd = new FormData();
             fd.append("menuFile", uploadMenuFile);
-            const response = await fetch(API + "/api/menu/extract", { method: "POST", body: fd });
+            const response = await fetch(API + "/api/menu/extract", { method: "POST", headers: { ...(await vendorAuthHeader()) }, body: fd });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Extraction failed");
             const items = data.items; // already an array, do NOT JSON.parse this
@@ -1048,7 +1059,7 @@ export default function App() {
             const notifyUrl = API + "/whatsapp/notify";
             const resp = await fetch(notifyUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...(await vendorAuthHeader()) },
                 body: JSON.stringify({ customerPhone, orderId: id, status, deliveryType })
             });
             if (!resp.ok) {
@@ -1085,7 +1096,7 @@ export default function App() {
                 try {
                     await fetch(API + '/whatsapp/notify', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...(await vendorAuthHeader()) },
                         body: JSON.stringify({
                             phone: order.customer_phone,
                             message: '✅ Payment confirmed!\n\nYour order is being prepared. Thank you! 🎉'
@@ -1177,7 +1188,7 @@ export default function App() {
         if (!broadcastMsg.trim()) return;
         setBroadcastSending(true); setBroadcastResult(null);
         try {
-            const res = await fetch(API + "/whatsapp/broadcast", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, message: broadcastMsg }) });
+            const res = await fetch(API + "/whatsapp/broadcast", { method: "POST", headers: { "Content-Type": "application/json", ...(await vendorAuthHeader()) }, body: JSON.stringify({ businessName, message: broadcastMsg }) });
             const data = await res.json(); setBroadcastResult(data);
             if (data.success) setBroadcastMsg("");
         } catch (e) { setBroadcastResult({ success: false, error: e.message }); }

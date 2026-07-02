@@ -2,14 +2,17 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { handleAuthError } from "./authUtils";
 
-const ADMIN_PASSWORD = "delivagh_admin_2024";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
 
 export default function Admin() {
-    const [authed, setAuthed] = useState(() => sessionStorage.getItem("admin_auth") === "true");
+    // Admin secret is held only in memory for the duration of the session.
+    // It is never persisted to localStorage/sessionStorage or hardcoded.
+    const [authed, setAuthed] = useState(false);
+    const [adminKey, setAdminKey] = useState("");
     const [pwInput, setPwInput] = useState("");
     const [pwError, setPwError] = useState("");
+    const [loggingIn, setLoggingIn] = useState(false);
     const [activePage, setActivePage] = useState("overview");
 
     // Data
@@ -73,13 +76,35 @@ export default function Admin() {
     const accent = "#16a34a";
     const accentSoft = isDark ? "rgba(22,163,74,0.15)" : "#f0fdf4";
 
-    function handleLogin() {
-        if (pwInput === ADMIN_PASSWORD) {
-            sessionStorage.setItem("admin_auth", "true");
-            setAuthed(true);
-        } else {
-            setPwError("Incorrect password");
+    async function handleLogin() {
+        const key = pwInput;
+        if (!key) {
+            setPwError("Enter the admin password");
             setTimeout(() => setPwError(""), 3000);
+            return;
+        }
+        setLoggingIn(true);
+        setPwError("");
+        try {
+            // Validate the password server-side by calling a protected admin endpoint.
+            // The secret is never compared locally and never stored anywhere but React state.
+            const response = await fetch(API + "/admin/user-emails", {
+                method: "GET",
+                headers: { "Content-Type": "application/json", "x-admin-key": key },
+            });
+            if (response.ok) {
+                setAdminKey(key);
+                setAuthed(true);
+                setPwInput("");
+            } else {
+                setPwError("Incorrect password");
+                setTimeout(() => setPwError(""), 3000);
+            }
+        } catch {
+            setPwError("Could not reach the server. Please try again.");
+            setTimeout(() => setPwError(""), 3000);
+        } finally {
+            setLoggingIn(false);
         }
     }
 
@@ -153,7 +178,7 @@ export default function Admin() {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
-                        "x-admin-key": ADMIN_PASSWORD
+                        "x-admin-key": adminKey
                     }
                 });
                 
@@ -249,7 +274,7 @@ export default function Admin() {
 
         const r = await fetch(API + "/admin/approve", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
             body: JSON.stringify({ id, businessName: biz.name, phone: biz.phone, botGreeting: biz.bot_greeting })
         });
         const data = await r.json();
@@ -273,7 +298,7 @@ export default function Admin() {
 
         const r = await fetch(API + "/admin/reject", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
             body: JSON.stringify({ id, businessName: biz.name })
         });
 
@@ -294,7 +319,7 @@ export default function Admin() {
 
         const r = await fetch(API + "/admin/suspend", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
             body: JSON.stringify({ id, businessName: biz.name, newStatus, phone: biz.phone, botGreeting: biz.bot_greeting })
         });
         const data = await r.json();
@@ -343,7 +368,7 @@ export default function Admin() {
 
         const r = await fetch(API + "/admin/update-bot-config", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+            headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
             body: JSON.stringify({ id: selectedBiz.id, ...botConfig, business_context: finalContext })
         });
 
@@ -398,7 +423,7 @@ export default function Admin() {
         try {
             const r = await fetch(API + "/whatsapp/resync-businesses", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
             });
             const data = await r.json();
             if (!r.ok || !data?.success) {
@@ -470,7 +495,7 @@ export default function Admin() {
         try {
             const r = await fetch(API + "/api/admin/create-vendor", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "x-admin-key": ADMIN_PASSWORD },
+                headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
                 body: JSON.stringify({
                     businessName: vendorForm.businessName.trim(),
                     ownerName: vendorForm.ownerName.trim(),
@@ -636,10 +661,10 @@ export default function Admin() {
                         </div>
                         <h2 style={{ color: d.text, fontSize: "18px", fontWeight: "700", marginBottom: "24px", textAlign: "center" }}>Admin Access</h2>
                         {pwError && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", marginBottom: "16px" }}>{pwError}</div>}
-                        <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()}
+                        <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !loggingIn && handleLogin()}
                             placeholder="Admin password" style={{ width: "100%", padding: "12px 14px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "10px", fontSize: "14px", color: d.text, outline: "none", boxSizing: "border-box", marginBottom: "14px", fontFamily: "inherit" }} />
-                        <button onClick={handleLogin} style={{ width: "100%", padding: "12px", backgroundColor: accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: "pointer" }}>
-                            Enter Admin
+                        <button onClick={handleLogin} disabled={loggingIn} style={{ width: "100%", padding: "12px", backgroundColor: accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: loggingIn ? "not-allowed" : "pointer", opacity: loggingIn ? 0.7 : 1 }}>
+                            {loggingIn ? "Checking…" : "Enter Admin"}
                         </button>
                     </div>
                 </div>
@@ -691,7 +716,7 @@ export default function Admin() {
                             style={{ width: "100%", marginBottom: "8px", padding: "9px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
                             {isDark ? "Switch to Light" : "Switch to Dark"}
                         </button>
-                        <button onClick={() => { sessionStorage.removeItem("admin_auth"); setAuthed(false); }}
+                        <button onClick={() => { setAdminKey(""); setAuthed(false); }}
                             style={{ width: "100%", padding: "9px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
                             Sign Out
                         </button>
