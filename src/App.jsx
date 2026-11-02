@@ -33,9 +33,8 @@ function clearVendorPersistedLocalStorage(userId) {
         if (userId) {
             localStorage.removeItem("onboarding_done_" + userId);
             localStorage.removeItem("onboarding_last_step_" + userId);
-            localStorage.removeItem("empty_menu_banner_dismissed_" + userId);
         }
-    } catch (_) { /* ignore */ }
+    } catch { /* ignore */ }
 }
 
 /** Ensure 7-day wall clock exists as soon as we have a confirmed auth user id (idempotent). */
@@ -47,21 +46,8 @@ function ensureVendorSessionStartTimestamp(userId) {
         if (!raw || !Number.isFinite(parsed)) {
             const ts = String(Date.now());
             localStorage.setItem(VENDOR_SESSION_START_KEY, ts);
-        
         }
-    } catch (e) {
-        
-    }
-}
-
-function waDigitsFromOrder(order) {
-    return (order.customer_phone || "").replace("whatsapp:", "").replace(/\D/g, "");
-}
-
-/** Number the vendor should call (customer may use a different line than WhatsApp). */
-function callDigitsForOrder(order) {
-    const c = (order.contact_phone || "").replace(/\D/g, "");
-    return c || waDigitsFromOrder(order);
+    } catch { /* ignore */ }
 }
 
 function formatCallDisplay(order) {
@@ -154,8 +140,6 @@ export default function App() {
     // ── ONBOARDING ──
     const [onboardingDone, setOnboardingDone] = useState(false);
     const [onboardingChecked, setOnboardingChecked] = useState(false);
-    const [isAdminLinkedVendor, setIsAdminLinkedVendor] = useState(false);
-    const [showEmptyMenuBanner, setShowEmptyMenuBanner] = useState(false);
     const [waLinkCopied, setWaLinkCopied] = useState(false);
     const [newItemImage, setNewItemImage] = useState(null);
     const [editItemImage, setEditItemImage] = useState(null);
@@ -185,7 +169,7 @@ export default function App() {
     const checkedAccountStatusForUserRef = useRef(null);
 
     async function uploadImageToStorage(file, path) {
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
             .from('delivagh-media')
             .upload(path, file, { upsert: true, contentType: file.type });
         if (error) throw new Error(error.message);
@@ -231,8 +215,6 @@ export default function App() {
             setOnboardingChecked(false);
             setOnboardingDone(false);
             setNeedsVendorProfile(false);
-            setIsAdminLinkedVendor(false);
-            setShowEmptyMenuBanner(false);
             setMenuItems([]);
             setOrders([]);
             ordersRef.current = [];
@@ -242,7 +224,7 @@ export default function App() {
             setPage("login");
             sessionPolicySignOutLockRef.current = false;
         }
-    }, [supabase]);
+    }, []);
 
     // ── LOUD SOUND ──
     function playNotification() {
@@ -352,7 +334,7 @@ export default function App() {
             setAuthLoading(false);
         });
         return () => subscription.unsubscribe();
-    }, [supabase]);
+    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => setAuthLoading(false), 5000);
@@ -408,7 +390,7 @@ export default function App() {
         const start = parseInt(raw, 10);
         if (now - start <= VENDOR_MAX_SESSION_MS) return;
         void signOutForSessionPolicy(uid);
-    }, [supabase, user?.id, signOutForSessionPolicy]);
+    }, [user?.id, signOutForSessionPolicy]);
 
     // ── Inactivity timeout (4 hours) ──
     useEffect(() => {
@@ -442,7 +424,7 @@ export default function App() {
             window.removeEventListener("click", bumpActivity, opts);
             window.removeEventListener("scroll", bumpActivity, opts);
         };
-    }, [supabase, user?.id, signOutForSessionPolicy]);
+    }, [user?.id, signOutForSessionPolicy]);
 
     useEffect(() => {
         if (!supabase || !user?.id) return;
@@ -474,7 +456,7 @@ export default function App() {
             }
         })();
         return () => { cancelled = true; };
-    }, [supabase, user?.id]);
+    }, [user?.id]);
 
     useEffect(() => {
         if (!user?.id) return;
@@ -502,7 +484,7 @@ export default function App() {
         }, 30000);
 
         return () => clearInterval(poll);
-    }, [supabase, user?.id]);
+    }, [user?.id]);
 
     // Subscribe after businessName is known
     useEffect(() => {
@@ -585,8 +567,6 @@ export default function App() {
         if (!supabase || !user?.id) return;
         setOnboardingChecked(false);
         setNeedsVendorProfile(false);
-        setIsAdminLinkedVendor(false);
-        setShowEmptyMenuBanner(false);
 
         try {
             let biz = null;
@@ -676,14 +656,9 @@ export default function App() {
                 });
 
                 if (linkedViaDirectory) {
-                    setIsAdminLinkedVendor(true);
                     localStorage.setItem("onboarding_done_" + user.id, "true");
                     setOnboardingDone(true);
-                    const dismissed = localStorage.getItem("empty_menu_banner_dismissed_" + user.id) === "true";
-                    const isMenuEmpty = !menuData || menuData.length === 0;
-                    setShowEmptyMenuBanner(isMenuEmpty && !dismissed);
                 } else {
-                    setIsAdminLinkedVendor(false);
                     // ── ONBOARDING CHECK ──
                     const done = localStorage.getItem("onboarding_done_" + user.id) === "true";
                     if (done) {
@@ -770,8 +745,6 @@ export default function App() {
                 }
                 setBusinessName("");
                 businessNameRef.current = "";
-                setIsAdminLinkedVendor(false);
-                setShowEmptyMenuBanner(false);
                 setNeedsVendorProfile(true);
                 setOnboardingDone(true);
                 setOnboardingChecked(true);
@@ -782,16 +755,6 @@ export default function App() {
             setNeedsVendorProfile(true);
         }
     }
-
-    useEffect(() => {
-        if (!isAdminLinkedVendor) {
-            setShowEmptyMenuBanner(false);
-            return;
-        }
-        if (menuItems.length > 0) {
-            setShowEmptyMenuBanner(false);
-        }
-    }, [isAdminLinkedVendor, menuItems]);
 
     useEffect(() => {
         if (!showUploadMenuModal || !uploadMenuFile) {
@@ -812,7 +775,6 @@ export default function App() {
 
         // Handle PKCE code exchange for password reset
         const code = params.get('code');
-        const next = params.get('next') || '';
 
         // Handle error from Supabase
         const error = params.get('error');
@@ -1232,7 +1194,7 @@ export default function App() {
         );
     }
 
-    function PaymentBadge({ status, paymentMethod, orderId, showMarkPaid }) {
+    function PaymentBadge({ status, orderId, showMarkPaid }) {
         const isPaid = status === "paid";
         return (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
@@ -1401,20 +1363,7 @@ export default function App() {
         );
     }
 
-    if (!user && page === "signup") return <Signup onSignup={(opts) => {
-        if (opts?.kind === "verify_email") {
-            const msg = `We sent a confirmation link to ${opts.email || "your email"}. Open it to verify your account, then sign in. Your vendor application will be created on first login and will await admin approval.`;
-            setAuthNotice(msg);
-            setAccountStatus({ type: "verify_email", message: msg });
-            setPage("login");
-            return;
-        }
-        const msg = "Account created. Wait for admin approval before first login.";
-        setAuthNotice(msg);
-        setAccountStatus({ type: "pending", message: msg });
-        setPage("login");
-        if (supabase) supabase.auth.signOut().finally(() => setUser(null));
-    }} onLogin={() => setPage("login")} />;
+    if (!user && page === "signup") return <Signup />;
     if (!user && page !== "signup" && accountStatus) return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
             <div style={{ width: "100%", maxWidth: "520px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "26px" }}>
@@ -1443,7 +1392,7 @@ export default function App() {
             </div>
         </div>
     );
-    if (!user) return <Login notice={authNotice} onLogin={u => { setAuthNotice(""); setUser(u); }} onSignup={() => { setAuthNotice(""); setPage("signup"); }} />;
+    if (!user) return <Login notice={authNotice} />;
 
     console.log("[render] state:", {
         user: !!user,
@@ -1551,7 +1500,7 @@ export default function App() {
                                 </div>
                                 <div style={{ display: "flex", gap: "7px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
                                     <StatusBadge status={liveOrder.status} cancelledBy={liveOrder.cancelled_by} />
-                                    <PaymentBadge status={liveOrder.payment_status} paymentMethod={liveOrder.payment_method} orderId={liveOrder.id} showMarkPaid={true} />
+                                    <PaymentBadge status={liveOrder.payment_status} orderId={liveOrder.id} showMarkPaid={true} />
                                     {liveOrder.payment_method && (
                                         <span style={{ backgroundColor: d.hover, color: d.muted, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>
                                             {liveOrder.payment_method === "momo" ? "MoMo" : liveOrder.delivery_type === "pickup" ? "Pay on Pickup" : "Pay on Delivery"}
@@ -1839,7 +1788,7 @@ export default function App() {
                                                     await supabase.from('menus').update({ image_url: null }).eq('id', editItem.id);
                                                     setEditItem({ ...editItem, image_url: null });
                                                     addNotif("Photo removed", "success");
-                                                } catch (e) {
+                                                } catch {
                                                     addNotif("Failed to remove photo", "error");
                                                 }
                                             }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
@@ -2052,7 +2001,7 @@ export default function App() {
                                                             <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
                                                             <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
-                                                            <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
+                                                            <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} orderId={order.id} showMarkPaid={false} /></td>
                                                             <td style={{ padding: "10px 14px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
                                                             <td style={{ padding: "10px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
                                                         </tr>
@@ -2152,7 +2101,7 @@ export default function App() {
                                                                                     {order.delivery_type === "pickup" ? "Pickup" : "Delivery"}
                                                                                 </span>
                                                                             </td>
-                                                                            <td style={{ padding: "11px 13px" }}><PaymentBadge status={order.payment_status} paymentMethod={order.payment_method} orderId={order.id} showMarkPaid={false} /></td>
+                                                                            <td style={{ padding: "11px 13px" }}><PaymentBadge status={order.payment_status} orderId={order.id} showMarkPaid={false} /></td>
                                                                             <td style={{ padding: "11px 13px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
                                                                             <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}</td>
                                                                             <td style={{ padding: "11px 13px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
@@ -2358,7 +2307,7 @@ export default function App() {
                                                         await supabase.from('businesses').update({ profile_picture: null }).eq('name', businessNameRef.current || businessName);
                                                         setProfilePicture("");
                                                         addNotif("Profile picture removed", "success");
-                                                    } catch (e) {
+                                                    } catch {
                                                         addNotif("Failed to remove picture", "error");
                                                     }
                                                 }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
@@ -2576,7 +2525,7 @@ export default function App() {
                                                 setNewPassword("");
                                                 setConfirmPassword("");
                                                 setTimeout(() => setPasswordSuccess(false), 4000);
-                                            } catch (e) {
+                                            } catch {
                                                 setPasswordError("Something went wrong. Please try again.");
                                             }
                                             setPasswordLoading(false);

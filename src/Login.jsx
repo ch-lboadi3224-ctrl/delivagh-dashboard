@@ -23,7 +23,7 @@ function googleButtonStyle() {
     };
 }
 
-export default function Login({ onLogin, onSignup, notice = "" }) {
+export default function Login({ notice = "" }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);

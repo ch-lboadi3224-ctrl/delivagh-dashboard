@@ -24,19 +24,6 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
     const [copied, setCopied] = useState(false);
     const progressKey = user?.id ? `onboarding_last_step_${user.id}` : null;
 
-    useEffect(() => {
-        if (!user?.id || initializedRef.current) return;
-        initializedRef.current = true;
-        const last = parseInt(localStorage.getItem(`onboarding_last_step_${user.id}`) || "", 10);
-        if (!Number.isNaN(last) && last >= 1 && last <= 4) setStep(last);
-        loadExistingProfile();
-    }, [user?.id]);
-
-    useEffect(() => {
-        if (!progressKey) return;
-        persistProgress(step);
-    }, [step, progressKey]);
-
     async function persistProgress(nextStep) {
         if (!user?.id) return;
         localStorage.setItem(`onboarding_last_step_${user.id}`, String(nextStep));
@@ -74,6 +61,19 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
             if (hasExistingMenu && hasProfile) setStep(3);
         }
     }
+
+    useEffect(() => {
+        if (!user?.id || initializedRef.current) return;
+        initializedRef.current = true;
+        const last = parseInt(localStorage.getItem(`onboarding_last_step_${user.id}`) || "", 10);
+        if (!Number.isNaN(last) && last >= 1 && last <= 4) setStep(last);
+        loadExistingProfile();
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (!progressKey) return;
+        persistProgress(step);
+    }, [step, progressKey]);
 
     async function saveBusinessProfile() {
         setProfileSaving(true);

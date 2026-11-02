@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { handleAuthError } from "./authUtils";
 
@@ -28,7 +28,6 @@ export default function Admin() {
     const [saveMsg, setSaveMsg] = useState("");
     const [paymentMsg, setPaymentMsg] = useState("");
     const [resyncingBot, setResyncingBot] = useState(false);
-    const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState({});
     const [showCreateVendorModal, setShowCreateVendorModal] = useState(false);
     const [creatingVendor, setCreatingVendor] = useState(false);
@@ -153,7 +152,7 @@ export default function Admin() {
             cancelled = true;
             if (channel) supabase.removeChannel(channel);
         };
-    }, [supabase, authed, activePage]);
+    }, [authed, activePage]);
 
     useEffect(() => {
         if (!supabase || !authed || activePage !== "learnings") return;
@@ -161,7 +160,6 @@ export default function Admin() {
     }, [authed, activePage]);
 
     async function fetchAll() {
-        setLoading(true);
         const [{ data: biz }, { data: ord }, { data: custRows }] = await Promise.all([
             supabase.from("businesses").select("*").order("created_at", { ascending: false }),
             supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(500),
@@ -217,7 +215,6 @@ export default function Admin() {
             setBotActive(botSettings.bot_active ?? true);
             setBotOfflineMessage(botSettings.offline_message || "Sorry, we are currently unavailable. Please try again later. 🙏");
         }
-        setLoading(false);
     }
 
     async function fetchLearnings() {
@@ -530,8 +527,6 @@ export default function Admin() {
     const active = businesses.filter(b => b.status === "active");
     const today = new Date().toDateString();
     const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
-    const totalRevenue = orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
-    const pendingLearnings = learnings.filter(l => l.status === "pending").length;
 
     function bizOrders(name) { return orders.filter(o => o.business_name === name); }
     function bizRevenue(name) { return orders.filter(o => o.business_name === name && o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0); }
@@ -773,7 +768,7 @@ export default function Admin() {
                                 </div>
                                 <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                                     {[
-                                        { label: "Backend (Railway)", status: health.backend },
+                                        { label: "Backend (Heroku)", status: health.backend },
                                         { label: "Database (Supabase)", status: health.supabase },
                                         { label: "AI Bot (Groq)", status: health.groq },
                                     ].map((h, i) => (
@@ -1078,7 +1073,7 @@ export default function Admin() {
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                                 {[
-                                    { label: "Backend API", sub: "Railway — Node.js/Express", status: health.backend, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
+                                    { label: "Backend API", sub: "Heroku — Node.js/Express", status: health.backend, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
                                     { label: "Database", sub: "Supabase — PostgreSQL", status: health.supabase, detail: health.supabase === "ok" ? "Connected, queries working" : "Connection failed" },
                                     { label: "AI Bot", sub: "Groq — llama-3.3-70b", status: health.groq, detail: health.groq === "ok" ? "API responding" : "Degraded or unreachable" },
                                     { label: "WhatsApp Bridge", sub: "Meta Cloud API", status: "warn", detail: "Check Meta Business Manager for status" },

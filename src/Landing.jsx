@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from "react";
+import React, { useEffect } from "react";
 import "./Landing.css";
 
 export default function Landing() {
@@ -62,7 +62,7 @@ export default function Landing() {
               <span className="hero-proof-dot"></span>
               <span>5 minute setup</span>
               <span className="hero-proof-dot"></span>
-              <span>MTN, Telecel &​amp; AirtelTigo</span>
+              <span>MTN, Telecel &amp; AirtelTigo</span>
             </div>
           </div>
 
@@ -97,7 +97,7 @@ export default function Landing() {
                     <div className="msg-time">2:14 PM ✓✓</div>
                   </div>
                   <div className="msg msg-in">
-                    Here&​apos;s our menu:
+                    Here&apos;s our menu:
                     1. Kelewele — GHS 15
                     2. Jollof Rice — GHS 25
                     3. Chicken Special — GHS 50
@@ -115,7 +115,7 @@ export default function Landing() {
                     Confirm order?
                     <div className="msg-time">2:16 PM</div>
                     <div className="msg-btn-wrap">
-                      <div className="msg-btn">Confirm &​amp; Pay</div>
+                      <div className="msg-btn">Confirm &amp; Pay</div>
                       <div className="msg-btn">Edit order</div>
                     </div>
                   </div>
@@ -159,7 +159,7 @@ export default function Landing() {
             </div>
             <div className="step">
               <div className="step-num">03</div>
-              <div className="step-title">Manage &​amp; get paid</div>
+              <div className="step-title">Manage &amp; get paid</div>
               <p className="step-text">Orders come into your dashboard in real time. Customers pay via MTN, Telecel, or AirtelTigo MoMo — straight to you.</p>
             </div>
           </div>
@@ -198,7 +198,7 @@ export default function Landing() {
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
               </div>
               <div className="feature-title">Order status updates</div>
-              <p className="feature-text">Customers always know where their order is. The bot sends automatic updates at every stage so you handle fewer &​quot;where is my food&​quot; messages.</p>
+              <p className="feature-text">Customers always know where their order is. The bot sends automatic updates at every stage so you handle fewer &quot;where is my food&quot; messages.</p>
             </div>
             <div className="feature">
               <div className="feature-icon">

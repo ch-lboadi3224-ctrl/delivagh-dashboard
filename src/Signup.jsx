@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { supabase } from "./supabase";
 import {
     normalizeGhanaPhone,
@@ -36,7 +36,7 @@ function googleButtonStyle() {
     };
 }
 
-export default function Signup({ onSignup, onLogin }) {
+export default function Signup() {
     const [businessName, setBusinessName] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");

@@ -21,8 +21,8 @@ export default function Privacy() {
         <div className="doc-label">Legal</div>
         <h1 className="doc-title">Privacy Policy</h1>
         <div className="doc-meta">
-          <strong>Effective date:</strong> 21 May 2026 &​nbsp;&​nbsp;|&​nbsp;&​nbsp;
-          <strong>Last updated:</strong> 21 May 2026 &​nbsp;&​nbsp;|&​nbsp;&​nbsp;
+          <strong>Effective date:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
+          <strong>Last updated:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
           <strong>Governing law:</strong> Republic of Ghana
         </div>
 
@@ -43,14 +43,14 @@ export default function Privacy() {
         </div>
 
         <div className="highlight">
-          <p>This Privacy Policy is governed by Ghana&​apos;s <strong>Data Protection Act, 2012 (Act 843)</strong> and the <strong>Electronic Transactions Act, 2008 (Act 772)</strong>. By using DelivaGH, you consent to the collection and use of your information as described in this policy.</p>
+          <p>This Privacy Policy is governed by Ghana&apos;s <strong>Data Protection Act, 2012 (Act 843)</strong> and the <strong>Electronic Transactions Act, 2008 (Act 772)</strong>. By using DelivaGH, you consent to the collection and use of your information as described in this policy.</p>
         </div>
 
         <h2 id="who">1. Who we are</h2>
         <p>DelivaGH is a WhatsApp-based order management platform for food vendors in Ghana. It is operated by <strong>Awochad Ventures</strong>, a sole proprietorship registered in Ghana under the Registration of Business Names Act, 1962 (Act 151), Registration Number BN233472017.</p>
         <p><strong>Registered address:</strong> 4750, Street 1, Dansoman, Accra, Ghana</p>
         <p><strong>Contact email:</strong> <a href="mailto:hello@delivagh.app">hello@delivagh.app</a></p>
-        <p>References to &​quot;DelivaGH&​quot;, &​quot;we&​quot;, &​quot;us&​quot;, or &​quot;our&​quot; in this policy mean Awochad Ventures operating the DelivaGH platform.</p>
+        <p>References to &quot;DelivaGH&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot; in this policy mean Awochad Ventures operating the DelivaGH platform.</p>
 
         <h2 id="collect">2. Information we collect</h2>
         <p>We collect information from two categories of users: <strong>vendors</strong> (food businesses who sign up to use DelivaGH) and <strong>customers</strong> (individuals who place orders through WhatsApp).</p>
@@ -69,7 +69,7 @@ export default function Privacy() {
 
         <h3>2.2 Information collected automatically</h3>
         <ul>
-          <li><strong>WhatsApp message metadata</strong> — message IDs, timestamps, and delivery status provided by Meta&​apos;s WhatsApp Cloud API when you interact with our bot</li>
+          <li><strong>WhatsApp message metadata</strong> — message IDs, timestamps, and delivery status provided by Meta&apos;s WhatsApp Cloud API when you interact with our bot</li>
           <li><strong>Session data</strong> — your conversation state and phase within the ordering flow, stored temporarily to maintain your session</li>
           <li><strong>Order history</strong> — a record of all orders placed through DelivaGH associated with your WhatsApp number</li>
           <li><strong>Usage logs</strong> — server logs recording API requests, errors, and system events for operational and security purposes</li>
@@ -77,7 +77,7 @@ export default function Privacy() {
 
         <h3>2.3 Information from third parties</h3>
         <ul>
-          <li><strong>Meta / WhatsApp</strong> — your WhatsApp phone number and message content when you interact with our bot, provided through Meta&​apos;s WhatsApp Business Cloud API</li>
+          <li><strong>Meta / WhatsApp</strong> — your WhatsApp phone number and message content when you interact with our bot, provided through Meta&apos;s WhatsApp Business Cloud API</li>
           <li><strong>Kora Payments</strong> — transaction status, payment reference numbers, and confirmation of successful or failed payments</li>
         </ul>
 
@@ -101,9 +101,9 @@ export default function Privacy() {
         <table>
           <tbody>
             <tr><th>Third party</th><th>What we share</th><th>Why</th></tr>
-            <tr><td><strong>Meta Platforms (WhatsApp)</strong></td><td>Message content, phone numbers</td><td>To deliver messages through the WhatsApp Business API. Governed by Meta&​apos;s Privacy Policy.</td></tr>
-            <tr><td><strong>Kora Payments Network Limited</strong></td><td>Customer name, phone number, order amount, payment reference</td><td>To process mobile money payments. Governed by Kora&​apos;s Privacy Policy and their KYC/AML obligations.</td></tr>
-            <tr><td><strong>Supabase Inc.</strong></td><td>All platform data</td><td>Our database and authentication provider. Data is stored on servers within Supabase&​apos;s infrastructure. Governed by Supabase&​apos;s Data Processing Agreement.</td></tr>
+            <tr><td><strong>Meta Platforms (WhatsApp)</strong></td><td>Message content, phone numbers</td><td>To deliver messages through the WhatsApp Business API. Governed by Meta&apos;s Privacy Policy.</td></tr>
+            <tr><td><strong>Kora Payments Network Limited</strong></td><td>Customer name, phone number, order amount, payment reference</td><td>To process mobile money payments. Governed by Kora&apos;s Privacy Policy and their KYC/AML obligations.</td></tr>
+            <tr><td><strong>Supabase Inc.</strong></td><td>All platform data</td><td>Our database and authentication provider. Data is stored on servers within Supabase&apos;s infrastructure. Governed by Supabase&apos;s Data Processing Agreement.</td></tr>
             <tr><td><strong>Heroku (Salesforce)</strong></td><td>Server logs, application data in transit</td><td>Our backend application hosting provider.</td></tr>
             <tr><td><strong>Vendors</strong></td><td>Customer name, WhatsApp number, order details, delivery address</td><td>To enable vendors to fulfil orders placed through their DelivaGH storefront. Vendors are bound by these terms not to misuse customer data.</td></tr>
           </tbody>
@@ -152,7 +152,7 @@ export default function Privacy() {
         <p>DelivaGH is not directed at children under the age of 16. We do not knowingly collect personal data from children. If you believe a child has provided us with their personal data, please contact us and we will delete it promptly.</p>
 
         <h2 id="changes">9. Changes to this policy</h2>
-        <p>We may update this Privacy Policy from time to time to reflect changes in our practices, legal requirements, or the platform&​apos;s features. When we make material changes, we will update the &​quot;Last updated&​quot; date at the top of this page. For significant changes, we will notify active vendors via the email address on their account. Continued use of DelivaGH after changes are posted constitutes your acceptance of the updated policy.</p>
+        <p>We may update this Privacy Policy from time to time to reflect changes in our practices, legal requirements, or the platform&apos;s features. When we make material changes, we will update the &quot;Last updated&quot; date at the top of this page. For significant changes, we will notify active vendors via the email address on their account. Continued use of DelivaGH after changes are posted constitutes your acceptance of the updated policy.</p>
 
         <h2 id="contact">10. Contact us</h2>
         <p>If you have any questions, concerns, or requests relating to this Privacy Policy or how we handle your personal data, please contact us:</p>
@@ -168,7 +168,7 @@ export default function Privacy() {
           <span className="footer-logo-text">DelivaGH</span>
           <span className="footer-logo-dot"></span>
         </div>
-        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &​nbsp;·&​nbsp; delivagh.app</p>
+        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &nbsp;·&nbsp; delivagh.app</p>
         <div className="footer-links">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>

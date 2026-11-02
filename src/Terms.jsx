@@ -21,8 +21,8 @@ export default function Terms() {
         <div className="doc-label">Legal</div>
         <h1 className="doc-title">Terms of Service</h1>
         <div className="doc-meta">
-          <strong>Effective date:</strong> 21 May 2026 &​nbsp;&​nbsp;|&​nbsp;&​nbsp;
-          <strong>Last updated:</strong> 21 May 2026 &​nbsp;&​nbsp;|&​nbsp;&​nbsp;
+          <strong>Effective date:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
+          <strong>Last updated:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
           <strong>Governing law:</strong> Republic of Ghana
         </div>
 
@@ -102,7 +102,7 @@ export default function Terms() {
 
         <h2 id="payments">7. Payments and fees</h2>
         <h3>7.1 Customer payments</h3>
-        <p>Customers may pay for orders via mobile money (MTN MoMo, Telecel Cash, AirtelTigo Money) through the WhatsApp bot. Payment processing is handled by Kora Payments Network Limited. By initiating a payment, you also agree to Kora&​apos;s terms of service.</p>
+        <p>Customers may pay for orders via mobile money (MTN MoMo, Telecel Cash, AirtelTigo Money) through the WhatsApp bot. Payment processing is handled by Kora Payments Network Limited. By initiating a payment, you also agree to Kora&apos;s terms of service.</p>
         <p>Payments are processed in Ghana Cedis (GHS). Minimum order amount is GHS 10.00.</p>
 
         <h3>7.2 Vendor subscription fees</h3>
@@ -116,7 +116,7 @@ export default function Terms() {
         <p>Subscription fees are charged monthly. DelivaGH takes <strong>0% commission</strong> on customer orders — the GHS 99 flat fee is the only charge to vendors.</p>
 
         <h3>7.3 Payment method</h3>
-        <p>Subscription fees are payable via mobile money to Awochad Ventures. Invoices will be issued at the end of each free trial period and monthly thereafter. Failure to pay within 7 days of the invoice date may result in suspension of the vendor&​apos;s account.</p>
+        <p>Subscription fees are payable via mobile money to Awochad Ventures. Invoices will be issued at the end of each free trial period and monthly thereafter. Failure to pay within 7 days of the invoice date may result in suspension of the vendor&apos;s account.</p>
 
         <h3>7.4 Refunds</h3>
         <p>Subscription fees are non-refundable except where required by applicable Ghanaian consumer protection law. If you cancel your account, you will retain access until the end of the current billing period.</p>
@@ -133,7 +133,7 @@ export default function Terms() {
           <li>Harass, threaten, or abuse other users of the platform</li>
           <li>Scrape, copy, or reverse-engineer any part of the DelivaGH platform</li>
           <li>Interfere with the security or integrity of the platform, its servers, or networks</li>
-          <li>Use the platform in a way that violates Meta&​apos;s WhatsApp Business Policy or Terms of Service</li>
+          <li>Use the platform in a way that violates Meta&apos;s WhatsApp Business Policy or Terms of Service</li>
           <li>Collect or harvest personal data of other users beyond what is necessary to fulfil an order</li>
         </ul>
         <p>Violation of these prohibitions may result in immediate account termination and may be reported to relevant authorities.</p>
@@ -163,7 +163,7 @@ export default function Terms() {
           <li>You materially breach these terms and fail to remedy the breach within 7 days of notice</li>
           <li>We reasonably believe your account is being used for fraudulent or illegal activity</li>
           <li>You repeatedly fail to fulfil orders or receive sustained customer complaints</li>
-          <li>Continued provision of the service to you would violate applicable law or Meta&​apos;s platform policies</li>
+          <li>Continued provision of the service to you would violate applicable law or Meta&apos;s platform policies</li>
           <li>You fail to pay subscription fees within 14 days of the invoice date</li>
         </ul>
         <p>On termination, your access to the dashboard will cease and your bot will be deactivated. We will retain your data in accordance with our Privacy Policy and applicable law.</p>
@@ -191,7 +191,7 @@ export default function Terms() {
           <span className="footer-logo-text">DelivaGH</span>
           <span className="footer-logo-dot"></span>
         </div>
-        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &​nbsp;·&​nbsp; delivagh.app</p>
+        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &nbsp;·&nbsp; delivagh.app</p>
         <div className="footer-links">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
