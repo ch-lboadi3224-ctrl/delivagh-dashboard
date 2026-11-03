@@ -867,7 +867,7 @@ export default function App() {
         const { data, error } = await supabase.from("menus").insert([{
             business_name: name, item_name: newItem.item_name.trim(),
             item_price: parseFloat(newItem.item_price), item_description: newItem.item_description.trim(),
-            category: newItem.category, available: true, image_url: imageUrl
+            category: (newItem.category || "").trim() || "Main", available: true, image_url: imageUrl
         }]).select();
         if (error) { if (await handleAuthError(error)) return; alert("Error: " + error.message); return; }
         setNewItem({ item_name: "", item_price: "", item_description: "", category: "Main" });
@@ -890,7 +890,7 @@ export default function App() {
         }
         await supabase.from("menus").update({
             item_name: editItem.item_name, item_price: parseFloat(editItem.item_price),
-            item_description: editItem.item_description, category: editItem.category,
+            item_description: editItem.item_description, category: (editItem.category || "").trim() || "Main",
             image_url: imageUrl
         }).eq("id", editItem.id);
         setShowEditModal(false); setEditItem(null); setEditItemImage(null);
@@ -1236,7 +1236,10 @@ export default function App() {
     const todayRevenue = todayOrders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
     const DELIVAGH_WA_LINK = "https://wa.me/233276295769?text=Hi";
     const filteredOrders = activeTab === "all" ? orders : orders.filter(o => o.status === activeTab);
-    const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => i.category === menuFilter);
+    // Sections are free text so any kind of shop can use its own ("Drinks", "Rice & Grains", ...)
+    const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => (i.category || "Main") === menuFilter);
+    const usedSections = [...new Set(menuItems.map(i => i.category || "Main"))];
+    const menuSections = [...new Set([...usedSections, "Main", "Sides", "Extras", "Drinks"])];
     const customers = Object.values(
         orders.reduce((acc, order) => {
             const phone = (order.customer_phone || "").replace("whatsapp:", "") || "Unknown";
@@ -1644,9 +1647,10 @@ export default function App() {
                                 <input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} placeholder="Item name (e.g. Jollof Rice)" style={inp()} />
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                                     <input value={newItem.item_price} onChange={e => setNewItem({ ...newItem, item_price: e.target.value })} placeholder="Price (GHS)" type="number" style={inp()} />
-                                    <select value={newItem.category} onChange={e => setNewItem({ ...newItem, category: e.target.value })} style={inp()}>
-                                        <option value="Main">Main</option><option value="Sides">Sides</option><option value="Extras">Extras</option>
-                                    </select>
+                                    <input value={newItem.category || ""} onChange={e => setNewItem({ ...newItem, category: e.target.value })} list="menu-sections" placeholder="Section (e.g. Main, Drinks)" style={inp()} />
+                                    <datalist id="menu-sections">
+                                        {menuSections.map(c => <option key={c} value={c} />)}
+                                    </datalist>
                                 </div>
                                 <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
                                 <div>
@@ -1773,9 +1777,7 @@ export default function App() {
                                 <input value={editItem.item_name} onChange={e => setEditItem({ ...editItem, item_name: e.target.value })} placeholder="Item name" style={inp()} />
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                                     <input value={editItem.item_price} onChange={e => setEditItem({ ...editItem, item_price: e.target.value })} placeholder="Price (GHS)" type="number" style={inp()} />
-                                    <select value={editItem.category} onChange={e => setEditItem({ ...editItem, category: e.target.value })} style={inp()}>
-                                        <option value="Main">Main</option><option value="Sides">Sides</option><option value="Extras">Extras</option>
-                                    </select>
+                                    <input value={editItem.category || ""} onChange={e => setEditItem({ ...editItem, category: e.target.value })} list="menu-sections" placeholder="Section (e.g. Main, Drinks)" style={inp()} />
                                 </div>
                                 <textarea value={editItem.item_description} onChange={e => setEditItem({ ...editItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
                                 <div>
@@ -2180,7 +2182,7 @@ export default function App() {
                         {activePage === "menu" && (
                             <div>
                                 <div style={{ display: "flex", gap: "7px", marginBottom: "16px" }}>
-                                    {["All", "Main", "Sides", "Extras"].map(cat => (
+                                    {["All", ...usedSections].map(cat => (
                                         <button key={cat} onClick={() => setMenuFilter(cat)} style={{ padding: "6px 14px", borderRadius: "8px", border: `1px solid ${menuFilter === cat ? "#22c55e" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: menuFilter === cat ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.card, color: menuFilter === cat ? "#22c55e" : d.muted }}>
                                             {cat === "All" ? "All Items" : cat}
                                         </button>

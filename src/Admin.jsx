@@ -1307,6 +1307,8 @@ export default function Admin() {
                                         { id: "food_fast", label: "Fast Food", icon: "🍔", desc: "Quick orders, combos, simple menu" },
                                         { id: "chop_bar", label: "Chop Bar / Canteen", icon: "🍲", desc: "Local Ghanaian food, daily specials" },
                                         { id: "bakery", label: "Bakery & Pastry", icon: "🥐", desc: "Baked goods, custom cakes, pre-orders" },
+                                        { id: "grocery", label: "Grocery & Provisions", icon: "🛒", desc: "Shopping lists, sizes, out-of-stock choice" },
+                                        { id: "retail", label: "Shop / Retail", icon: "🛍️", desc: "Products such as clothes, phones, beauty" },
                                     ].map(type => {
                                         const selected = (botConfig.bot_type || "food") === type.id;
                                         return (
