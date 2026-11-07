@@ -46,12 +46,6 @@ export default function Admin() {
     const [webhookFilter, setWebhookFilter] = useState("");
     const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
 
-    // Bot Learnings
-    const [learnings, setLearnings] = useState([]);
-    const [learningsLoading, setLearningsLoading] = useState(false);
-    const [learningsFilter, setLearningsFilter] = useState("pending");
-    const [learningsBiz, setLearningsBiz] = useState("all");
-
     // Bot Control
     const [botActive, setBotActive] = useState(true);
     const [botOfflineMessage, setBotOfflineMessage] = useState("Sorry, we are currently unavailable. Please try again later. 🙏");
@@ -154,11 +148,6 @@ export default function Admin() {
         };
     }, [authed, activePage]);
 
-    useEffect(() => {
-        if (!supabase || !authed || activePage !== "learnings") return;
-        fetchLearnings();
-    }, [authed, activePage]);
-
     async function fetchAll() {
         const [{ data: biz }, { data: ord }, { data: custRows }] = await Promise.all([
             supabase.from("businesses").select("*").order("created_at", { ascending: false }),
@@ -217,36 +206,6 @@ export default function Admin() {
         }
     }
 
-    async function fetchLearnings() {
-        setLearningsLoading(true);
-        const { data } = await supabase
-            .from("bot_learnings")
-            .select("*")
-            .order("created_at", { ascending: false })
-            .limit(200);
-        setLearnings(data || []);
-        setLearningsLoading(false);
-    }
-
-    async function approveLearning(id) {
-        await supabase.from("bot_learnings").update({
-            status: "approved",
-            approved_by: "admin",
-            approved_at: new Date().toISOString()
-        }).eq("id", id);
-        setLearnings(prev => prev.map(l => l.id === id ? { ...l, status: "approved" } : l));
-    }
-
-    async function rejectLearning(id) {
-        await supabase.from("bot_learnings").update({ status: "rejected" }).eq("id", id);
-        setLearnings(prev => prev.map(l => l.id === id ? { ...l, status: "rejected" } : l));
-    }
-
-    async function deleteLearning(id) {
-        await supabase.from("bot_learnings").delete().eq("id", id);
-        setLearnings(prev => prev.filter(l => l.id !== id));
-    }
-
     async function checkHealth() {
         try {
             const r = await fetch(API + "/", { signal: AbortSignal.timeout(5000) });
@@ -259,8 +218,11 @@ export default function Admin() {
         } catch { setHealth(h => ({ ...h, supabase: "error" })); }
 
         try {
+            // The bot's WhatsApp route, and whether its Meta settings are present
             const r = await fetch(API + "/whatsapp/health", { signal: AbortSignal.timeout(5000) });
-            setHealth(h => ({ ...h, groq: r.ok ? "ok" : "warn" }));
+            const j = r.ok ? await r.json().catch(() => ({})) : {};
+            const metaOk = j.meta && j.meta.META_PHONE_NUMBER_ID_configured && j.meta.META_ACCESS_TOKEN_configured;
+            setHealth(h => ({ ...h, groq: r.ok && metaOk ? "ok" : "warn" }));
         } catch { setHealth(h => ({ ...h, groq: "warn" })); }
     }
 
@@ -288,7 +250,7 @@ export default function Admin() {
     }
 
     async function rejectBusiness(id) {
-        if (!window.confirm("Reject and delete this business account?")) return;
+        if (!window.confirm("Reject this business? It will be removed from the bot and customers can't order from it.")) return;
         setActionLoading(p => ({ ...p, [id]: "rejecting" }));
         const biz = businesses.find(b => b.id === id);
         if (!biz) { setActionLoading(p => ({ ...p, [id]: null })); return; }
@@ -353,20 +315,12 @@ export default function Admin() {
         if (!selectedBiz) return;
         setSaving(true);
 
-        let finalContext = (botConfig.business_context || "").trim();
-        if (!finalContext) {
-            const parts = [];
-            if (botConfig.bot_persona?.trim()) parts.push("PERSONA & VIBE:\n" + botConfig.bot_persona.trim());
-            if (botConfig.bot_location?.trim()) parts.push("LOCATION & PICKUP:\n" + botConfig.bot_location.trim());
-            if (botConfig.bot_special_instructions?.trim()) parts.push("SPECIAL INSTRUCTIONS:\n" + botConfig.bot_special_instructions.trim());
-            if (botConfig.bot_boundaries?.trim()) parts.push("BOUNDARIES (strictly follow):\n" + botConfig.bot_boundaries.trim());
-            finalContext = parts.join("\n\n");
-        }
-
+        // Each field is saved on its own and the bot reads them separately, so
+        // editing one later always takes effect.
         const r = await fetch(API + "/admin/update-bot-config", {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-admin-key": adminKey },
-            body: JSON.stringify({ id: selectedBiz.id, ...botConfig, business_context: finalContext })
+            body: JSON.stringify({ id: selectedBiz.id, ...botConfig, business_context: (botConfig.business_context || "").trim() })
         });
 
         const data = await r.json();
@@ -383,8 +337,6 @@ export default function Admin() {
     function openPaymentConfig(biz) {
         setSelectedBiz(biz);
         setPaymentConfig({
-            subaccount_code: biz.subaccount_code || "",
-            split_code: biz.split_code || biz.subaccount_code || "",
             commission_type: biz.commission_type || "flat",
             commission_value: typeof biz.commission_value === "number" ? biz.commission_value : (parseFloat(biz.commission_value) || 1),
         });
@@ -397,8 +349,6 @@ export default function Admin() {
         setPaymentSaving(true);
         setPaymentMsg("");
         const payload = {
-            subaccount_code: (paymentConfig.subaccount_code || "").trim(),
-            split_code: (paymentConfig.subaccount_code || "").trim(),
             commission_type: paymentConfig.commission_type || "flat",
             commission_value: parseFloat(paymentConfig.commission_value) || 0,
         };
@@ -409,7 +359,7 @@ export default function Admin() {
             setPaymentSaving(false);
             return;
         }
-        setPaymentMsg("Payment settings saved");
+        setPaymentMsg("Commission saved");
         setPaymentSaving(false);
         await fetchAll();
     }
@@ -542,6 +492,17 @@ export default function Admin() {
         return 0;
     }
 
+    // MoMo payments land in the DelivaGH Kora account; cash goes straight to the vendor.
+    // The vendor is owed the MoMo money minus the platform's commission on all paid orders.
+    function bizPayout(name) {
+        const paid = orders.filter(o => o.business_name === name && o.payment_status === "paid");
+        const sum = list => list.reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
+        const momo = sum(paid.filter(o => o.payment_method === "momo"));
+        const cash = sum(paid.filter(o => o.payment_method !== "momo"));
+        const commission = bizPlatformEarnings(name);
+        return { momo, cash, commission, owed: momo - commission };
+    }
+
     function bizPlatformEarnings(name) {
         const biz = bizByName[name];
         return orders.filter(o => o.business_name === name).reduce((sum, order) => sum + orderPlatformCut(order, biz), 0);
@@ -591,8 +552,7 @@ export default function Admin() {
         health: "System Health",
         analytics: "Analytics",
         botconfig: "Bot Configuration",
-        payments: "Payment Settings",
-        learnings: "Bot Learnings",
+        payments: "Payments",
         botcontrol: "Bot Control",
         customers: "Customers",
     };
@@ -606,7 +566,6 @@ export default function Admin() {
         { id: "payments", icon: "▪", label: "Payments", badge: 0 },
         { id: "health", icon: "▪", label: "System Health", badge: 0 },
         { id: "analytics", icon: "▪", label: "Analytics", badge: 0 },
-        { id: "learnings", icon: "▪", label: "Bot Learnings", badge: 0 },
         { id: "botcontrol", icon: "▪", label: "Bot Control", badge: 0 },
     ];
 
@@ -770,7 +729,7 @@ export default function Admin() {
                                     {[
                                         { label: "Backend (Heroku)", status: health.backend },
                                         { label: "Database (Supabase)", status: health.supabase },
-                                        { label: "AI Bot (Groq)", status: health.groq },
+                                        { label: "WhatsApp Bot", status: health.groq },
                                     ].map((h, i) => (
                                         <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
                                             <p style={{ fontSize: "11px", color: d.muted, marginBottom: "6px" }}>{h.label}</p>
@@ -944,7 +903,7 @@ export default function Admin() {
                                 <div style={{ overflowX: "auto" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
                                         <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Phone", "Email", "Status", "Subaccount", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
+                                            {["Business", "Phone", "Email", "Status", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
                                                 <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
                                             ))}
                                         </tr></thead>
@@ -960,7 +919,6 @@ export default function Admin() {
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.email || "—"}</td>
                                                     <td style={{ padding: "12px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>{biz.subaccount_code || "—"}</td>
                                                     <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>
                                                         {biz.commission_type === "percent" ? `${parseFloat(biz.commission_value || 0).toFixed(2)}%` : `GHS ${(parseFloat(biz.commission_value || 0) || 0).toFixed(2)}`}
                                                     </td>
@@ -1075,7 +1033,7 @@ export default function Admin() {
                                 {[
                                     { label: "Backend API", sub: "Heroku — Node.js/Express", status: health.backend, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
                                     { label: "Database", sub: "Supabase — PostgreSQL", status: health.supabase, detail: health.supabase === "ok" ? "Connected, queries working" : "Connection failed" },
-                                    { label: "AI Bot", sub: "Groq — llama-3.3-70b", status: health.groq, detail: health.groq === "ok" ? "API responding" : "Degraded or unreachable" },
+                                    { label: "WhatsApp Bot", sub: "Webhook route and Meta settings", status: health.groq, detail: health.groq === "ok" ? "Responding, Meta settings present" : "Unreachable or Meta settings missing" },
                                     { label: "WhatsApp Bridge", sub: "Meta Cloud API", status: "warn", detail: "Check Meta Business Manager for status" },
                                 ].map((s, i) => (
                                     <div key={i} style={{ ...cardStyle, padding: "22px" }}>
@@ -1094,11 +1052,10 @@ export default function Admin() {
                                 <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                     <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Database Tables</p>
                                 </div>
-                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
                                     {[
                                         { table: "orders", count: orders.length },
                                         { table: "businesses", count: businesses.length },
-                                        { table: "bot_learnings", count: learnings.length },
                                         { table: "conversations", count: "—" },
                                     ].map((t, i) => (
                                         <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
@@ -1217,23 +1174,33 @@ export default function Admin() {
                                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                         <button onClick={() => { setSelectedBiz(null); setPaymentMsg(""); }} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← All Businesses</button>
                                         <div>
-                                            <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Payment Settings — {selectedBiz.name}</h1>
-                                            <p style={{ fontSize: "12px", color: d.muted }}>Configure vendor subaccount routing and platform commission rule</p>
+                                            <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Payments — {selectedBiz.name}</h1>
+                                            <p style={{ fontSize: "12px", color: d.muted }}>MoMo payments land in the DelivaGH Kora account. Pay vendors out manually using the figures below.</p>
                                         </div>
                                     </div>
-                                    <div style={cardStyle}>
-                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Settlement Routing</p>
-                                        </div>
-                                        <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                                            <div>
-                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Subaccount Code</label>
-                                                <input value={paymentConfig.subaccount_code || ""} onChange={e => setPaymentConfig(p => ({ ...p, subaccount_code: e.target.value }))}
-                                                    placeholder="e.g. ACCT_6e3jqm4w80k0w4e" style={inp()} />
-                                                <p style={{ fontSize: "11px", color: d.muted, marginTop: "5px" }}>Used when initializing split payment so funds route to this vendor.</p>
+                                    {(() => {
+                                        const p = bizPayout(selectedBiz.name);
+                                        const tile = (label, value, color, note) => (
+                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
+                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>{label}</p>
+                                                <p style={{ fontSize: "22px", fontWeight: "800", color }}>GHS {value.toFixed(2)}</p>
+                                                <p style={{ fontSize: "10px", color: d.muted, marginTop: "2px" }}>{note}</p>
                                             </div>
-                                        </div>
-                                    </div>
+                                        );
+                                        return (
+                                            <div style={cardStyle}>
+                                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
+                                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Payout Summary (all paid orders)</p>
+                                                </div>
+                                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+                                                    {tile("MoMo collected by DelivaGH", p.momo, "#22c55e", "Held in the Kora account")}
+                                                    {tile("Cash collected by vendor", p.cash, d.text, "Already with the vendor")}
+                                                    {tile("Platform commission", p.commission, "#8b5cf6", "On all paid orders")}
+                                                    {tile(p.owed >= 0 ? "To pay the vendor" : "Vendor owes DelivaGH", Math.abs(p.owed), p.owed >= 0 ? "#22c55e" : "#ef4444", "MoMo collected minus commission")}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                     <div style={cardStyle}>
                                         <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
                                             <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Platform Commission Rule</p>
@@ -1255,29 +1222,10 @@ export default function Admin() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div style={cardStyle}>
-                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Business Earnings Snapshot</p>
-                                        </div>
-                                        <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Paid Revenue</p>
-                                                <p style={{ fontSize: "22px", fontWeight: "800", color: "#22c55e" }}>GHS {bizRevenue(selectedBiz.name).toFixed(2)}</p>
-                                            </div>
-                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Platform Cut</p>
-                                                <p style={{ fontSize: "22px", fontWeight: "800", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(selectedBiz.name).toFixed(2)}</p>
-                                            </div>
-                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>Net to Vendor</p>
-                                                <p style={{ fontSize: "22px", fontWeight: "800", color: d.text }}>GHS {(bizRevenue(selectedBiz.name) - bizPlatformEarnings(selectedBiz.name)).toFixed(2)}</p>
-                                            </div>
-                                        </div>
-                                    </div>
                                     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                                         <button onClick={savePaymentConfig} disabled={paymentSaving}
                                             style={{ padding: "12px 28px", backgroundColor: paymentSaving ? d.muted : "#8b5cf6", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: paymentSaving ? "not-allowed" : "pointer" }}>
-                                            {paymentSaving ? "Saving..." : "Save Payment Settings"}
+                                            {paymentSaving ? "Saving..." : "Save Commission"}
                                         </button>
                                         {paymentMsg && <span style={{ fontSize: "13px", color: paymentMsg.startsWith("Could not") ? "#ef4444" : "#22c55e", fontWeight: "600" }}>{paymentMsg}</span>}
                                     </div>
@@ -1348,7 +1296,7 @@ export default function Admin() {
                                     <div>
                                         <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Special Instructions</label>
                                         <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
-                                            placeholder="e.g. Closed on Sundays. Delivery is GHS 5."
+                                            placeholder="e.g. Closed on Sundays. Ask campus customers for their hall and room number."
                                             style={{ ...inp({ height: "80px", resize: "none" }) }} />
                                     </div>
                                     <div>
@@ -1363,9 +1311,9 @@ export default function Admin() {
                                             style={{ ...inp({ height: "70px", resize: "none" }) }} />
                                     </div>
                                     <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Advanced: Full AI Context Override</label>
+                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Extra Business Info</label>
                                         <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
-                                            placeholder="Optional: Write a full custom AI system prompt. Overrides all structured fields above."
+                                            placeholder="Optional: anything else the bot should know, e.g. 'We cater for events. Large orders need a day's notice.' Used together with the fields above."
                                             style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
                                     </div>
                                 </div>
@@ -1379,6 +1327,7 @@ export default function Admin() {
                                         <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Delivery Zones</label>
                                         <input value={botConfig.delivery_zones || ""} onChange={e => setBotConfig(p => ({ ...p, delivery_zones: e.target.value }))}
                                             placeholder="e.g. Accra, Tema, Madina, East Legon" style={inp()} />
+                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "6px" }}>The bot tells customers these areas. For anywhere else it says the vendor will confirm.</p>
                                     </div>
                                     <div>
                                         <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Minimum Order Amount (GHS)</label>
@@ -1396,136 +1345,6 @@ export default function Admin() {
                         </div>
                     )}
 
-                    {/* ── BOT LEARNINGS ── */}
-                    {activePage === "learnings" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-                                <div>
-                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Bot Learnings</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>Review what the bot learned from real conversations. Approve to activate, reject to discard.</p>
-                                </div>
-                                <button onClick={fetchLearnings}
-                                    style={{ padding: "8px 16px", backgroundColor: accentSoft, color: accent, border: `1px solid ${accent}`, borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                    Refresh
-                                </button>
-                            </div>
-
-                            {/* Stats */}
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
-                                {[
-                                    { label: "Pending Review", value: learnings.filter(l => l.status === "pending").length, color: "#f59e0b" },
-                                    { label: "Approved", value: learnings.filter(l => l.status === "approved").length, color: "#22c55e" },
-                                    { label: "Corrections", value: learnings.filter(l => l.learning_type === "correction").length, color: "#818cf8" },
-                                    { label: "Popular Items", value: learnings.filter(l => l.learning_type === "popular_item").length, color: "#38bdf8" },
-                                ].map(stat => (
-                                    <div key={stat.label} style={{ ...cardStyle, padding: "14px 16px" }}>
-                                        <p style={{ fontSize: "22px", fontWeight: "800", color: stat.color, margin: 0 }}>{stat.value}</p>
-                                        <p style={{ fontSize: "11px", color: d.muted, margin: "2px 0 0" }}>{stat.label}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Filters */}
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                                {["all", "pending", "approved", "rejected"].map(f => (
-                                    <button key={f} onClick={() => setLearningsFilter(f)}
-                                        style={{ padding: "6px 14px", borderRadius: "7px", fontSize: "12px", fontWeight: "600", cursor: "pointer", border: `1px solid ${learningsFilter === f ? accent : d.border}`, backgroundColor: learningsFilter === f ? accentSoft : "transparent", color: learningsFilter === f ? accent : d.muted, transition: "all 0.15s" }}>
-                                        {f.charAt(0).toUpperCase() + f.slice(1)}
-                                    </button>
-                                ))}
-                                <select value={learningsBiz} onChange={e => setLearningsBiz(e.target.value)}
-                                    style={{ ...inp({ width: "auto", padding: "6px 12px", fontSize: "12px" }) }}>
-                                    <option value="all">All Businesses</option>
-                                    {[...new Set(learnings.map(l => l.business_name))].map(biz => (
-                                        <option key={biz} value={biz}>{biz}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Learning cards */}
-                            {learningsLoading ? (
-                                <div style={{ textAlign: "center", padding: "40px", color: d.muted, fontSize: "14px" }}>Loading learnings...</div>
-                            ) : (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    {learnings
-                                        .filter(l => learningsFilter === "all" || l.status === learningsFilter)
-                                        .filter(l => learningsBiz === "all" || l.business_name === learningsBiz)
-                                        .map(learning => {
-                                            const typeColors = {
-                                                correction: { bg: "rgba(129,114,248,0.1)", c: "#818cf8", icon: "🔧" },
-                                                popular_item: { bg: "rgba(56,189,248,0.1)", c: "#38bdf8", icon: "🔥" },
-                                                frequent_question: { bg: "rgba(251,191,36,0.1)", c: "#fbbf24", icon: "❓" },
-                                            };
-                                            const tc = typeColors[learning.learning_type] || typeColors.correction;
-                                            const statusColor = learning.status === "approved" ? "#22c55e" : learning.status === "rejected" ? "#ef4444" : "#f59e0b";
-
-                                            return (
-                                                <div key={learning.id} style={{ ...cardStyle, padding: "16px", borderLeft: `3px solid ${tc.c}` }}>
-                                                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                                                        <div style={{ flex: 1, minWidth: "200px" }}>
-                                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-                                                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "5px", backgroundColor: tc.bg, color: tc.c, fontWeight: "700" }}>
-                                                                    {tc.icon} {learning.learning_type.replace("_", " ").toUpperCase()}
-                                                                </span>
-                                                                <span style={{ fontSize: "11px", color: d.muted }}>{learning.business_name}</span>
-                                                                <span style={{ fontSize: "11px", color: statusColor, fontWeight: "600" }}>● {learning.status}</span>
-                                                                {learning.times_seen > 1 && (
-                                                                    <span style={{ fontSize: "11px", color: d.muted }}>seen {learning.times_seen}x</span>
-                                                                )}
-                                                            </div>
-                                                            {learning.trigger_phrase && (
-                                                                <div style={{ marginBottom: "6px" }}>
-                                                                    <span style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>TRIGGER: </span>
-                                                                    <span style={{ fontSize: "12px", color: d.text, fontStyle: "italic" }}>"{learning.trigger_phrase}"</span>
-                                                                </div>
-                                                            )}
-                                                            <div style={{ marginBottom: "6px" }}>
-                                                                <span style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>BEHAVIOR: </span>
-                                                                <span style={{ fontSize: "12px", color: d.text }}>{learning.correct_behavior}</span>
-                                                            </div>
-                                                            {learning.source_context && (
-                                                                <details style={{ marginTop: "8px" }}>
-                                                                    <summary style={{ fontSize: "11px", color: d.muted, cursor: "pointer" }}>View conversation context</summary>
-                                                                    <pre style={{ fontSize: "11px", color: d.muted, backgroundColor: d.bg3, padding: "8px", borderRadius: "6px", marginTop: "6px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                                                                        {learning.source_context}
-                                                                    </pre>
-                                                                </details>
-                                                            )}
-                                                            <p style={{ fontSize: "11px", color: d.muted, margin: "8px 0 0" }}>{new Date(learning.created_at).toLocaleString()}</p>
-                                                        </div>
-                                                        {learning.status === "pending" && (
-                                                            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                                                                <button onClick={() => approveLearning(learning.id)}
-                                                                    style={{ padding: "7px 14px", backgroundColor: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                                    Approve
-                                                                </button>
-                                                                <button onClick={() => rejectLearning(learning.id)}
-                                                                    style={{ padding: "7px 14px", backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                                    Reject
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                        {learning.status !== "pending" && (
-                                                            <button onClick={() => deleteLearning(learning.id)}
-                                                                style={{ padding: "7px 12px", backgroundColor: "transparent", color: d.muted, border: `1px solid ${d.border}`, borderRadius: "7px", fontSize: "11px", cursor: "pointer" }}>
-                                                                Delete
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    {learnings.filter(l => learningsFilter === "all" || l.status === learningsFilter).filter(l => learningsBiz === "all" || l.business_name === learningsBiz).length === 0 && (
-                                        <div style={{ textAlign: "center", padding: "40px", color: d.muted }}>
-                                            <p style={{ fontSize: "32px", margin: "0 0 8px" }}>▪</p>
-                                            <p style={{ fontSize: "14px", fontWeight: "600" }}>No learnings yet</p>
-                                            <p style={{ fontSize: "12px", margin: "4px 0 0" }}>The bot will start learning as customers interact with it.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                         {activePage === "botcontrol" && (
                             <div style={{ maxWidth: "560px", display: "flex", flexDirection: "column", gap: "16px" }}>
