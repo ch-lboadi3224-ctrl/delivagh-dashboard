@@ -5,6 +5,8 @@ import Login from "./Login";
 import Signup from "./Signup";
 import Onboarding from "./Onboarding";
 import CompleteVendorProfile from "./CompleteVendorProfile";
+import Icon from "./ui/Icon";
+import "./ui/dash.css";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
@@ -127,7 +129,7 @@ export default function App() {
     const [insights, setInsights] = useState({ topItems: [], totalCustomers: 0, avgOrderValue: 0, avgRating: 0, ratingsCount: 0 });
     const [darkMode, setDarkMode] = useState(() => {
         const stored = localStorage.getItem("delivagh_dark");
-        if (stored === null) return true;
+        if (stored === null) return false;
         return stored === "true";
     });
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -176,17 +178,6 @@ export default function App() {
         const { data: urlData } = supabase.storage.from('delivagh-media').getPublicUrl(path);
         return urlData.publicUrl;
     }
-
-    const dm = darkMode;
-    const d = dm ? {
-        bg: "#080f0a", bg2: "#0d1610", bg3: "#122019", card: "#101b14",
-        border: "rgba(255,255,255,0.10)", text: "#ecfdf3", muted: "rgba(236,253,243,0.62)",
-        hover: "rgba(255,255,255,0.06)", input: "rgba(255,255,255,0.06)", inputBorder: "rgba(255,255,255,0.12)",
-    } : {
-        bg: "#f0fdf4", bg2: "#ffffff", bg3: "#f7fff9", card: "#ffffff",
-        border: "#d1fae5", text: "#052e16", muted: "#166534",
-        hover: "#ecfdf5", input: "#ffffff", inputBorder: "#a7f3d0",
-    };
 
     function toggleDark() {
         const next = !darkMode;
@@ -1169,90 +1160,170 @@ export default function App() {
         setOnboardingChecked(false);
     }
 
-    function StatusBadge({ status, cancelledBy }) {
-        const cfg = {
-            pending: { bg: "#fef3c7", c: "#92400e", dot: "#f59e0b", label: "Pending" },
-            confirmed: { bg: "#dcfce7", c: "#166534", dot: "#22c55e", label: "Confirmed" },
-            preparing: { bg: "#fce7f3", c: "#9d174d", dot: "#ec4899", label: "Preparing" },
-            ready: { bg: "#ede9fe", c: "#5b21b6", dot: "#8b5cf6", label: "Ready" },
-            delivered: { bg: "#dcfce7", c: "#14532d", dot: "#22c55e", label: "Delivered" },
-            rejected: { bg: "#fee2e2", c: "#7f1d1d", dot: "#ef4444", label: "Rejected" },
-            cancelled: { bg: "#fee2e2", c: "#7f1d1d", dot: "#ef4444", label: "Cancelled" },
-        };
-        if (status === 'cancelled' && cancelledBy === 'customer') {
-            return (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap" }}>
-                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", flexShrink: 0 }} />Cancelled by customer
-                </span>
-            );
+    // ── Presentation ────────────────────────────────────────────
+    // Re-render every 30s so "waiting for 6 min" stays true
+    const [, setClockTick] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setClockTick(x => x + 1), 30000);
+        return () => clearInterval(t);
+    }, []);
+    useEffect(() => {
+        document.body.style.background = darkMode ? "#12110f" : "#f4f2ec";
+    }, [darkMode]);
+
+    const theme = darkMode ? "dark" : "light";
+    const money = n => (parseFloat(n) || 0).toFixed(2);
+    const shortId = id => "#" + String(id || "").substring(0, 8).toUpperCase();
+    const phoneOf = o => (o.customer_phone || "").replace("whatsapp:", "");
+    const custName = o => o.customer_name || phoneOf(o) || "Customer";
+    const noteOf = o => o.special_instructions || o.notes || "";
+    const minutesSince = iso => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+    function ageText(iso) {
+        const m = minutesSince(iso);
+        if (m < 1) return "Just now";
+        if (m < 60) return m + " min";
+        if (m < 60 * 24) return Math.floor(m / 60) + "h " + (m % 60) + "m";
+        return new Date(iso).toLocaleDateString("en-GH", { day: "numeric", month: "short" });
+    }
+    function agoText(iso) {
+        const m = minutesSince(iso);
+        if (m < 1) return "just now";
+        if (m < 60) return m + " min ago";
+        if (m < 60 * 24) return Math.floor(m / 60) + " h ago";
+        if (m < 60 * 48) return "yesterday";
+        return new Date(iso).toLocaleDateString("en-GH", { day: "numeric", month: "short" });
+    }
+    const timeOf = iso => new Date(iso).toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" });
+    function parseItems(text) {
+        return String(text || "").split(/,\s*(?=\d+x\s)/).map(s => s.trim()).filter(Boolean).map(s => {
+            const m = s.match(/^(\d+)x\s+(.+?)(?:\s*-\s*GHS\s*([\d.]+))?$/i);
+            return m ? { qty: m[1], name: m[2], price: m[3] } : { qty: "", name: s, price: null };
+        });
+    }
+    const itemsShort = o => parseItems(o.items).map(i => (i.qty ? i.qty + "× " : "") + i.name).join(", ");
+
+    const STEPS = { pending: 1, confirmed: 2, preparing: 3, ready: 4, delivered: 5 };
+    function statusLabel(o) {
+        switch (o.status) {
+            case "pending": return "New";
+            case "confirmed": return "Accepted";
+            case "preparing": return "Preparing";
+            case "ready": return o.delivery_type === "delivery" ? "On the way" : "Ready for pickup";
+            case "delivered": return o.delivery_type === "pickup" ? "Collected" : "Delivered";
+            case "rejected": return "Rejected";
+            case "cancelled": return o.cancelled_by === "customer" ? "Cancelled by customer" : "Cancelled";
+            default: return o.status || "—";
         }
-        const s = cfg[status] || { bg: "#f3f4f6", c: "#374151", dot: "#9ca3af", label: status || "—" };
+    }
+    function renderProgress(o) {
+        const step = STEPS[o.status] || 0;
+        const stopped = o.status === "rejected" || o.status === "cancelled";
         return (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: s.bg, color: s.c, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", whiteSpace: "nowrap" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: s.dot, flexShrink: 0 }} />{s.label}
+            <span className={"dx-progress" + (o.status === "pending" ? " is-new" : "") + (stopped ? " is-stopped" : "")}>
+                <span className="dx-progress-label">{statusLabel(o)}</span>
+                <span className="dx-progress-track" aria-hidden="true">
+                    {[1, 2, 3, 4, 5].map(i => <i key={i} className={!stopped && i <= step ? "is-on" : ""} />)}
+                </span>
             </span>
         );
     }
-
-    function PaymentBadge({ status, orderId, showMarkPaid }) {
-        const isPaid = status === "paid";
+    function renderPay(o) {
+        const how = o.payment_method === "momo" ? "MoMo" : o.delivery_type === "pickup" ? "Cash on pickup" : "Cash on delivery";
+        if (o.payment_status === "paid") return <span className="dx-tag is-accent">Paid · {o.payment_method === "momo" ? "MoMo" : "Cash"}</span>;
+        if (o.payment_method === "momo") return <span className="dx-tag is-attn">MoMo not paid yet</span>;
+        return <span className="dx-tag is-plain is-outline">{how}</span>;
+    }
+    function nextStep(o) {
+        switch (o.status) {
+            case "pending": return { status: "confirmed", label: "Accept" };
+            case "confirmed": return { status: "preparing", label: "Start preparing" };
+            case "preparing": return { status: "ready", label: o.delivery_type === "delivery" ? "Send out" : "Mark ready" };
+            case "ready": return { status: "delivered", label: o.delivery_type === "delivery" ? "Mark delivered" : "Mark collected" };
+            default: return null;
+        }
+    }
+    function renderActions(o, { size = "sm", block = false } = {}) {
+        const step = nextStep(o);
+        if (!step) return null;
+        const busy = !!buttonLoading[o.id];
+        const go = status => async e => {
+            e.stopPropagation();
+            if (busy) return;
+            if (status === "rejected" && !window.confirm("Reject this order? The customer will be told on WhatsApp.")) return;
+            await updateStatus(o.id, status, o.customer_phone, o.delivery_type);
+        };
         return (
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", backgroundColor: isPaid ? "#dcfce7" : "#fef3c7", color: isPaid ? "#14532d" : "#92400e", padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
-                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: isPaid ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />{isPaid ? "Paid" : "Unpaid"}
-                </span>
-                {!isPaid && showMarkPaid && (
-                    <button onClick={e => { e.stopPropagation(); markAsPaid(orderId); }} disabled={buttonLoading[orderId + "_pay"]}
-                        style={{ backgroundColor: "#16a34a", color: "white", border: "none", padding: "3px 10px", borderRadius: "5px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>
-                        {buttonLoading[orderId + "_pay"] ? "..." : "Mark Paid"}
-                    </button>
-                )}
+            <div className="dx-row" style={{ flexWrap: "nowrap", width: block ? "100%" : undefined }} onClick={e => e.stopPropagation()}>
+                {o.status === "pending" && <button type="button" className={`dx-btn is-danger is-${size}`} disabled={busy} onClick={go("rejected")}>Reject</button>}
+                <button type="button" className={`dx-btn is-primary is-${size}` + (block ? " is-block" : "")} style={block ? { flex: 1 } : undefined} disabled={busy} onClick={go(step.status)}>
+                    {busy ? "Updating…" : step.label}
+                </button>
             </div>
         );
     }
-
-    function getNextAction(orderId) {
-        const order = ordersRef.current.find(o => o.id === orderId) || orders.find(o => o.id === orderId);
-        if (!order) return null;
-        const isLoading = buttonLoading[orderId];
-        const btn = (bg, label, cb) => (
-            <button disabled={isLoading} style={{ backgroundColor: isLoading ? "#94a3b8" : bg, color: "white", border: "none", padding: "6px 12px", borderRadius: "7px", fontSize: "11px", fontWeight: "600", cursor: isLoading ? "not-allowed" : "pointer", whiteSpace: "nowrap", opacity: isLoading ? 0.7 : 1 }}
-                onClick={async e => { e.stopPropagation(); if (!isLoading) await cb(); }}>
-                {isLoading ? "..." : label}
-            </button>
+    function renderTicket(o) {
+        const mins = minutesSince(o.created_at);
+        const urgency = mins >= 10 ? " is-late" : mins >= 5 ? " is-waiting" : "";
+        const note = noteOf(o);
+        return (
+            <article key={o.id} className={"dx-ticket" + urgency} onClick={() => setSelectedOrder(o)}>
+                <div className="dx-ticket-head">
+                    <div className="dx-ticket-who">
+                        <div className="dx-ticket-name truncate">{custName(o)}</div>
+                        <div className="dx-ticket-meta">
+                            <span className="mono">{shortId(o.id)}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{o.delivery_type === "pickup" ? "Pickup" : "Delivery"}</span>
+                        </div>
+                    </div>
+                    <span className="dx-age" title={new Date(o.created_at).toLocaleString("en-GH")}>
+                        <Icon name="clock" size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />{ageText(o.created_at)}
+                    </span>
+                </div>
+                <ul className="dx-ticket-items">
+                    {parseItems(o.items).map((it, i) => (
+                        <li key={i}><span className="dx-qty">{it.qty ? it.qty + "×" : ""}</span><span>{it.name}</span><span className="faint num">{it.price ? money(it.price) : ""}</span></li>
+                    ))}
+                </ul>
+                {note && <div className="dx-ticket-note"><small>Customer note</small>{note}</div>}
+                {o.delivery_type === "delivery" && o.delivery_address && (
+                    <div className="dx-ticket-addr"><Icon name="pin" size={14} /><span>{o.delivery_address}</span></div>
+                )}
+                <div className="dx-ticket-foot">
+                    <div className="dx-stack" style={{ gap: 6 }}>
+                        <div className="dx-total"><small>GHS</small>{money(o.total_amount)}</div>
+                        {renderPay(o)}
+                    </div>
+                    {renderActions(o)}
+                </div>
+            </article>
         );
-        switch (order.status) {
-            case "pending": return (<div style={{ display: "flex", gap: "5px" }}>{btn("#22c55e", "Accept", () => updateStatus(order.id, "confirmed", order.customer_phone, order.delivery_type))}{btn("#dc2626", "Reject", () => updateStatus(order.id, "rejected", order.customer_phone, order.delivery_type))}</div>);
-            case "confirmed": return btn("#db2777", "Preparing", () => updateStatus(order.id, "preparing", order.customer_phone, order.delivery_type));
-            case "preparing": return btn("#7c3aed", order.delivery_type === "delivery" ? "On the Way" : "Ready", () => updateStatus(order.id, "ready", order.customer_phone, order.delivery_type));
-            case "ready": return btn("#16a34a", "Delivered", () => updateStatus(order.id, "delivered", order.customer_phone, order.delivery_type));
-            case "delivered": return <span style={{ color: "#16a34a", fontSize: "11px", fontWeight: "700" }}>Done</span>;
-            case "rejected": return <span style={{ color: "#dc2626", fontSize: "11px", fontWeight: "700" }}>Rejected</span>;
-            default: return null;
-        }
     }
 
     const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString());
     const todayRevenue = todayOrders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
     const DELIVAGH_WA_LINK = "https://wa.me/233276295769?text=Hi";
-    const filteredOrders = activeTab === "all" ? orders : orders.filter(o => o.status === activeTab);
+    const ORDER_GROUPS = {
+        all: () => true,
+        pending: o => o.status === "pending",
+        active: o => ["confirmed", "preparing", "ready"].includes(o.status),
+        delivered: o => o.status === "delivered",
+        closed: o => ["rejected", "cancelled"].includes(o.status),
+    };
+    const filteredOrders = orders.filter(ORDER_GROUPS[activeTab] || ORDER_GROUPS.all);
+    const waitingOrders = orders.filter(ORDER_GROUPS.pending).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const activeOrders = orders.filter(ORDER_GROUPS.active);
     // Sections are free text so any kind of shop can use its own ("Drinks", "Rice & Grains", ...)
     const filteredMenu = menuFilter === "All" ? menuItems : menuItems.filter(i => (i.category || "Main") === menuFilter);
     const usedSections = [...new Set(menuItems.map(i => i.category || "Main"))];
     const menuSections = [...new Set([...usedSections, "Main", "Sides", "Extras", "Drinks"])];
     const customers = Object.values(
         orders.reduce((acc, order) => {
-            const phone = (order.customer_phone || "").replace("whatsapp:", "") || "Unknown";
+            const phone = phoneOf(order) || "Unknown";
             if (!acc[phone]) {
-                acc[phone] = {
-                    phone,
-                    orders: 0,
-                    delivered: 0,
-                    pending: 0,
-                    revenue: 0,
-                    lastOrderAt: order.created_at,
-                };
+                acc[phone] = { phone, name: order.customer_name || "", orders: 0, delivered: 0, pending: 0, revenue: 0, lastOrderAt: order.created_at };
             }
+            if (!acc[phone].name && order.customer_name) acc[phone].name = order.customer_name;
             acc[phone].orders += 1;
             if (order.status === "delivered") acc[phone].delivered += 1;
             if (order.status === "pending") acc[phone].pending += 1;
@@ -1261,160 +1332,126 @@ export default function App() {
             return acc;
         }, {})
     ).sort((a, b) => new Date(b.lastOrderAt) - new Date(a.lastOrderAt));
-    const sidebarW = sidebarCollapsed ? "60px" : "240px";
     const unreadNotifs = notifications.length;
-    const accent = "#22c55e";
-    const accentSoft = dm ? "rgba(34,197,94,0.12)" : "#ecfdf5";
-    const accentBorder = dm ? "rgba(34,197,94,0.3)" : "#86efac";
-    const inp = (extra = {}) => ({ padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", ...extra });
+
+    async function toggleShopOpen() {
+        const name = businessNameRef.current || businessName;
+        if (!supabase || !name) return;
+        const next = !settings.is_open;
+        setSettings(s => ({ ...s, is_open: next }));
+        const { error } = await supabase.from("business_settings").upsert({ business_name: name, is_open: next }, { onConflict: "business_name" });
+        if (error) {
+            setSettings(s => ({ ...s, is_open: !next }));
+            addNotif("Could not change shop status: " + error.message, "error");
+            return;
+        }
+        addNotif(next ? "Shop opened. Customers can order." : "Shop closed. The bot tells customers you're closed.", "success");
+    }
 
     const navItems = [
-        { id: "overview", label: "Overview", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
-        { id: "pending", label: "Orders", badge: stats.pending, icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg> },
-        { id: "customers", label: "Customers", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg> },
-        { id: "menu", label: "Menu", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg> },
-        { id: "insights", label: "Insights", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg> },
-        { id: "settings", label: "Settings", icon: <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg> },
+        { id: "overview", label: "Today", icon: "today" },
+        { id: "pending", label: "Orders", icon: "orders", badge: stats.pending },
+        { id: "menu", label: "Menu", icon: "menu" },
+        { id: "customers", label: "Customers", icon: "customers" },
+        { id: "insights", label: "Insights", icon: "insights" },
+        { id: "settings", label: "Settings", icon: "settings" },
     ];
+    const goTo = id => { setActivePage(id); if (id === "pending") setActiveTab("all"); window.scrollTo({ top: 0 }); };
+
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const todayLong = new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long" });
+    const hoursText = settings.open_time && settings.close_time ? `${String(settings.open_time).slice(0, 5)} – ${String(settings.close_time).slice(0, 5)}` : "";
+
+    const Brand = ({ sub }) => <div className="dx-wordmark">Delivagh<i>.</i>{sub && <small>{sub}</small>}</div>;
+    const Screen = ({ children }) => <div className="dx" data-theme={theme}><div className="dx-center">{children}</div></div>;
 
     if (!supabase) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f1117", color: "#e6edf3", padding: "24px", fontFamily: "Inter, sans-serif" }}>
-            <div style={{ maxWidth: "640px", background: "#161b22", border: "1px solid #30363d", borderRadius: "12px", padding: "20px" }}>
-                <h2 style={{ margin: "0 0 10px", fontSize: "18px" }}>Missing Supabase Configuration</h2>
-                <p style={{ margin: "0 0 8px", color: "#9fb0c3", fontSize: "14px" }}>Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` in your Vercel environment variables, then redeploy.</p>
-                <p style={{ margin: 0, color: "#7d8590", fontSize: "12px" }}>Until that is configured, the dashboard cannot load.</p>
+        <Screen>
+            <div className="dx-card is-wide">
+                <Brand />
+                <h1 className="dx-title-sm">The dashboard isn't configured</h1>
+                <p className="dx-sub">Set <code className="mono">VITE_SUPABASE_URL</code> and <code className="mono">VITE_SUPABASE_KEY</code> in the Vercel environment variables, then redeploy.</p>
             </div>
-        </div>
+        </Screen>
     );
 
     if (authLoading) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f1117" }}>
-            <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "22px", fontWeight: "800", color: "white" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
-                <p style={{ color: "#7d8590", marginTop: "8px", fontSize: "13px" }}>Loading...</p>
-            </div>
-        </div>
+        <Screen><div className="dx-loading"><Brand /><p>Loading…</p></div></Screen>
     );
 
     if (isPasswordResetMode && !resetPasswordDone) {
         return (
-            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
-                <div style={{ width: "100%", maxWidth: "420px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "32px" }}>
-                    <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
-                        Delivagh<span style={{ color: "#22c55e" }}>.</span>
-                    </div>
-                    <h2 style={{ margin: "0 0 6px", fontSize: "22px", color: "#ecfdf3", fontFamily: "'Playfair Display', serif" }}>Set New Password</h2>
-                    <p style={{ margin: "0 0 24px", color: "rgba(236,253,243,0.55)", fontSize: "13px" }}>Choose a strong password for your account.</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        <input
-                            type="password"
-                            value={resetPassword}
-                            onChange={e => setResetPassword(e.target.value)}
-                            placeholder="New password (min 6 characters)"
-                            style={{ padding: "12px 14px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", width: "100%", boxSizing: "border-box" }}
-                        />
-                        <input
-                            type="password"
-                            value={resetConfirmPassword}
-                            onChange={e => setResetConfirmPassword(e.target.value)}
-                            placeholder="Confirm new password"
-                            style={{ padding: "12px 14px", backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", width: "100%", boxSizing: "border-box" }}
-                        />
-                        {resetPasswordError && (
-                            <p style={{ margin: 0, fontSize: "12px", color: "#f87171", fontWeight: "600" }}>{resetPasswordError}</p>
-                        )}
-                        <button onClick={async () => {
-                            setResetPasswordError("");
-                            if (!resetPassword) { setResetPasswordError("Please enter a new password."); return; }
-                            if (resetPassword.length < 6) { setResetPasswordError("Password must be at least 6 characters."); return; }
-                            if (resetPassword !== resetConfirmPassword) { setResetPasswordError("Passwords do not match."); return; }
-                            setResetPasswordLoading(true);
-                            const { error } = await supabase.auth.updateUser({ password: resetPassword });
-                            if (error) {
-                                setResetPasswordError(error.message);
-                                setResetPasswordLoading(false);
-                                return;
-                            }
-                            await supabase.auth.signOut({ scope: 'others' });
-                            setResetPasswordDone(true);
+            <Screen>
+                <div className="dx-card">
+                    <Brand />
+                    <h1 className="dx-title-sm">Set a new password</h1>
+                    <p className="dx-sub" style={{ marginBottom: 20 }}>Use at least 6 characters.</p>
+                    <form className="dx-stack" style={{ gap: 12 }} onSubmit={async e => {
+                        e.preventDefault();
+                        setResetPasswordError("");
+                        if (!resetPassword) { setResetPasswordError("Enter a new password."); return; }
+                        if (resetPassword.length < 6) { setResetPasswordError("Password must be at least 6 characters."); return; }
+                        if (resetPassword !== resetConfirmPassword) { setResetPasswordError("The passwords don't match."); return; }
+                        setResetPasswordLoading(true);
+                        const { error } = await supabase.auth.updateUser({ password: resetPassword });
+                        if (error) {
+                            setResetPasswordError(error.message);
                             setResetPasswordLoading(false);
-                            setTimeout(async () => {
-                                await supabase.auth.signOut();
-                                setIsPasswordResetMode(false);
-                                setUser(null);
-                                setPage('login');
-                            }, 3000);
-                        }} disabled={resetPasswordLoading}
-                            style={{ padding: "13px", backgroundColor: resetPasswordLoading ? "rgba(255,255,255,0.1)" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "14px", cursor: resetPasswordLoading ? "not-allowed" : "pointer", width: "100%" }}>
-                            {resetPasswordLoading ? "Saving..." : "Set New Password"}
-                        </button>
-                    </div>
+                            return;
+                        }
+                        await supabase.auth.signOut({ scope: 'others' });
+                        setResetPasswordDone(true);
+                        setResetPasswordLoading(false);
+                        setTimeout(async () => {
+                            await supabase.auth.signOut();
+                            setIsPasswordResetMode(false);
+                            setUser(null);
+                            setPage('login');
+                        }, 3000);
+                    }}>
+                        <label className="dx-field"><span className="dx-label">New password</span>
+                            <input className="dx-input" type="password" autoComplete="new-password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} /></label>
+                        <label className="dx-field"><span className="dx-label">Confirm new password</span>
+                            <input className="dx-input" type="password" autoComplete="new-password" value={resetConfirmPassword} onChange={e => setResetConfirmPassword(e.target.value)} /></label>
+                        {resetPasswordError && <p className="dx-msg is-error" role="alert">{resetPasswordError}</p>}
+                        <button type="submit" className="dx-btn is-primary is-lg is-block" disabled={resetPasswordLoading}>{resetPasswordLoading ? "Saving…" : "Set new password"}</button>
+                    </form>
                 </div>
-            </div>
+            </Screen>
         );
     }
 
     if (isPasswordResetMode && resetPasswordDone) {
         return (
-            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
-                <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "16px", fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
-                    <p style={{ color: "#22c55e", fontSize: "18px", fontWeight: "700", margin: "0 0 8px" }}>✓ Password updated!</p>
-                    <p style={{ color: "rgba(236,253,243,0.55)", fontSize: "13px", margin: 0 }}>Redirecting you to login...</p>
-                </div>
-            </div>
+            <Screen>
+                <div className="dx-loading"><Brand /><p className="accent-text" style={{ fontSize: 15, fontWeight: 600 }}>Password updated</p><p>Taking you to sign in…</p></div>
+            </Screen>
         );
     }
 
     if (!user && page === "signup") return <Signup />;
     if (!user && page !== "signup" && accountStatus) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans', sans-serif" }}>
-            <div style={{ width: "100%", maxWidth: "520px", backgroundColor: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "26px" }}>
-                <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
-                    Delivagh<span style={{ color: "#22c55e" }}>.</span>
-                </div>
-                <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Account Status</p>
-                <h2 style={{ margin: "0 0 10px", fontSize: "24px", color: "#ecfdf3", fontFamily: "'Playfair Display', serif" }}>
-                    {accountStatus.type === "verify_email" ? "Confirm your email" : accountStatus.type === "pending" ? "Approval Pending" : accountStatus.type === "rejected" ? "Application Rejected" : "Account Suspended"}
-                </h2>
-                <p style={{ margin: "0 0 18px", color: "rgba(236,253,243,0.75)", fontSize: "14px", lineHeight: 1.6 }}>{accountStatus.message}</p>
-                <div style={{ display: "flex", gap: "10px" }}>
-                    <button
-                        onClick={() => { setAccountStatus(null); setAuthNotice(""); }}
-                        style={{ flex: 1, padding: "12px", backgroundColor: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", color: "rgba(236,253,243,0.75)", fontWeight: "700", cursor: "pointer" }}
-                    >
-                        Back to Login
-                    </button>
-                    <button
-                        onClick={() => { setAccountStatus(null); setAuthNotice(""); setPage("signup"); }}
-                        style={{ flex: 1, padding: "12px", backgroundColor: "#22c55e", border: "none", borderRadius: "10px", color: "white", fontWeight: "700", cursor: "pointer" }}
-                    >
-                        Use Different Account
-                    </button>
+        <Screen>
+            <div className="dx-card is-wide">
+                <Brand />
+                <p className="dx-crumb" style={{ margin: 0 }}>Account status</p>
+                <h1 className="dx-title-sm" style={{ marginTop: 4 }}>
+                    {accountStatus.type === "verify_email" ? "Confirm your email" : accountStatus.type === "pending" ? "Waiting for approval" : accountStatus.type === "rejected" ? "Application not approved" : "Account suspended"}
+                </h1>
+                <p className="dx-sub" style={{ marginBottom: 22 }}>{accountStatus.message}</p>
+                <div className="dx-row" style={{ flexWrap: "nowrap" }}>
+                    <button type="button" className="dx-btn is-block" style={{ flex: 1 }} onClick={() => { setAccountStatus(null); setAuthNotice(""); }}>Back to sign in</button>
+                    <button type="button" className="dx-btn is-primary" style={{ flex: 1 }} onClick={() => { setAccountStatus(null); setAuthNotice(""); setPage("signup"); }}>Use another account</button>
                 </div>
             </div>
-        </div>
+        </Screen>
     );
     if (!user) return <Login notice={authNotice} />;
 
-    console.log("[render] state:", {
-        user: !!user,
-        authLoading,
-        onboardingChecked,
-        onboardingDone,
-        businessName,
-        needsVendorProfile,
-        page,
-        accountStatus: !!accountStatus
-    });
     // Avoid flashing dashboard before onboarding decision finishes.
     if (user && !onboardingChecked) return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: d.bg }}>
-            <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "22px", fontWeight: "800", color: d.text, fontFamily: "'Playfair Display', serif" }}>Delivagh<span style={{ color: accent }}>.</span></div>
-                <p style={{ color: d.muted, marginTop: "8px", fontSize: "13px" }}>Preparing your workspace...</p>
-            </div>
-        </div>
+        <Screen><div className="dx-loading"><Brand /><p>Getting your shop ready…</p></div></Screen>
     );
 
     if (user && needsVendorProfile) {
@@ -1452,468 +1489,351 @@ export default function App() {
         />;
     }
 
+    const shopName = businessName || user.email?.split("@")[0] || "Your shop";
+    const avatar = (cls = "") => (
+        <div className={"dx-avatar " + cls}>
+            {profilePicture ? <img src={profilePicture} alt="" /> : (businessName || user.email || "?").charAt(0).toUpperCase()}
+        </div>
+    );
+    const statusPill = (
+        <button type="button" className={"dx-status-pill " + (settings.is_open ? "is-open" : "is-closed")} onClick={toggleShopOpen}
+            title={settings.is_open ? "Tap to close the shop" : "Tap to open the shop"} aria-pressed={settings.is_open}>
+            <span className="dx-led" />{settings.is_open ? "Open" : "Closed"}
+            {hoursText && <span className="faint dx-hide-phone num" style={{ fontWeight: 500 }}>{hoursText}</span>}
+        </button>
+    );
+    const switchEl = (checked, onChange, label) => (
+        <button type="button" role="switch" aria-checked={!!checked} aria-label={label} className="dx-switch" onClick={onChange} />
+    );
+
     return (
-        <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-            <style>{`
-                * { font-family: 'Inter', -apple-system, sans-serif; box-sizing: border-box; }
-                body { margin: 0; background: ${d.bg}; }
-                ::-webkit-scrollbar { width: 4px; height: 4px; }
-                ::-webkit-scrollbar-track { background: transparent; }
-                ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 2px; }
-                @keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-                @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-                @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-                @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
-                .row-hover:hover td { background: ${d.hover} !important; cursor: pointer; }
-            `}</style>
+        <div className="dx" data-theme={theme}>
+            {/* NEW ORDER TOAST */}
+            {newOrderAlert && (
+                <div className="dx-toast" role="status">
+                    <span className="dx-led" />
+                    <div><strong>New order</strong><span>A customer just ordered on WhatsApp</span></div>
+                    <button type="button" className="dx-btn is-sm" onClick={() => { setNewOrderAlert(false); goTo("overview"); }}>View</button>
+                </div>
+            )}
 
-            <div style={{ display: "flex", minHeight: "100vh", backgroundColor: d.bg, color: d.text }}>
-
-                {/* NEW ORDER TOAST */}
-                {newOrderAlert && (
-                    <div style={{ position: "fixed", top: "20px", right: "20px", zIndex: 9999, animation: "slideIn 0.3s ease" }}>
-                        <div style={{ background: "linear-gradient(135deg, #dc2626, #ef4444)", color: "white", padding: "16px 20px", borderRadius: "14px", boxShadow: "0 16px 48px rgba(220,38,38,0.45)", display: "flex", alignItems: "center", gap: "12px", minWidth: "290px", animation: "pulse 1.5s infinite" }}>
-                            <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <p style={{ margin: 0, fontWeight: "800", fontSize: "14px" }}>New Order!</p>
-                                <p style={{ margin: "2px 0 0", fontSize: "12px", opacity: 0.9 }}>A customer placed an order</p>
-                            </div>
-                            <button onClick={() => { setNewOrderAlert(false); setActivePage("pending"); setActiveTab("pending"); }}
-                                style={{ background: "rgba(255,255,255,0.25)", border: "none", color: "white", padding: "6px 12px", borderRadius: "7px", cursor: "pointer", fontSize: "12px", fontWeight: "700" }}>View</button>
-                        </div>
-                    </div>
-                )}
-
-                {/* ORDER DETAIL MODAL */}
-                {selectedOrder && (() => {
-                    const liveOrder = orders.find(o => o.id === selectedOrder.id) || selectedOrder;
-                    const paymentOptions = liveOrder.delivery_type === "pickup" ? ["MoMo", "Pay on Pickup"] : ["MoMo", "Pay on Delivery"];
-                    return (
-                        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setSelectedOrder(null)}>
-                            <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "480px", boxShadow: "0 24px 64px rgba(0,0,0,0.35)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
-                                    <div>
-                                        <h2 style={{ margin: 0, fontSize: "17px", fontWeight: "700", color: d.text }}>Order Details</h2>
-                                        <p style={{ margin: "3px 0 0", fontSize: "11px", color: d.muted, fontFamily: "monospace" }}>#{liveOrder.id.substring(0, 8).toUpperCase()}</p>
-                                    </div>
-                                    <button onClick={() => setSelectedOrder(null)} style={{ background: d.hover, border: `1px solid ${d.border}`, borderRadius: "7px", padding: "5px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: d.muted }}>Close</button>
-                                </div>
-                                <div style={{ display: "flex", gap: "7px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-                                    <StatusBadge status={liveOrder.status} cancelledBy={liveOrder.cancelled_by} />
-                                    <PaymentBadge status={liveOrder.payment_status} orderId={liveOrder.id} showMarkPaid={true} />
-                                    {liveOrder.payment_method && (
-                                        <span style={{ backgroundColor: d.hover, color: d.muted, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>
-                                            {liveOrder.payment_method === "momo" ? "MoMo" : liveOrder.delivery_type === "pickup" ? "Pay on Pickup" : "Pay on Delivery"}
-                                        </span>
-                                    )}
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "7px", marginBottom: "18px" }}>
-                                    {[
-                                        { label: "Customer", value: liveOrder.customer_name || liveOrder.customer_phone?.replace("whatsapp:", "") },
-                                        ...(() => {
-                                            const callDisplay = formatCallDisplay(liveOrder);
-                                            // Always show contact phone if it exists (for both pickup and delivery)
-                                            if (callDisplay && liveOrder.contact_phone) {
-                                                return [{ label: "Call on", value: callDisplay }];
-                                            }
-                                            return [];
-                                        })(),
-                                        { label: "Items", value: liveOrder.items },
-                                        { label: "Total", value: liveOrder.total_amount ? "GHS " + parseFloat(liveOrder.total_amount).toFixed(2) : "-" },
-                                        ...(liveOrder.momo_number ? [{ label: "MoMo #", value: liveOrder.momo_number }] : []),
-                                        { label: "Type", value: liveOrder.delivery_type === "pickup" ? "Pickup" : "Delivery" },
-                                        ...(liveOrder.delivery_address ? [{ label: "Address", value: liveOrder.delivery_address }] : []),
-                                        { label: "Time", value: new Date(liveOrder.created_at).toLocaleString("en-GH", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) },
-                                    ].map(item => (
-                                        <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "9px 13px", backgroundColor: d.hover, borderRadius: "8px" }}>
-                                            <span style={{ fontSize: "11px", color: d.muted, fontWeight: "500", flexShrink: 0, marginRight: "12px" }}>{item.label}</span>
-                                            <span style={{ fontSize: "12px", fontWeight: "600", color: d.text, textAlign: "right" }}>{item.value}</span>
-                                        </div>
-                                    ))}
-                                    {liveOrder.special_instructions && (
-                                        <div style={{ padding: "11px 13px", backgroundColor: "#fefce8", borderRadius: "8px", border: "1px solid #fde68a" }}>
-                                            <p style={{ margin: "0 0 3px", fontSize: "10px", fontWeight: "700", color: "#92400e", textTransform: "uppercase" }}>Special Instructions</p>
-                                            <p style={{ margin: 0, fontSize: "13px", color: "#78350f" }}>{liveOrder.special_instructions}</p>
-                                        </div>
-                                    )}
-                                    <div style={{ padding: "11px 13px", backgroundColor: d.hover, borderRadius: "8px" }}>
-                                        <p style={{ margin: "0 0 6px", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase" }}>Payment Options</p>
-                                        <div style={{ display: "flex", gap: "8px" }}>
-                                            {paymentOptions.map(opt => <span key={opt} style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, color: d.text, padding: "4px 12px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}>{opt}</span>)}
-                                        </div>
-                                    </div>
-                                    {/* Payment Screenshot */}
-                                    {liveOrder.payment_method === 'manual_momo' && liveOrder.payment_screenshot_url && (
-                                        <div style={{ padding: "11px 13px", backgroundColor: d.bg3, borderRadius: "8px", border: `1px solid ${d.border}` }}>
-                                            <p style={{ margin: "0 0 8px", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase" }}>Payment Screenshot</p>
-                                            <a href={liveOrder.payment_screenshot_url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
-                                                <img 
-                                                    src={liveOrder.payment_screenshot_url} 
-                                                    alt="Payment screenshot" 
-                                                    style={{ 
-                                                        maxWidth: "100%", 
-                                                        maxHeight: "300px", 
-                                                        borderRadius: "8px",
-                                                        border: `1px solid ${d.border}`,
-                                                        cursor: "pointer"
-                                                    }} 
-                                                />
-                                            </a>
-                                            <p style={{ margin: "8px 0 0", fontSize: "10px", color: d.muted }}>Click to view full size</p>
-                                        </div>
-                                    )}
-                                </div>
-                                <div style={{ display: "flex", gap: "9px" }}>
-                                    <div style={{ flex: 1 }}>{getNextAction(liveOrder.id)}</div>
-                                    <button onClick={() => setSelectedOrder(null)} style={{ flex: 1, backgroundColor: d.hover, color: d.muted, border: `1px solid ${d.border}`, padding: "8px 16px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>Close</button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                {/* CUSTOMER DETAIL MODAL */}
-                {selectedCustomer && (() => {
-                    const customerOrders = orders
-                        .filter(o => (o.customer_phone || "").replace("whatsapp:", "") === selectedCustomer.phone)
-                        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                    const latest = customerOrders[0];
-                    return (
-                        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setSelectedCustomer(null)}>
-                            <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "24px", width: "100%", maxWidth: "820px", boxShadow: "0 24px 64px rgba(0,0,0,0.35)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                                    <div>
-                                        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: d.text }}>Customer Details</h2>
-                                        <p style={{ margin: "4px 0 0", fontSize: "12px", color: d.muted }}>{selectedCustomer.phone}</p>
-                                    </div>
-                                    <button onClick={() => setSelectedCustomer(null)} style={{ background: d.hover, border: `1px solid ${d.border}`, borderRadius: "7px", padding: "6px 12px", cursor: "pointer", fontSize: "12px", fontWeight: "600", color: d.muted }}>Close</button>
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "14px", marginBottom: "14px" }}>
-                                    <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "14px" }}>
-                                        <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Customer Information</p>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                                            {[
-                                                { label: "Phone", value: selectedCustomer.phone },
-                                                { label: "First Seen", value: customerOrders.length ? new Date(customerOrders[customerOrders.length - 1].created_at).toLocaleDateString("en-GH") : "—" },
-                                                { label: "Total Orders", value: selectedCustomer.orders },
-                                                { label: "Revenue", value: "GHS " + selectedCustomer.revenue.toFixed(2) },
-                                            ].map(row => (
-                                                <div key={row.label} style={{ backgroundColor: d.card, borderRadius: "8px", padding: "10px 11px", border: `1px solid ${d.border}` }}>
-                                                    <p style={{ margin: "0 0 2px", fontSize: "10px", color: d.muted }}>{row.label}</p>
-                                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.text }}>{row.value}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "14px" }}>
-                                        <p style={{ margin: "0 0 8px", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Order Statistics</p>
-                                        <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Delivered: <strong style={{ color: "#16a34a" }}>{selectedCustomer.delivered}</strong></p>
-                                        <p style={{ margin: "0 0 6px", fontSize: "12px", color: d.text }}>Pending: <strong style={{ color: "#d97706" }}>{selectedCustomer.pending}</strong></p>
-                                        <p style={{ margin: 0, fontSize: "12px", color: d.text }}>Last Order: <strong>{latest ? new Date(latest.created_at).toLocaleDateString("en-GH") : "—"}</strong></p>
-                                    </div>
-                                </div>
-                                <div style={{ backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "10px", padding: "12px" }}>
-                                    <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: "700", color: d.text }}>Recent Orders</p>
-                                    {customerOrders.length === 0 ? (
-                                        <p style={{ margin: 0, color: d.muted, fontSize: "12px" }}>No orders found for this customer.</p>
-                                    ) : (
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                            {customerOrders.slice(0, 6).map(order => (
-                                                <div key={order.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr auto auto auto", alignItems: "center", gap: "8px", backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "8px", padding: "9px 10px" }}>
-                                                    <span style={{ fontFamily: "monospace", fontSize: "11px", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</span>
-                                                    <span style={{ fontSize: "11px", color: d.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{order.items}</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#22c55e" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</span>
-                                                    <StatusBadge status={order.status} cancelledBy={order.cancelled_by} />
-                                                    <button onClick={() => { setSelectedCustomer(null); setSelectedOrder(order); }} style={{ padding: "4px 8px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.22)", borderRadius: "6px", fontSize: "10px", fontWeight: "700", cursor: "pointer" }}>Open</button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
-
-                {/* ADD MENU MODAL */}
-                {showAddModal && (
-                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setShowAddModal(false)}>
-                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "420px", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: "700", color: d.text }}>Add Menu Item</h2>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <input value={newItem.item_name} onChange={e => setNewItem({ ...newItem, item_name: e.target.value })} placeholder="Item name (e.g. Jollof Rice)" style={inp()} />
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                    <input value={newItem.item_price} onChange={e => setNewItem({ ...newItem, item_price: e.target.value })} placeholder="Price (GHS)" type="number" style={inp()} />
-                                    <input value={newItem.category || ""} onChange={e => setNewItem({ ...newItem, category: e.target.value })} list="menu-sections" placeholder="Section (e.g. Main, Drinks)" style={inp()} />
-                                    <datalist id="menu-sections">
-                                        {menuSections.map(c => <option key={c} value={c} />)}
-                                    </datalist>
-                                </div>
-                                <textarea value={newItem.item_description} onChange={e => setNewItem({ ...newItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
+            {/* ORDER DETAIL */}
+            {selectedOrder && (() => {
+                const o = orders.find(x => x.id === selectedOrder.id) || selectedOrder;
+                const callDisplay = o.contact_phone ? formatCallDisplay(o) : null;
+                const note = noteOf(o);
+                return (
+                    <div className="dx-overlay" onClick={() => setSelectedOrder(null)}>
+                        <div className="dx-sheet" role="dialog" aria-modal="true" aria-label="Order details" onClick={e => e.stopPropagation()}>
+                            <div className="dx-sheet-head">
                                 <div>
-                                    <label style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>Item Photo (optional)</label>
-                                    <input type="file" accept="image/*" onChange={e => setNewItemImage(e.target.files?.[0] || null)}
-                                        style={{ marginTop: "5px", fontSize: "12px", color: d.muted, width: "100%" }} />
-                                    {newItemImage && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ {newItemImage.name}</p>}
+                                    <p className="dx-crumb" style={{ margin: 0 }}><span className="mono">{shortId(o.id)}</span> · {new Date(o.created_at).toLocaleString("en-GH", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                                    <h2 className="dx-title-sm" style={{ marginTop: 4 }}>{custName(o)}</h2>
                                 </div>
-                                <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
-                                    <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
-                                    <button onClick={addMenuItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Item</button>
-                                </div>
+                                <button type="button" className="dx-icon-btn" aria-label="Close" onClick={() => setSelectedOrder(null)}><Icon name="close" /></button>
                             </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* UPLOAD MENU MODAL */}
-                {showUploadMenuModal && (
-                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backdropFilter: "blur(4px)" }} onClick={closeUploadMenuModal}>
-                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "24px", width: "100%", maxWidth: "920px", maxHeight: "min(92vh, 840px)", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${accentBorder}`, display: "flex", flexDirection: "column", gap: "14px" }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: d.text }}>Upload Menu</h2>
-                            <p style={{ margin: 0, fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>Upload a photo or PDF of your menu. We will read items with AI—you can edit them before saving to your storefront.</p>
-                            <input ref={menuFileInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" style={{ display: "none" }}
-                                onChange={e => { pickUploadMenuFile(e.target.files?.[0]); e.target.value = ""; }} />
-                            <div
-                                onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(true); }}
-                                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(false); }}
-                                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                                onDrop={e => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setUploadMenuDragActive(false);
-                                    pickUploadMenuFile(e.dataTransfer.files?.[0]);
-                                }}
-                                onClick={() => menuFileInputRef.current?.click()}
-                                style={{
-                                    border: `2px dashed ${uploadMenuDragActive ? accent : d.inputBorder}`,
-                                    borderRadius: "12px",
-                                    padding: "22px",
-                                    textAlign: "center",
-                                    cursor: "pointer",
-                                    backgroundColor: uploadMenuDragActive ? accentSoft : d.bg3,
-                                    transition: "border-color 0.15s, background 0.15s",
-                                }}>
-                                <p style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "700", color: d.text }}>Drop image or PDF here</p>
-                                <p style={{ margin: 0, fontSize: "12px", color: d.muted }}>or click to browse — JPG, PNG, WEBP, PDF · max 10MB</p>
-                            </div>
-                            {uploadMenuFile && (
-                                <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flexWrap: "wrap" }}>
-                                    {uploadImagePreviewUrl ? (
-                                        <img alt="Menu preview" src={uploadImagePreviewUrl} style={{ width: "160px", maxHeight: "200px", objectFit: "cover", borderRadius: "10px", border: `1px solid ${d.border}` }} />
-                                    ) : (
-                                        <div style={{ width: "160px", minHeight: "100px", borderRadius: "10px", border: `1px solid ${d.border}`, backgroundColor: d.bg3, display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", fontSize: "12px", fontWeight: "600", color: d.text, textAlign: "center", wordBreak: "break-word" }}>
-                                            {uploadMenuFile.name}
-                                        </div>
-                                    )}
-                                    <div style={{ flex: "1", minWidth: "200px" }}>
-                                        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "700", color: d.muted }}>Selected file</p>
-                                        <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: d.text }}>{uploadMenuFile.name}</p>
-                                        <button type="button" onClick={(e) => { e.stopPropagation(); menuFileInputRef.current?.click(); }} style={{ padding: "8px 14px", backgroundColor: "transparent", border: `1px solid ${accentBorder}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: accent, cursor: "pointer" }}>Change file</button>
+                            <div className="dx-sheet-body">
+                                <div className="dx-spread" style={{ alignItems: "flex-start" }}>
+                                    {renderProgress(o)}
+                                    <div className="dx-stack" style={{ gap: 6, alignItems: "flex-end" }}>
+                                        {renderPay(o)}
+                                        {o.payment_status !== "paid" && !["rejected", "cancelled"].includes(o.status) && (
+                                            <button type="button" className="dx-link" disabled={buttonLoading[o.id + "_pay"]} onClick={() => markAsPaid(o.id)}>
+                                                {buttonLoading[o.id + "_pay"] ? "Saving…" : "Mark as paid"}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
-                            )}
-                            {uploadMenuError && (
-                                <p style={{ margin: 0, fontSize: "12px", fontWeight: "600", color: "#dc2626" }}>{uploadMenuError}</p>
-                            )}
-                            {!uploadExtractLoading && uploadExtracted.length === 0 && (
-                                <button type="button" disabled={!uploadMenuFile} onClick={(e) => { e.stopPropagation(); extractMenuFromUpload(); }} style={{ alignSelf: "flex-start", padding: "11px 20px", backgroundColor: !uploadMenuFile ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: !uploadMenuFile ? "not-allowed" : "pointer", opacity: !uploadMenuFile ? 0.5 : 1 }}>
-                                    Extract Menu Items
-                                </button>
-                            )}
-                            {uploadExtractLoading && (
-                                <div style={{ padding: "20px", textAlign: "center", borderRadius: "12px", border: `1px solid ${d.border}`, backgroundColor: accentSoft }}>
-                                    <p style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: accent }}>Reading your menu...</p>
-                                </div>
-                            )}
-                            {!uploadExtractLoading && uploadExtracted.length > 0 && (
-                                <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
-                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.muted }}>{uploadExtracted.length} item(s) — edit if needed</p>
-                                    <div style={{ overflow: "auto", borderRadius: "10px", border: `1px solid ${d.border}`, maxHeight: "360px" }}>
-                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: d.bg3 }}>
-                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Name</th>
-                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "100px" }}>Price (GHS)</th>
-                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted, width: "120px" }}>Category</th>
-                                                    <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", color: d.muted }}>Description</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {uploadExtracted.map((row, idx) => (
-                                                    <tr key={row.rowKey || idx} style={{ borderTop: `1px solid ${d.border}` }}>
-                                                        <td style={{ padding: "6px 8px" }}><input value={row.name ?? ""} onChange={e => patchUploadExtractedRow(idx, { name: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
-                                                        <td style={{ padding: "6px 8px" }}><input type="number" step="0.01" min="0" value={row.price ?? ""} onChange={e => patchUploadExtractedRow(idx, { price: e.target.value === "" ? "" : parseFloat(e.target.value) })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
-                                                        <td style={{ padding: "6px 8px" }}><input value={row.category ?? ""} onChange={e => patchUploadExtractedRow(idx, { category: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
-                                                        <td style={{ padding: "6px 8px" }}><input value={row.description ?? ""} onChange={e => patchUploadExtractedRow(idx, { description: e.target.value })} style={{ ...inp(), padding: "7px 8px", fontSize: "12px" }} /></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                <div className="dx-panel" style={{ background: "var(--surface-2)", border: 0 }}>
+                                    <ul className="dx-ticket-items" style={{ padding: "14px 16px" }}>
+                                        {parseItems(o.items).map((it, i) => (
+                                            <li key={i}><span className="dx-qty">{it.qty ? it.qty + "×" : ""}</span><span>{it.name}</span><span className="num muted">{it.price ? money(it.price) : ""}</span></li>
+                                        ))}
+                                        {parseFloat(o.delivery_fee) > 0 && <li><span /><span className="muted">Delivery</span><span className="num muted">{money(o.delivery_fee)}</span></li>}
+                                    </ul>
+                                    <div className="dx-spread" style={{ padding: "10px 16px 14px", borderTop: "1px dashed var(--line-strong)" }}>
+                                        <span className="muted">Total</span>
+                                        <span className="dx-total"><small>GHS</small>{money(o.total_amount)}</span>
                                     </div>
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setUploadExtracted([]); setUploadMenuError(""); }} style={{ alignSelf: "flex-start", padding: "8px 12px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", fontWeight: "600", fontSize: "12px", color: d.muted, cursor: "pointer" }}>Extract again</button>
                                 </div>
-                            )}
-                            <div style={{ display: "flex", gap: "10px", paddingTop: "4px", flexWrap: "wrap" }}>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); closeUploadMenuModal(); }} style={{ flex: 1, padding: "11px", minWidth: "120px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
-                                {uploadExtracted.length > 0 && (
-                                    <button type="button" disabled={uploadSaveLoading} onClick={(e) => { e.stopPropagation(); saveExtractedMenuItems(); }} style={{ flex: 2, padding: "11px", minWidth: "180px", backgroundColor: uploadSaveLoading ? d.border : accent, color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: uploadSaveLoading ? "wait" : "pointer" }}>
-                                        {uploadSaveLoading ? "Saving..." : "Save All to Menu"}
-                                    </button>
+                                {note && <div className="dx-ticket-note" style={{ margin: 0 }}><small>Customer note</small>{note}</div>}
+                                <dl className="dx-dl">
+                                    <dt>{o.delivery_type === "pickup" ? "Pickup" : "Delivery to"}</dt>
+                                    <dd>{o.delivery_type === "pickup" ? "Customer collects from you" : (o.delivery_address || "No address given")}</dd>
+                                    <dt>WhatsApp</dt><dd className="num">{phoneOf(o) || "—"}</dd>
+                                    {callDisplay && <><dt>Call on</dt><dd><a className="dx-link num" href={"tel:" + callDisplay}>{callDisplay}</a></dd></>}
+                                    {o.momo_number && <><dt>MoMo number</dt><dd className="num">{o.momo_number}</dd></>}
+                                    <dt>Payment</dt>
+                                    <dd>{o.payment_method === "momo" ? "MoMo" : o.delivery_type === "pickup" ? "Cash on pickup" : "Cash on delivery"}</dd>
+                                </dl>
+                                {o.payment_method === 'manual_momo' && o.payment_screenshot_url && (
+                                    <div className="dx-field">
+                                        <span className="dx-label">Payment screenshot</span>
+                                        <a href={o.payment_screenshot_url} target="_blank" rel="noopener noreferrer">
+                                            <img src={o.payment_screenshot_url} alt="Customer's payment screenshot" style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 10, border: "1px solid var(--line)" }} />
+                                        </a>
+                                    </div>
                                 )}
                             </div>
+                            {nextStep(o) && <div className="dx-sheet-foot">{renderActions(o, { size: "lg", block: true })}</div>}
                         </div>
                     </div>
-                )}
+                );
+            })()}
 
-                {/* EDIT MENU MODAL */}
-                {showEditModal && editItem && (
-                    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backdropFilter: "blur(4px)" }} onClick={() => setShowEditModal(false)}>
-                        <div style={{ backgroundColor: d.card, borderRadius: "18px", padding: "26px", width: "100%", maxWidth: "420px", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", border: `1px solid ${d.border}` }} onClick={e => e.stopPropagation()}>
-                            <h2 style={{ margin: "0 0 20px", fontSize: "16px", fontWeight: "700", color: d.text }}>Edit Item</h2>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <input value={editItem.item_name} onChange={e => setEditItem({ ...editItem, item_name: e.target.value })} placeholder="Item name" style={inp()} />
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                    <input value={editItem.item_price} onChange={e => setEditItem({ ...editItem, item_price: e.target.value })} placeholder="Price (GHS)" type="number" style={inp()} />
-                                    <input value={editItem.category || ""} onChange={e => setEditItem({ ...editItem, category: e.target.value })} list="menu-sections" placeholder="Section (e.g. Main, Drinks)" style={inp()} />
-                                </div>
-                                <textarea value={editItem.item_description} onChange={e => setEditItem({ ...editItem, item_description: e.target.value })} placeholder="Description..." style={inp({ height: "80px", resize: "none" })} />
+            {/* CUSTOMER DETAIL */}
+            {selectedCustomer && (() => {
+                const customerOrders = orders
+                    .filter(o => phoneOf(o) === selectedCustomer.phone)
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                const first = customerOrders[customerOrders.length - 1];
+                return (
+                    <div className="dx-overlay" onClick={() => setSelectedCustomer(null)}>
+                        <div className="dx-sheet" role="dialog" aria-modal="true" aria-label="Customer details" onClick={e => e.stopPropagation()}>
+                            <div className="dx-sheet-head">
                                 <div>
-                                    <label style={{ fontSize: "11px", color: d.muted, fontWeight: "600" }}>Item Photo (optional)</label>
-                                    {editItem.image_url && !editItemImage && (
-                                        <>
-                                            <img src={editItem.image_url} alt="Current" style={{ display: "block", width: "100%", height: "80px", objectFit: "cover", borderRadius: "6px", margin: "5px 0" }} />
-                                            <button onClick={async () => {
+                                    <p className="dx-crumb num" style={{ margin: 0 }}>{selectedCustomer.phone}</p>
+                                    <h2 className="dx-title-sm" style={{ marginTop: 4 }}>{selectedCustomer.name || "Customer"}</h2>
+                                </div>
+                                <button type="button" className="dx-icon-btn" aria-label="Close" onClick={() => setSelectedCustomer(null)}><Icon name="close" /></button>
+                            </div>
+                            <div className="dx-sheet-body">
+                                <div className="dx-kpis" style={{ "--cols": 3 }}>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Orders</p><p className="dx-kpi-value">{selectedCustomer.orders}</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Paid</p><p className="dx-kpi-value"><small>GHS</small>{money(selectedCustomer.revenue)}</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Customer since</p><p className="dx-kpi-value" style={{ fontSize: 17 }}>{first ? new Date(first.created_at).toLocaleDateString("en-GH", { day: "numeric", month: "short" }) : "—"}</p></div>
+                                </div>
+                                <div className="dx-row">
+                                    <a className="dx-btn is-sm" href={"https://wa.me/" + selectedCustomer.phone.replace(/\D/g, "")} target="_blank" rel="noopener noreferrer"><Icon name="external" size={15} />Message on WhatsApp</a>
+                                </div>
+                                <div>
+                                    <h3 className="dx-section-title">Order history</h3>
+                                    <div className="dx-panel dx-list">
+                                        {customerOrders.slice(0, 8).map(o => (
+                                            <button type="button" key={o.id} className="dx-list-row" onClick={() => { setSelectedCustomer(null); setSelectedOrder(o); }}>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div className="truncate" style={{ fontWeight: 550 }}>{itemsShort(o)}</div>
+                                                    <div className="dx-cell-sub">{new Date(o.created_at).toLocaleDateString("en-GH", { day: "numeric", month: "short" })} · {statusLabel(o)}</div>
+                                                </div>
+                                                <span className="dx-price">GHS {money(o.total_amount)}</span>
+                                            </button>
+                                        ))}
+                                        {customerOrders.length === 0 && <div className="dx-empty"><p>No orders found.</p></div>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* ADD / EDIT MENU ITEM */}
+            {(showAddModal || (showEditModal && editItem)) && (() => {
+                const isEdit = !showAddModal;
+                const item = isEdit ? editItem : newItem;
+                const set = patch => isEdit ? setEditItem({ ...editItem, ...patch }) : setNewItem({ ...newItem, ...patch });
+                const close = () => { if (isEdit) { setShowEditModal(false); setEditItem(null); } else setShowAddModal(false); };
+                const file = isEdit ? editItemImage : newItemImage;
+                return (
+                    <div className="dx-overlay" onClick={close}>
+                        <form className="dx-sheet" role="dialog" aria-modal="true" aria-label={isEdit ? "Edit item" : "Add item"} onClick={e => e.stopPropagation()}
+                            onSubmit={e => { e.preventDefault(); isEdit ? saveEditItem() : addMenuItem(); }}>
+                            <div className="dx-sheet-head">
+                                <h2 className="dx-title-sm">{isEdit ? "Edit item" : "Add an item"}</h2>
+                                <button type="button" className="dx-icon-btn" aria-label="Close" onClick={close}><Icon name="close" /></button>
+                            </div>
+                            <div className="dx-sheet-body">
+                                <label className="dx-field"><span className="dx-label">Name</span>
+                                    <input className="dx-input" required value={item.item_name || ""} onChange={e => set({ item_name: e.target.value })} placeholder="e.g. Jollof rice with chicken" /></label>
+                                <div className="dx-form-grid">
+                                    <label className="dx-field"><span className="dx-label">Price (GHS)</span>
+                                        <input className="dx-input num" required type="number" min="0" step="0.5" inputMode="decimal" value={item.item_price ?? ""} onChange={e => set({ item_price: e.target.value })} placeholder="45" /></label>
+                                    <label className="dx-field"><span className="dx-label">Section</span>
+                                        <input className="dx-input" list="menu-sections" value={item.category || ""} onChange={e => set({ category: e.target.value })} placeholder="Main, Drinks…" />
+                                        <datalist id="menu-sections">{menuSections.map(c => <option key={c} value={c} />)}</datalist></label>
+                                </div>
+                                <label className="dx-field"><span className="dx-label">Description <span className="faint" style={{ fontWeight: 400 }}>(optional)</span></span>
+                                    <textarea className="dx-textarea" value={item.item_description || ""} onChange={e => set({ item_description: e.target.value })} placeholder="What's in it. The bot uses this to answer questions, e.g. about pepper or allergies." /></label>
+                                <div className="dx-field">
+                                    <span className="dx-label">Photo <span className="faint" style={{ fontWeight: 400 }}>(optional)</span></span>
+                                    {isEdit && editItem.image_url && !editItemImage && (
+                                        <div className="dx-row">
+                                            <img src={editItem.image_url} alt="" className="dx-thumb" />
+                                            <button type="button" className="dx-btn is-danger is-sm" onClick={async () => {
                                                 try {
                                                     await supabase.from('menus').update({ image_url: null }).eq('id', editItem.id);
                                                     setEditItem({ ...editItem, image_url: null });
                                                     addNotif("Photo removed", "success");
                                                 } catch {
-                                                    addNotif("Failed to remove photo", "error");
+                                                    addNotif("Couldn't remove the photo", "error");
                                                 }
-                                            }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-                                                Remove Photo
-                                            </button>
-                                        </>
+                                            }}>Remove photo</button>
+                                        </div>
                                     )}
-                                    <input type="file" accept="image/*" onChange={e => setEditItemImage(e.target.files?.[0] || null)}
-                                        style={{ marginTop: "5px", fontSize: "12px", color: d.muted, width: "100%" }} />
-                                    {editItemImage && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ {editItemImage.name}</p>}
-                                </div>
-                                <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
-                                    <button onClick={() => { setShowEditModal(false); setEditItem(null); }} style={{ flex: 1, padding: "11px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "9px", cursor: "pointer", fontWeight: "600", color: d.muted, fontSize: "13px" }}>Cancel</button>
-                                    <button onClick={saveEditItem} style={{ flex: 2, padding: "11px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "9px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>Save Changes</button>
+                                    <label className="dx-btn is-sm" style={{ alignSelf: "flex-start" }}>
+                                        <Icon name="upload" size={15} />{file ? "Choose another photo" : "Choose photo"}
+                                        <input type="file" accept="image/*" className="sr-only" onChange={e => (isEdit ? setEditItemImage : setNewItemImage)(e.target.files?.[0] || null)} />
+                                    </label>
+                                    {file && <p className="dx-hint accent-text">Selected: {file.name}</p>}
                                 </div>
                             </div>
-                        </div>
+                            <div className="dx-sheet-foot">
+                                <button type="button" className="dx-btn" onClick={close}>Cancel</button>
+                                <button type="submit" className="dx-btn is-primary">{isEdit ? "Save changes" : "Add item"}</button>
+                            </div>
+                        </form>
                     </div>
-                )}
+                );
+            })()}
 
-                {/* SIDEBAR */}
-                <aside style={{ width: sidebarW, backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 100, transition: "width 0.2s ease", overflow: "hidden" }}>
-                    <div style={{ padding: sidebarCollapsed ? "18px 0" : "18px 14px", display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "space-between", borderBottom: `1px solid ${d.border}`, flexShrink: 0 }}>
-                        {!sidebarCollapsed && <div style={{ fontSize: "15px", fontWeight: "800", color: d.text }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>}
-                        <button type="button" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed(prev => !prev)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.muted, flexShrink: 0 }}>
-                            {sidebarCollapsed
-                                ? <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden><polyline points="9 18 15 12 9 6" /></svg>
-                                : <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden><polyline points="15 18 9 12 15 6" /></svg>}
-                        </button>
-                    </div>
-                    <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px", overflowY: "auto" }}>
-                        {navItems.map(item => {
-                            const isActive = activePage === item.id;
-                            return (
-                                <button key={item.id} onClick={() => { setActivePage(item.id); if (item.id === "pending") setActiveTab("all"); }}
-                                    title={sidebarCollapsed ? item.label : ""}
-                                    style={{ display: "flex", alignItems: "center", gap: "9px", padding: sidebarCollapsed ? "10px" : "10px 11px", borderRadius: "8px", border: "none", cursor: "pointer", textAlign: "left", fontWeight: "600", fontSize: "12px", transition: "all 0.12s", backgroundColor: isActive ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : "transparent", color: isActive ? "#22c55e" : d.muted, justifyContent: sidebarCollapsed ? "center" : "flex-start", position: "relative" }}>
-                                    <span style={{ flexShrink: 0, color: isActive ? "#22c55e" : d.muted }}>{item.icon}</span>
-                                    {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
-                                    {item.badge > 0 && !sidebarCollapsed && <span style={{ backgroundColor: "#dc2626", color: "white", fontSize: "10px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800", animation: "pulse 2s infinite" }}>{item.badge}</span>}
-                                    {item.badge > 0 && sidebarCollapsed && <span style={{ position: "absolute", top: "5px", right: "5px", backgroundColor: "#dc2626", color: "white", fontSize: "8px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800" }}>{item.badge}</span>}
-                                </button>
-                            );
-                        })}
-                    </nav>
-                    {!sidebarCollapsed && (
-                        <div style={{ padding: "10px 10px 6px", borderTop: `1px solid ${d.border}`, flexShrink: 0 }}>
-                            <div style={{ backgroundColor: d.bg3, borderRadius: "9px", padding: "11px", border: `1px solid ${d.border}`, marginBottom: "9px" }}>
-                                <p style={{ margin: "0 0 2px", fontSize: "9px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Revenue</p>
-                                <p style={{ margin: "0 0 1px", fontSize: "17px", fontWeight: "800", color: "#16a34a", lineHeight: 1 }}>GHS {stats.revenue.toFixed(2)}</p>
-                                <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>GHS {stats.unpaidRevenue.toFixed(2)} pending</p>
-                                <div style={{ marginTop: "6px", display: "flex", alignItems: "center", gap: "5px" }}>
-                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: settings.is_open ? "#22c55e" : "#ef4444" }} />
-                                    <span style={{ fontSize: "10px", color: settings.is_open ? "#16a34a" : "#dc2626", fontWeight: "700" }}>{settings.is_open ? "Open" : "Closed"}</span>
-                                </div>
+            {/* UPLOAD MENU */}
+            {showUploadMenuModal && (
+                <div className="dx-overlay" onClick={closeUploadMenuModal}>
+                    <div className="dx-sheet is-wide" role="dialog" aria-modal="true" aria-label="Upload menu" onClick={e => e.stopPropagation()}>
+                        <div className="dx-sheet-head">
+                            <div>
+                                <h2 className="dx-title-sm">Upload your menu</h2>
+                                <p className="dx-sub" style={{ marginTop: 4 }}>A photo or PDF of your menu. We read the items for you; check them before saving.</p>
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", padding: "0 2px" }}>
-                                <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "13px", color: "white", flexShrink: 0, overflow: "hidden" }}>
-                                    {profilePicture
-                                        ? <img src={profilePicture} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                        : (businessName || user.email || "?").charAt(0).toUpperCase()}
+                            <button type="button" className="dx-icon-btn" aria-label="Close" onClick={closeUploadMenuModal}><Icon name="close" /></button>
+                        </div>
+                        <div className="dx-sheet-body">
+                            <input ref={menuFileInputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" style={{ display: "none" }}
+                                onChange={e => { pickUploadMenuFile(e.target.files?.[0]); e.target.value = ""; }} />
+                            {!uploadMenuFile ? (
+                                <div className={"dx-drop" + (uploadMenuDragActive ? " is-active" : "")} role="button" tabIndex={0}
+                                    onKeyDown={e => { if (e.key === "Enter" || e.key === " ") menuFileInputRef.current?.click(); }}
+                                    onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(true); }}
+                                    onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(false); }}
+                                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDrop={e => { e.preventDefault(); e.stopPropagation(); setUploadMenuDragActive(false); pickUploadMenuFile(e.dataTransfer.files?.[0]); }}
+                                    onClick={() => menuFileInputRef.current?.click()}>
+                                    <Icon name="upload" size={22} />
+                                    <p style={{ margin: "8px 0 2px", fontWeight: 600 }}>Drop a photo or PDF here</p>
+                                    <p className="dx-hint">or tap to choose · JPG, PNG, WEBP or PDF · up to 10 MB</p>
                                 </div>
-                                <div style={{ overflow: "hidden" }}>
-                                    <p style={{ margin: 0, fontSize: "12px", fontWeight: "700", color: d.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{businessName || user.email?.split("@")[0]}</p>
-                                    <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>Vendor</p>
+                            ) : (
+                                <div className="dx-row" style={{ alignItems: "flex-start", gap: 14 }}>
+                                    {uploadImagePreviewUrl
+                                        ? <img alt="Menu preview" src={uploadImagePreviewUrl} style={{ width: 120, maxHeight: 160, objectFit: "cover", borderRadius: 10, border: "1px solid var(--line)" }} />
+                                        : <div className="dx-thumb" style={{ width: 120, height: 90, fontSize: 13, fontFamily: "var(--font)" }}>PDF</div>}
+                                    <div className="dx-stack" style={{ gap: 8, minWidth: 0 }}>
+                                        <span className="truncate" style={{ fontWeight: 600 }}>{uploadMenuFile.name}</span>
+                                        <button type="button" className="dx-btn is-sm" onClick={() => menuFileInputRef.current?.click()}>Choose another file</button>
+                                    </div>
                                 </div>
+                            )}
+                            {uploadMenuError && <p className="dx-msg is-error" role="alert">{uploadMenuError}</p>}
+                            {uploadExtractLoading && (
+                                <div className="dx-stack" style={{ gap: 8 }} aria-live="polite">
+                                    <p className="dx-hint">Reading your menu…</p>
+                                    {[0, 1, 2, 3].map(i => <div key={i} className="dx-skel" style={{ height: 38 }} />)}
+                                </div>
+                            )}
+                            {!uploadExtractLoading && uploadExtracted.length > 0 && (
+                                <div className="dx-stack" style={{ gap: 10 }}>
+                                    <div className="dx-spread">
+                                        <p className="dx-label" style={{ margin: 0 }}>{uploadExtracted.length} items found. Edit anything that's wrong.</p>
+                                        <button type="button" className="dx-btn is-ghost is-sm" onClick={() => { setUploadExtracted([]); setUploadMenuError(""); }}>Read again</button>
+                                    </div>
+                                    <div className="dx-panel dx-table-wrap" style={{ maxHeight: 360 }}>
+                                        <table className="dx-table" style={{ minWidth: 640 }}>
+                                            <thead><tr><th>Name</th><th style={{ width: 110 }}>Price (GHS)</th><th style={{ width: 140 }}>Section</th><th>Description</th></tr></thead>
+                                            <tbody>
+                                                {uploadExtracted.map((row, idx) => (
+                                                    <tr key={row.rowKey || idx}>
+                                                        <td style={{ padding: 6 }}><input className="dx-input" aria-label="Name" value={row.name ?? ""} onChange={e => patchUploadExtractedRow(idx, { name: e.target.value })} /></td>
+                                                        <td style={{ padding: 6 }}><input className="dx-input num" aria-label="Price" type="number" step="0.01" min="0" value={row.price ?? ""} onChange={e => patchUploadExtractedRow(idx, { price: e.target.value === "" ? "" : parseFloat(e.target.value) })} /></td>
+                                                        <td style={{ padding: 6 }}><input className="dx-input" aria-label="Section" value={row.category ?? ""} onChange={e => patchUploadExtractedRow(idx, { category: e.target.value })} /></td>
+                                                        <td style={{ padding: 6 }}><input className="dx-input" aria-label="Description" value={row.description ?? ""} onChange={e => patchUploadExtractedRow(idx, { description: e.target.value })} /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="dx-sheet-foot">
+                            <button type="button" className="dx-btn" onClick={closeUploadMenuModal}>Cancel</button>
+                            {uploadExtracted.length > 0
+                                ? <button type="button" className="dx-btn is-primary" disabled={uploadSaveLoading} onClick={saveExtractedMenuItems}>{uploadSaveLoading ? "Saving…" : `Add ${uploadExtracted.length} items to menu`}</button>
+                                : <button type="button" className="dx-btn is-primary" disabled={!uploadMenuFile || uploadExtractLoading} onClick={extractMenuFromUpload}>{uploadExtractLoading ? "Reading…" : "Read menu"}</button>}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className={"dx-shell" + (sidebarCollapsed ? " is-collapsed" : "")}>
+                {/* SIDEBAR (desktop) */}
+                <aside className="dx-side" aria-label="Main navigation">
+                    <div className="dx-brand">
+                        {sidebarCollapsed ? <div className="dx-wordmark">D<i>.</i></div> : <Brand sub="Vendor" />}
+                        {!sidebarCollapsed && (
+                            <button type="button" className="dx-icon-btn" aria-label="Collapse sidebar" onClick={() => setSidebarCollapsed(true)}><Icon name="sidebar" size={17} /></button>
+                        )}
+                    </div>
+                    {sidebarCollapsed && (
+                        <button type="button" className="dx-icon-btn" style={{ margin: "0 auto 10px" }} aria-label="Expand sidebar" onClick={() => setSidebarCollapsed(false)}><Icon name="sidebar" size={17} /></button>
+                    )}
+                    <nav className="dx-nav">
+                        {navItems.map(item => (
+                            <button key={item.id} type="button" className="dx-nav-item" aria-current={activePage === item.id ? "page" : undefined}
+                                title={sidebarCollapsed ? item.label : undefined} onClick={() => goTo(item.id)}>
+                                <Icon name={item.icon} />
+                                <span>{item.label}</span>
+                                {item.badge > 0 && !sidebarCollapsed && <span className="dx-count">{item.badge}</span>}
+                            </button>
+                        ))}
+                    </nav>
+                    <div className="dx-side-foot">
+                        <div className="dx-me">
+                            {avatar()}
+                            <div className="dx-hide-collapsed" style={{ minWidth: 0 }}>
+                                <div className="dx-me-name truncate">{shopName}</div>
+                                <div className="dx-me-sub truncate">{user.email}</div>
                             </div>
                         </div>
-                    )}
-                    <div style={{ padding: sidebarCollapsed ? "8px" : "0 10px 10px", flexShrink: 0 }}>
-                        <button onClick={handleLogout} title={sidebarCollapsed ? "Sign Out" : ""}
-                            style={{ width: "100%", backgroundColor: d.hover, color: d.muted, border: `1px solid ${d.border}`, padding: "8px", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "600", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
-                            onMouseEnter={e => { e.currentTarget.style.color = "#dc2626"; e.currentTarget.style.borderColor = "#fca5a5"; }}
-                            onMouseLeave={e => { e.currentTarget.style.color = d.muted; e.currentTarget.style.borderColor = d.border; }}>
-                            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                            {!sidebarCollapsed && "Sign Out"}
+                        <button type="button" className="dx-nav-item" onClick={handleLogout} title={sidebarCollapsed ? "Sign out" : undefined}>
+                            <Icon name="logout" /><span>Sign out</span>
                         </button>
                     </div>
                 </aside>
 
-                {/* MAIN */}
-                <main style={{ marginLeft: sidebarW, flex: 1, display: "flex", flexDirection: "column", minWidth: 0, transition: "margin-left 0.2s ease" }}>
-                    <header style={{ height: "58px", backgroundColor: d.bg2, borderBottom: `1px solid ${d.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px", position: "sticky", top: 0, zIndex: 50, flexShrink: 0 }}>
-                        <div>
-                            <h1 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: d.text }}>{{ overview: "Overview", pending: "Orders", customers: "Customers", menu: "Menu Manager", insights: "Insights", settings: "Settings" }[activePage]}</h1>
-                            <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                <main className="dx-main">
+                    <header className="dx-top">
+                        <div className="dx-row" style={{ flexWrap: "nowrap", minWidth: 0 }}>
+                            <div className="dx-show-phone dx-wordmark" style={{ fontSize: 22 }}>Delivagh<i>.</i></div>
+                            {statusPill}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {activePage === "menu" && <>
-                                <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#22c55e", color: "white", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "none", cursor: "pointer" }}>+ Add Item</button>
-                                <button onClick={() => setShowUploadMenuModal(true)} type="button" style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: dm ? "rgba(34,197,94,0.12)" : "#ecfdf5", color: "#166534", padding: "7px 14px", borderRadius: "8px", fontWeight: "600", fontSize: "12px", border: "1px solid #86efac", cursor: "pointer" }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
-                                    Upload menu
-                                </button>
-                            </>}
+                        <div className="dx-top-actions">
                             {stats.pending > 0 && (
-                                <button onClick={() => { setActivePage("pending"); setActiveTab("pending"); }} style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "#fef3c7", color: "#92400e", padding: "6px 12px", borderRadius: "8px", fontWeight: "700", fontSize: "11px", border: "1px solid #fde68a", cursor: "pointer" }}>
-                                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b", animation: "blink 1.2s infinite" }} />{stats.pending} pending
+                                <button type="button" className="dx-btn is-sm dx-hide-phone" onClick={() => goTo("overview")}>
+                                    <span className="dx-count">{stats.pending}</span>waiting
                                 </button>
                             )}
-                            {/* NOTIFICATION BELL */}
                             <div style={{ position: "relative" }}>
-                                <button type="button" title="Notifications" onClick={() => setShowNotifPanel(p => !p)} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", color: d.text }}>
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-                                    {unreadNotifs > 0 && <span style={{ position: "absolute", top: "4px", right: "4px", backgroundColor: "#dc2626", color: "white", fontSize: "8px", width: "14px", height: "14px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800" }}>{unreadNotifs > 9 ? "9+" : unreadNotifs}</span>}
+                                <button type="button" className="dx-icon-btn" aria-label="Notifications" aria-expanded={showNotifPanel} onClick={() => setShowNotifPanel(p => !p)}>
+                                    <Icon name="bell" />
+                                    {unreadNotifs > 0 && <span className="dx-dot" />}
                                 </button>
                                 {showNotifPanel && (
-                                    <div style={{ position: "absolute", top: "42px", right: 0, width: "320px", backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, boxShadow: "0 16px 48px rgba(0,0,0,0.2)", zIndex: 200, animation: "slideDown 0.2s ease", overflow: "hidden" }}>
-                                        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: d.text }}>Notifications</p>
-                                            <button onClick={() => { setNotifications([]); setShowNotifPanel(false); }} style={{ background: "none", border: "none", fontSize: "11px", color: d.muted, cursor: "pointer", fontWeight: "600" }}>Clear all</button>
+                                    <div className="dx-popover" role="dialog" aria-label="Notifications">
+                                        <div className="dx-panel-head" style={{ padding: "12px 16px" }}>
+                                            <p className="dx-panel-title">Notifications</p>
+                                            {notifications.length > 0 && <button type="button" className="dx-link" onClick={() => { setNotifications([]); setShowNotifPanel(false); }}>Clear</button>}
                                         </div>
-                                        <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                                        <div style={{ maxHeight: 340, overflowY: "auto" }}>
                                             {notifications.length === 0
-                                                ? <p style={{ padding: "24px", textAlign: "center", color: d.muted, fontSize: "13px", margin: 0 }}>No notifications yet</p>
+                                                ? <div className="dx-empty" style={{ padding: 28 }}><p>Nothing yet. Order updates and new orders show up here.</p></div>
                                                 : notifications.map(n => (
-                                                    <div key={n.id} style={{ padding: "11px 16px", borderBottom: `1px solid ${d.border}`, display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                                                        <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: d.text }}>{n.type === "new"
-                                                            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-                                                            : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6L9 17l-5-5" /></svg>}</span>
-                                                        <div>
-                                                            <p style={{ margin: "0 0 2px", fontSize: "12px", fontWeight: "600", color: d.text }}>{n.message}</p>
-                                                            <p style={{ margin: 0, fontSize: "10px", color: d.muted }}>{n.time.toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" })}</p>
+                                                    <div key={n.id} className="dx-list-row" style={{ alignItems: "flex-start" }}>
+                                                        <span className={n.type === "error" ? "danger-text" : n.type === "new" ? "attn-text" : "accent-text"} style={{ marginTop: 2 }}>
+                                                            <Icon name={n.type === "error" ? "close" : n.type === "new" ? "bell" : "check"} size={16} />
+                                                        </span>
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <div style={{ fontSize: 13.5, fontWeight: 500 }}>{n.message}</div>
+                                                            <div className="dx-cell-sub">{n.time.toLocaleTimeString("en-GH", { hour: "2-digit", minute: "2-digit" })}</div>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1921,128 +1841,109 @@ export default function App() {
                                     </div>
                                 )}
                             </div>
-                            <button type="button" title={darkMode ? "Light mode" : "Dark mode"} onClick={toggleDark} style={{ width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.hover, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: d.text }}>
-                                {darkMode
-                                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
-                                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>}
+                            <button type="button" className="dx-icon-btn" aria-label={darkMode ? "Use light theme" : "Use dark theme"} onClick={toggleDark}>
+                                <Icon name={darkMode ? "sun" : "moon"} />
                             </button>
                         </div>
                     </header>
 
-                    <div style={{ padding: "20px 22px", flex: 1, overflowY: "auto" }}>
+                    <div className="dx-content">
 
-                        {/* OVERVIEW */}
+                        {/* TODAY */}
                         {activePage === "overview" && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
-                                    {[
-                                        { label: "Total Orders", value: stats.total, sub: "All time" },
-                                        { label: "Pending", value: stats.pending, sub: "Need action", accent: stats.pending > 0 },
-                                        { label: "Delivered Today", value: todayOrders.filter(o => o.status === "delivered").length, sub: "Completed" },
-                                        { label: "Today's Orders", value: todayOrders.length, sub: "Since midnight" },
-                                    ].map((s, i) => (
-                                        <div key={i} style={{ backgroundColor: d.card, border: `1px solid ${s.accent ? "#fde68a" : d.border}`, borderRadius: "12px", padding: "16px", transition: "transform 0.15s" }}
-                                            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-                                            onMouseLeave={e => e.currentTarget.style.transform = ""}>
-                                            <p style={{ margin: "0 0 6px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
-                                            <p style={{ margin: "0 0 3px", fontSize: "28px", fontWeight: "800", color: s.accent ? "#d97706" : d.text, lineHeight: 1 }}>{s.value}</p>
-                                            <p style={{ margin: 0, fontSize: "11px", color: s.accent ? "#d97706" : d.muted }}>{s.sub}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
-                                    {[
-                                        { label: "Total Revenue", value: "GHS " + stats.revenue.toFixed(2), c: "#16a34a", bg: dm ? "rgba(22,163,74,0.07)" : "#f0fdf4", br: dm ? "rgba(22,163,74,0.18)" : "#bbf7d0" },
-                                        { label: "Today's Revenue", value: "GHS " + todayRevenue.toFixed(2), c: "#22c55e", bg: dm ? "rgba(34,197,94,0.07)" : "#ecfdf5", br: dm ? "rgba(34,197,94,0.18)" : "#86efac" },
-                                        { label: "Pending Payment", value: "GHS " + stats.unpaidRevenue.toFixed(2), c: "#d97706", bg: dm ? "rgba(217,119,6,0.07)" : "#fffbeb", br: dm ? "rgba(217,119,6,0.18)" : "#fde68a" },
-                                    ].map((s, i) => (
-                                        <div key={i} style={{ backgroundColor: s.bg, border: `1px solid ${s.br}`, borderRadius: "12px", padding: "16px" }}>
-                                            <p style={{ margin: "0 0 5px", fontSize: "10px", fontWeight: "600", color: s.c, textTransform: "uppercase", letterSpacing: "0.08em", opacity: 0.8 }}>{s.label}</p>
-                                            <p style={{ margin: 0, fontSize: "22px", fontWeight: "800", color: s.c, lineHeight: 1 }}>{s.value}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                {/* SHARE & INVITE */}
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, padding: "16px" }}>
-                                    <p style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: "700", color: d.text }}>Share with Customers</p>
-                                    <p style={{ margin: "0 0 12px", fontSize: "12px", color: d.muted, lineHeight: "1.5" }}>Send this link to customers — they tap it and WhatsApp opens ready to order</p>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                                        <code style={{ flex: "1 1 200px", padding: "9px 13px", backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "8px", fontSize: "13px", color: "#22c55e", fontFamily: "monospace", wordBreak: "break-all", userSelect: "all" }}>
-                                            {DELIVAGH_WA_LINK}
-                                        </code>
-                                        <button
-                                            onClick={() => { navigator.clipboard.writeText(DELIVAGH_WA_LINK); setWaLinkCopied(true); setTimeout(() => setWaLinkCopied(false), 2000); }}
-                                            style={{ padding: "9px 16px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-                                        >
-                                            {waLinkCopied ? "Copied! ✓" : "Copy Link"}
-                                        </button>
-                                        <button
-                                            onClick={() => window.open(DELIVAGH_WA_LINK, "_blank")}
-                                            style={{ padding: "9px 16px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.30)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-                                        >
-                                            Open in WhatsApp
-                                        </button>
+                            <div className="dx-stack" style={{ gap: 28 }}>
+                                <div className="dx-page-head" style={{ marginBottom: 0 }}>
+                                    <div>
+                                        <p className="dx-crumb" style={{ margin: 0 }}>{todayLong}</p>
+                                        <h1 className="dx-title" style={{ marginTop: 6 }}>{greeting}, {shopName}</h1>
+                                        <p className="dx-sub">
+                                            {waitingOrders.length > 0
+                                                ? `${waitingOrders.length} ${waitingOrders.length === 1 ? "order is" : "orders are"} waiting for you to accept.`
+                                                : settings.is_open ? "You're open and taking orders on WhatsApp." : "Your shop is closed. Customers are told you're closed."}
+                                        </p>
                                     </div>
                                 </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "14px" }}>
-                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
-                                        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Orders</p>
-                                            <button onClick={() => setActivePage("pending")} style={{ fontSize: "11px", fontWeight: "600", color: "#22c55e", background: "none", border: "none", cursor: "pointer" }}>View all</button>
-                                        </div>
-                                        <div style={{ overflowX: "auto" }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "480px" }}>
-                                                <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                                    {["Order", "Items", "Total", "Payment", "Status", "Action"].map(h => (
-                                                        <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted }}>{h}</th>
-                                                    ))}
-                                                </tr></thead>
-                                                <tbody>
-                                                    {orders.slice(0, 8).map(order => (
-                                                        <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
-                                                            <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
-                                                            <td style={{ padding: "10px 14px", fontSize: "12px", color: d.text, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                            <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
-                                                            <td style={{ padding: "10px 14px" }}><PaymentBadge status={order.payment_status} orderId={order.id} showMarkPaid={false} /></td>
-                                                            <td style={{ padding: "10px 14px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
-                                                            <td style={{ padding: "10px 14px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+
+                                <div className="dx-kpis">
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Orders today</p><p className="dx-kpi-value">{todayOrders.length}</p>
+                                        <p className="dx-kpi-note">{todayOrders.filter(o => o.delivery_type === "pickup").length} pickup · {todayOrders.filter(o => o.delivery_type === "delivery").length} delivery</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Paid today</p><p className="dx-kpi-value"><small>GHS</small>{money(todayRevenue)}</p>
+                                        <p className="dx-kpi-note">GHS {money(stats.revenue)} all time</p></div>
+                                    <div className={"dx-kpi" + (stats.unpaidRevenue > 0 ? " is-attn" : "")}><p className="dx-kpi-label">Not paid yet</p><p className="dx-kpi-value"><small>GHS</small>{money(stats.unpaidRevenue)}</p>
+                                        <p className="dx-kpi-note">Accepted orders awaiting payment</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Delivered today</p><p className="dx-kpi-value">{todayOrders.filter(o => o.status === "delivered").length}</p>
+                                        <p className="dx-kpi-note">{activeOrders.length} in progress now</p></div>
+                                </div>
+
+                                <section aria-labelledby="waiting-h">
+                                    <div className="dx-spread" style={{ marginBottom: 12 }}>
+                                        <h2 id="waiting-h" className="dx-title-sm">Waiting for you {waitingOrders.length > 0 && <span className="dx-count" style={{ verticalAlign: "4px", marginLeft: 6 }}>{waitingOrders.length}</span>}</h2>
+                                        {waitingOrders.length > 0 && <span className="dx-hint dx-hide-phone">Oldest first · amber after 5 min, red after 10</span>}
                                     </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                        <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, padding: "16px" }}>
-                                            <p style={{ margin: "0 0 10px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Today</p>
-                                            <p style={{ margin: "0 0 12px", fontSize: "30px", fontWeight: "800", color: d.text, lineHeight: 1 }}>{todayOrders.length} <span style={{ fontSize: "12px", color: d.muted, fontWeight: "500" }}>orders</span></p>
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                                                {[{ label: "Pickup", value: todayOrders.filter(o => o.delivery_type === "pickup").length }, { label: "Delivery", value: todayOrders.filter(o => o.delivery_type === "delivery").length }].map((s, i) => (
-                                                    <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "10px", border: `1px solid ${d.border}` }}>
-                                                        <p style={{ margin: "0 0 2px", fontSize: "10px", color: d.muted, fontWeight: "600" }}>{s.label}</p>
-                                                        <p style={{ margin: 0, fontSize: "20px", fontWeight: "800", color: d.text }}>{s.value}</p>
+                                    {loading ? (
+                                        <div className="dx-tickets">{[0, 1].map(i => <div key={i} className="dx-skel" style={{ height: 210, borderRadius: 12 }} />)}</div>
+                                    ) : waitingOrders.length === 0 ? (
+                                        <div className="dx-panel dx-empty">
+                                            <h3>All caught up</h3>
+                                            <p>New orders appear here with a chime. Keep this tab open, or turn the sound up on your phone.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="dx-tickets">{waitingOrders.map(renderTicket)}</div>
+                                    )}
+                                </section>
+
+                                <div className="dx-grid-2">
+                                    <section className="dx-panel" aria-labelledby="kitchen-h">
+                                        <div className="dx-panel-head">
+                                            <h2 id="kitchen-h" className="dx-panel-title">In progress</h2>
+                                            <button type="button" className="dx-link" onClick={() => { setActivePage("pending"); setActiveTab("active"); }}>All orders</button>
+                                        </div>
+                                        {activeOrders.length === 0 ? (
+                                            <div className="dx-empty" style={{ padding: 28 }}><p>Nothing being prepared right now.</p></div>
+                                        ) : (
+                                            <div className="dx-list">
+                                                {activeOrders.map(o => (
+                                                    <div key={o.id} className="dx-list-row" role="button" tabIndex={0} style={{ cursor: "pointer" }}
+                                                        onClick={() => setSelectedOrder(o)} onKeyDown={e => { if (e.key === "Enter") setSelectedOrder(o); }}>
+                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                            <div className="dx-row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                                                                <span className="truncate" style={{ fontWeight: 600 }}>{custName(o)}</span>
+                                                                {noteOf(o) && <span className="dx-note-flag" title={noteOf(o)}>· note</span>}
+                                                            </div>
+                                                            <div className="dx-items-line truncate">{itemsShort(o)}</div>
+                                                        </div>
+                                                        <span className="dx-hide-phone">{renderProgress(o)}</span>
+                                                        {renderActions(o)}
                                                     </div>
                                                 ))}
                                             </div>
-                                        </div>
-                                        <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, padding: "16px" }}>
-                                            <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "700", color: d.text }}>Quick Actions</p>
-                                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "7px" }}>
-                                                {[
-                                                    { label: "Add Item", action: () => { setActivePage("menu"); setShowAddModal(true); } },
-                                                    { label: "Menu", action: () => setActivePage("menu") },
-                                                    { label: "Customers", action: () => setActivePage("customers") },
-                                                    { label: "Insights", action: () => setActivePage("insights") },
-                                                    { label: "Orders", action: () => setActivePage("pending") },
-                                                ].map(btn => (
-                                                    <button key={btn.label} onClick={btn.action} style={{ padding: "10px 6px", backgroundColor: d.bg3, border: `1px solid ${d.border}`, borderRadius: "8px", cursor: "pointer", fontSize: "11px", fontWeight: "600", color: d.muted }}
-                                                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.color = "#22c55e"; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.color = d.muted; }}>
-                                                        {btn.label}
+                                        )}
+                                    </section>
+                                    <div className="dx-stack">
+                                        <section className="dx-panel">
+                                            <div className="dx-panel-body dx-stack" style={{ gap: 12 }}>
+                                                <div>
+                                                    <h2 className="dx-panel-title">Your order link</h2>
+                                                    <p className="dx-hint" style={{ marginTop: 4 }}>Customers tap it and WhatsApp opens, ready to order. Put it on your status, flyers and Instagram bio.</p>
+                                                </div>
+                                                <div className="dx-share">
+                                                    <code>{DELIVAGH_WA_LINK}</code>
+                                                    <button type="button" className="dx-btn is-sm" onClick={() => { navigator.clipboard.writeText(DELIVAGH_WA_LINK); setWaLinkCopied(true); setTimeout(() => setWaLinkCopied(false), 2000); }}>
+                                                        <Icon name={waLinkCopied ? "check" : "copy"} size={15} />{waLinkCopied ? "Copied" : "Copy"}
                                                     </button>
-                                                ))}
+                                                    <a className="dx-btn is-sm is-ghost" href={DELIVAGH_WA_LINK} target="_blank" rel="noopener noreferrer"><Icon name="external" size={15} />Open</a>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </section>
+                                        <section className="dx-panel">
+                                            <div className="dx-panel-body dx-spread">
+                                                <div>
+                                                    <h2 className="dx-panel-title">{settings.is_open ? "Taking orders" : "Not taking orders"}</h2>
+                                                    <p className="dx-hint" style={{ marginTop: 4 }}>{hoursText ? `Opening hours ${hoursText}` : "No opening hours set"}</p>
+                                                </div>
+                                                {switchEl(settings.is_open, toggleShopOpen, "Shop open")}
+                                            </div>
+                                        </section>
                                     </div>
                                 </div>
                             </div>
@@ -2050,129 +1951,137 @@ export default function App() {
 
                         {/* ORDERS */}
                         {activePage === "pending" && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                <div style={{ display: "flex", gap: "7px", flexWrap: "wrap" }}>
-                                    {[{ id: "all", label: "All", count: orders.length }, { id: "pending", label: "Pending", count: stats.pending }, { id: "confirmed", label: "Confirmed", count: stats.confirmed }, { id: "delivered", label: "Delivered", count: stats.delivered }].map(tab => (
-                                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                                            style={{ padding: "7px 14px", borderRadius: "8px", border: `1px solid ${activeTab === tab.id ? "#22c55e" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: activeTab === tab.id ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : "transparent", color: activeTab === tab.id ? "#22c55e" : d.muted, display: "flex", alignItems: "center", gap: "6px" }}>
-                                            {tab.label}
-                                            <span style={{ backgroundColor: activeTab === tab.id ? "#22c55e" : d.border, color: activeTab === tab.id ? "white" : d.muted, borderRadius: "999px", padding: "1px 6px", fontSize: "10px", fontWeight: "700" }}>{tab.count}</span>
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Orders</h1>
+                                        <p className="dx-sub">Every order customers placed with your bot.</p>
+                                    </div>
+                                </div>
+                                <div className="dx-seg" role="group" aria-label="Filter orders" style={{ marginBottom: 14 }}>
+                                    {[
+                                        { id: "all", label: "All" },
+                                        { id: "pending", label: "New" },
+                                        { id: "active", label: "In progress" },
+                                        { id: "delivered", label: "Delivered" },
+                                        { id: "closed", label: "Cancelled" },
+                                    ].map(tab => (
+                                        <button key={tab.id} type="button" aria-pressed={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>
+                                            {tab.label}<span className="num">{orders.filter(ORDER_GROUPS[tab.id]).length}</span>
                                         </button>
                                     ))}
                                 </div>
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
-                                    {loading ? <div style={{ padding: "48px", textAlign: "center", color: d.muted, fontSize: "13px" }}>Loading orders...</div>
-                                        : filteredOrders.length === 0 ? (
-                                            <div style={{ padding: "64px", textAlign: "center" }}>
-                                                <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
-                                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
-                                                </div>
-                                                <p style={{ color: d.muted, fontSize: "14px", fontWeight: "600", margin: 0 }}>No orders here</p>
-                                            </div>
-                                        ) : (
-                                            <div style={{ overflowX: "auto" }}>
-                                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
-                                                    <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                                        {["Order", "Customer", "Items", "Total", "Notes", "Type", "Payment", "Status", "Time", "Action"].map(h => (
-                                                            <th key={h} style={{ padding: "10px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
-                                                        ))}
-                                                    </tr></thead>
+                                <div className="dx-panel">
+                                    {loading ? (
+                                        <div className="dx-panel-body dx-stack" style={{ gap: 10 }}>{[0, 1, 2, 3].map(i => <div key={i} className="dx-skel" style={{ height: 44 }} />)}</div>
+                                    ) : filteredOrders.length === 0 ? (
+                                        <div className="dx-empty"><h3>No orders here</h3><p>{activeTab === "all" ? "When a customer orders on WhatsApp it shows up here." : "Try another filter."}</p></div>
+                                    ) : (
+                                        <>
+                                            <div className="dx-table-wrap dx-hide-phone">
+                                                <table className="dx-table">
+                                                    <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th className="is-right">Total</th><th>Payment</th><th>Status</th><th><span className="sr-only">Action</span></th></tr></thead>
                                                     <tbody>
                                                         {(() => {
                                                             let lastDate = null;
-                                                            return filteredOrders.map(order => {
-                                                                const od = new Date(order.created_at).toDateString();
+                                                            return filteredOrders.map(o => {
+                                                                const od = new Date(o.created_at).toDateString();
                                                                 const isNew = od !== lastDate; lastDate = od;
-                                                                const isToday = od === new Date().toDateString();
-                                                                const isYest = od === new Date(Date.now() - 86400000).toDateString();
-                                                                const dl = isToday ? "Today" : isYest ? "Yesterday" : new Date(order.created_at).toLocaleDateString("en-GH", { weekday: "short", month: "short", day: "numeric" });
+                                                                const dl = od === new Date().toDateString() ? "Today" : od === new Date(Date.now() - 86400000).toDateString() ? "Yesterday"
+                                                                    : new Date(o.created_at).toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "short" });
                                                                 return (
-                                                                    <>
-                                                                        {isNew && <tr key={"d-" + od}><td colSpan="10" style={{ padding: "10px 13px 5px" }}><span style={{ fontSize: "10px", fontWeight: "700", backgroundColor: isToday ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.bg3, color: isToday ? "#22c55e" : d.muted, padding: "3px 10px", borderRadius: "5px" }}>{dl}</span></td></tr>}
-                                                                        <tr key={order.id} className="row-hover" onClick={() => setSelectedOrder(order)} style={{ borderTop: `1px solid ${d.border}` }}>
-                                                                            <td style={{ padding: "11px 13px", fontFamily: "monospace", fontSize: "11px", fontWeight: "700", color: d.muted }}>#{order.id.substring(0, 8).toUpperCase()}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.muted }}>{order.customer_name || order.customer_phone?.replace("whatsapp:", "")}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.items}</td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text, whiteSpace: "nowrap" }}>{order.total_amount ? "GHS " + parseFloat(order.total_amount).toFixed(2) : "—"}</td>
-                                                                            <td style={{ padding: "11px 13px", maxWidth: "110px" }}>
-                                                                                {order.notes ? <span title={order.notes} style={{ backgroundColor: dm ? "#2a1f0a" : "#fffbeb", color: "#d97706", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{order.notes}</span>
-                                                                                    : <span style={{ color: d.muted, fontSize: "12px" }}>—</span>}
+                                                                    <React.Fragment key={o.id}>
+                                                                        {isNew && <tr className="dx-group"><td colSpan="7">{dl}</td></tr>}
+                                                                        <tr className="is-clickable" onClick={() => setSelectedOrder(o)}>
+                                                                            <td><div className="mono">{shortId(o.id)}</div><div className="dx-cell-sub num">{timeOf(o.created_at)}</div></td>
+                                                                            <td><div className="dx-cell-main">{custName(o)}</div><div className="dx-cell-sub">{o.delivery_type === "pickup" ? "Pickup" : "Delivery"}</div></td>
+                                                                            <td style={{ maxWidth: 280 }}>
+                                                                                <div className="truncate">{itemsShort(o)}</div>
+                                                                                {noteOf(o) && <div className="dx-note-flag truncate" title={noteOf(o)}>Note: {noteOf(o)}</div>}
                                                                             </td>
-                                                                            <td style={{ padding: "11px 13px" }}>
-                                                                                <span style={{ backgroundColor: order.delivery_type === "pickup" ? (dm ? "rgba(124,58,237,0.12)" : "#ede9fe") : (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5"), color: order.delivery_type === "pickup" ? "#7c3aed" : "#22c55e", padding: "3px 8px", borderRadius: "5px", fontSize: "10px", fontWeight: "700" }}>
-                                                                                    {order.delivery_type === "pickup" ? "Pickup" : "Delivery"}
-                                                                                </span>
-                                                                            </td>
-                                                                            <td style={{ padding: "11px 13px" }}><PaymentBadge status={order.payment_status} orderId={order.id} showMarkPaid={false} /></td>
-                                                                            <td style={{ padding: "11px 13px" }}><StatusBadge status={order.status} cancelledBy={order.cancelled_by} /></td>
-                                                                            <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(order.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit" })}</td>
-                                                                            <td style={{ padding: "11px 13px" }} onClick={e => e.stopPropagation()}>{getNextAction(order.id)}</td>
+                                                                            <td className="is-right dx-price">{money(o.total_amount)}</td>
+                                                                            <td>{renderPay(o)}</td>
+                                                                            <td>{renderProgress(o)}</td>
+                                                                            <td className="is-right">{renderActions(o)}</td>
                                                                         </tr>
-                                                                    </>
+                                                                    </React.Fragment>
                                                                 );
                                                             });
                                                         })()}
                                                     </tbody>
                                                 </table>
                                             </div>
-                                        )}
+                                            <div className="dx-list dx-show-phone">
+                                                {filteredOrders.map(o => (
+                                                    <div key={o.id} className="dx-list-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10, cursor: "pointer" }} onClick={() => setSelectedOrder(o)}>
+                                                        <div className="dx-spread" style={{ alignItems: "flex-start" }}>
+                                                            <div style={{ minWidth: 0 }}>
+                                                                <div style={{ fontWeight: 600 }} className="truncate">{custName(o)}</div>
+                                                                <div className="dx-cell-sub"><span className="mono">{shortId(o.id)}</span> · {agoText(o.created_at)} · {o.delivery_type === "pickup" ? "Pickup" : "Delivery"}</div>
+                                                            </div>
+                                                            <span className="dx-price">GHS {money(o.total_amount)}</span>
+                                                        </div>
+                                                        <div className="dx-items-line">{itemsShort(o)}</div>
+                                                        {noteOf(o) && <div className="dx-note-flag">Note: {noteOf(o)}</div>}
+                                                        <div className="dx-spread">{renderProgress(o)}{renderActions(o)}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {/* CUSTOMERS */}
                         {activePage === "customers" && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
-                                    {[
-                                        { label: "Total Customers", value: customers.length, sub: "Unique WhatsApp numbers" },
-                                        { label: "Active Today", value: customers.filter(c => new Date(c.lastOrderAt).toDateString() === new Date().toDateString()).length, sub: "Ordered today" },
-                                        { label: "Pending Attention", value: customers.filter(c => c.pending > 0).length, sub: "With pending orders" },
-                                        { label: "Customer Revenue", value: "GHS " + customers.reduce((s, c) => s + c.revenue, 0).toFixed(2), sub: "Paid order value" },
-                                    ].map((s, i) => (
-                                        <div key={i} style={{ backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px", padding: "16px" }}>
-                                            <p style={{ margin: "0 0 6px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
-                                            <p style={{ margin: "0 0 3px", fontSize: "24px", fontWeight: "800", color: d.text, lineHeight: 1 }}>{s.value}</p>
-                                            <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>{s.sub}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}`, overflow: "hidden" }}>
-                                    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${d.border}` }}>
-                                        <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: d.text }}>Customer Directory</p>
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Customers</h1>
+                                        <p className="dx-sub">Everyone who has ordered from you on WhatsApp.</p>
                                     </div>
+                                </div>
+                                <div className="dx-kpis" style={{ "--cols": 3, marginBottom: 20 }}>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Customers</p><p className="dx-kpi-value">{customers.length}</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Came back</p><p className="dx-kpi-value">{customers.filter(c => c.orders > 1).length}</p>
+                                        <p className="dx-kpi-note">Ordered more than once</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Ordered today</p><p className="dx-kpi-value">{customers.filter(c => new Date(c.lastOrderAt).toDateString() === new Date().toDateString()).length}</p></div>
+                                </div>
+                                <div className="dx-panel">
                                     {customers.length === 0 ? (
-                                        <div style={{ padding: "64px", textAlign: "center" }}>
-                                            <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
-                                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                                            </div>
-                                            <p style={{ color: d.muted, fontSize: "14px", fontWeight: "600", margin: 0 }}>No customers yet</p>
-                                        </div>
+                                        <div className="dx-empty"><h3>No customers yet</h3><p>Share your order link to get your first order.</p></div>
                                     ) : (
-                                        <div style={{ overflowX: "auto" }}>
-                                            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "840px" }}>
-                                                <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                                    {["Customer", "Orders", "Delivered", "Pending", "Paid Revenue", "Last Order", "Actions"].map(h => (
-                                                        <th key={h} style={{ padding: "10px 13px", textAlign: "left", fontSize: "10px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.08em", color: d.muted, whiteSpace: "nowrap" }}>{h}</th>
-                                                    ))}
-                                                </tr></thead>
-                                                <tbody>
-                                                    {customers.map(c => (
-                                                        <tr key={c.phone} className="row-hover" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", fontWeight: "700", color: d.text }}>{c.phone}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: d.text }}>{c.orders}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#16a34a", fontWeight: "700" }}>{c.delivered}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: c.pending > 0 ? "#d97706" : d.muted, fontWeight: "700" }}>{c.pending}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "12px", color: "#22c55e", fontWeight: "700" }}>GHS {c.revenue.toFixed(2)}</td>
-                                                            <td style={{ padding: "11px 13px", fontSize: "11px", color: d.muted }}>{new Date(c.lastOrderAt).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                                                            <td style={{ padding: "11px 13px" }}>
-                                                                <button onClick={() => setSelectedCustomer(c)} style={{ padding: "5px 10px", backgroundColor: "rgba(34,197,94,0.12)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.22)", borderRadius: "6px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>View</button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                        <>
+                                            <div className="dx-table-wrap dx-hide-phone">
+                                                <table className="dx-table">
+                                                    <thead><tr><th>Customer</th><th className="is-right">Orders</th><th className="is-right">Delivered</th><th className="is-right">Paid (GHS)</th><th>Last order</th></tr></thead>
+                                                    <tbody>
+                                                        {customers.map(c => (
+                                                            <tr key={c.phone} className="is-clickable" onClick={() => setSelectedCustomer(c)}>
+                                                                <td><div className="dx-cell-main">{c.name || "Customer"}</div><div className="dx-cell-sub num">{c.phone}</div></td>
+                                                                <td className="is-right num">{c.orders}{c.pending > 0 && <span className="dx-count" style={{ marginLeft: 8 }}>{c.pending} new</span>}</td>
+                                                                <td className="is-right num">{c.delivered}</td>
+                                                                <td className="is-right dx-price">{money(c.revenue)}</td>
+                                                                <td className="muted num">{new Date(c.lastOrderAt).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="dx-list dx-show-phone">
+                                                {customers.map(c => (
+                                                    <button type="button" key={c.phone} className="dx-list-row" onClick={() => setSelectedCustomer(c)}>
+                                                        <div className="dx-avatar">{(c.name || "?").charAt(0).toUpperCase()}</div>
+                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                            <div style={{ fontWeight: 600 }} className="truncate">{c.name || c.phone}</div>
+                                                            <div className="dx-cell-sub">{c.orders} {c.orders === 1 ? "order" : "orders"} · last {agoText(c.lastOrderAt)}</div>
+                                                        </div>
+                                                        <span className="dx-price">GHS {money(c.revenue)}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -2181,338 +2090,254 @@ export default function App() {
                         {/* MENU */}
                         {activePage === "menu" && (
                             <div>
-                                <div style={{ display: "flex", gap: "7px", marginBottom: "16px" }}>
-                                    {["All", ...usedSections].map(cat => (
-                                        <button key={cat} onClick={() => setMenuFilter(cat)} style={{ padding: "6px 14px", borderRadius: "8px", border: `1px solid ${menuFilter === cat ? "#22c55e" : d.border}`, cursor: "pointer", fontSize: "12px", fontWeight: "600", backgroundColor: menuFilter === cat ? (dm ? "rgba(34,197,94,0.12)" : "#ecfdf5") : d.card, color: menuFilter === cat ? "#22c55e" : d.muted }}>
-                                            {cat === "All" ? "All Items" : cat}
-                                        </button>
-                                    ))}
-                                </div>
-                                {filteredMenu.length === 0 ? (
-                                    <div style={{ textAlign: "center", padding: "72px 20px", backgroundColor: d.card, borderRadius: "12px", border: `1px solid ${d.border}` }}>
-                                        <div style={{ margin: "0 0 10px", display: "flex", justifyContent: "center", color: d.muted }}>
-                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" /></svg>
-                                        </div>
-                                        <p style={{ color: d.text, fontSize: "14px", fontWeight: "600", margin: "0 0 4px" }}>No items yet</p>
-                                        <p style={{ color: d.muted, fontSize: "12px", margin: "0 0 20px" }}>Click "+ Add Item" to get started</p>
-                                        <button onClick={() => setShowAddModal(true)} style={{ padding: "10px 24px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}>+ Add First Item</button>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Menu</h1>
+                                        <p className="dx-sub">What your bot can sell. Switch an item off when it runs out and the bot stops offering it.</p>
                                     </div>
-                                ) : (
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "14px" }}>
-                                        {filteredMenu.map(item => (
-                                            <div key={item.id} style={{ backgroundColor: d.card, padding: "18px", borderRadius: "12px", border: `1px solid ${d.border}`, opacity: item.available ? 1 : 0.55, transition: "all 0.15s" }}
-                                                onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                                                onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.transform = ""; }}>
-                                                {item.image_url && (
-                                                    <img src={item.image_url} alt={item.item_name}
-                                                        style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "8px", marginBottom: "10px" }} />
-                                                )}
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                                                    <div>
-                                                        <span style={{ fontSize: "9px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.1em", color: d.muted }}>{item.category || "Main"}</span>
-                                                        <h3 style={{ margin: "2px 0 0", fontSize: "14px", fontWeight: "700", color: d.text }}>{item.item_name}</h3>
-                                                    </div>
-                                                    <div onClick={() => toggleAvailable(item.id, item.available)} style={{ width: "36px", height: "20px", backgroundColor: item.available ? "#22c55e" : d.border, borderRadius: "10px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                                        <div style={{ position: "absolute", width: "14px", height: "14px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: item.available ? "19px" : "3px", transition: "left 0.2s" }} />
-                                                    </div>
-                                                </div>
-                                                <p style={{ fontSize: "12px", color: d.muted, margin: "0 0 14px", lineHeight: "1.5" }}>{item.item_description || "No description"}</p>
-                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${d.border}`, paddingTop: "12px" }}>
-                                                    <span style={{ color: "#22c55e", fontWeight: "800", fontSize: "14px" }}>GHS {parseFloat(item.item_price).toFixed(2)}</span>
-                                                    <div style={{ display: "flex", gap: "6px" }}>
-                                                        <button onClick={() => { setEditItem({ ...item }); setShowEditModal(true); }} style={{ background: "none", border: `1px solid ${d.border}`, cursor: "pointer", color: d.muted, padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "600" }}
-                                                            onMouseEnter={e => { e.currentTarget.style.borderColor = "#22c55e"; e.currentTarget.style.color = "#22c55e"; }}
-                                                            onMouseLeave={e => { e.currentTarget.style.borderColor = d.border; e.currentTarget.style.color = d.muted; }}>Edit</button>
-                                                        <button type="button" title="Delete" onClick={() => deleteMenuItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: d.border, padding: "4px 5px", borderRadius: "5px", display: "flex", alignItems: "center" }}
-                                                            onMouseEnter={e => e.currentTarget.style.color = "#dc2626"}
-                                                            onMouseLeave={e => e.currentTarget.style.color = d.border}>
-                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    <div className="dx-row">
+                                        <button type="button" className="dx-btn" onClick={() => setShowUploadMenuModal(true)}><Icon name="upload" size={16} />Upload menu</button>
+                                        <button type="button" className="dx-btn is-primary" onClick={() => setShowAddModal(true)}><Icon name="plus" size={16} />Add item</button>
+                                    </div>
+                                </div>
+                                {menuItems.length > 0 && (
+                                    <div className="dx-seg" role="group" aria-label="Filter by section" style={{ marginBottom: 18 }}>
+                                        {["All", ...usedSections].map(cat => (
+                                            <button key={cat} type="button" aria-pressed={menuFilter === cat} onClick={() => setMenuFilter(cat)}>
+                                                {cat}<span className="num">{cat === "All" ? menuItems.length : menuItems.filter(i => (i.category || "Main") === cat).length}</span>
+                                            </button>
                                         ))}
                                     </div>
+                                )}
+                                {filteredMenu.length === 0 ? (
+                                    <div className="dx-panel dx-empty">
+                                        <h3>Your menu is empty</h3>
+                                        <p>Add items one by one, or upload a photo of your printed menu and we'll read it for you.</p>
+                                        <div className="dx-row" style={{ justifyContent: "center" }}>
+                                            <button type="button" className="dx-btn" onClick={() => setShowUploadMenuModal(true)}>Upload menu</button>
+                                            <button type="button" className="dx-btn is-primary" onClick={() => setShowAddModal(true)}>Add first item</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    [...new Set(filteredMenu.map(i => i.category || "Main"))].map(section => {
+                                        const items = filteredMenu.filter(i => (i.category || "Main") === section);
+                                        return (
+                                            <section key={section} className="dx-menu-section">
+                                                <div className="dx-menu-section-head">
+                                                    <h2>{section}</h2>
+                                                    <span className="dx-hint">{items.filter(i => i.available).length} of {items.length} available</span>
+                                                </div>
+                                                <div className="dx-panel">
+                                                    {items.map(item => (
+                                                        <div key={item.id} className={"dx-menu-item" + (item.available ? "" : " is-off")}>
+                                                            {item.image_url ? <img className="dx-thumb" src={item.image_url} alt="" /> : <div className="dx-thumb" aria-hidden="true">{item.item_name.charAt(0)}</div>}
+                                                            <div className="dx-menu-text" style={{ minWidth: 0 }}>
+                                                                <div className="dx-menu-name">{item.item_name} {!item.available && <span className="dx-tag is-plain" style={{ marginLeft: 6 }}>Sold out</span>}</div>
+                                                                {item.item_description && <p className="dx-menu-desc">{item.item_description}</p>}
+                                                            </div>
+                                                            <span className="dx-price">GHS {money(item.item_price)}</span>
+                                                            <div className="dx-menu-actions">
+                                                                {switchEl(item.available, () => toggleAvailable(item.id, item.available), (item.available ? "Available: " : "Sold out: ") + item.item_name)}
+                                                                <button type="button" className="dx-icon-btn" aria-label={"Edit " + item.item_name} onClick={() => { setEditItem({ ...item }); setShowEditModal(true); }}><Icon name="edit" size={17} /></button>
+                                                                <button type="button" className="dx-icon-btn" aria-label={"Delete " + item.item_name} onClick={() => deleteMenuItem(item.id)}><Icon name="trash" size={17} /></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        );
+                                    })
                                 )}
                             </div>
                         )}
 
                         {/* INSIGHTS */}
                         {activePage === "insights" && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
-                                    {[
-                                        { label: "Total Customers", value: insights.totalCustomers, sub: "Unique WhatsApp numbers" },
-                                        { label: "Avg Order Value", value: "GHS " + insights.avgOrderValue.toFixed(2), sub: "Per completed order" },
-                                        { label: "Completion Rate", value: Math.round((stats.delivered / (stats.total || 1)) * 100) + "%", sub: "Orders delivered" },
-                                    ].map((s, i) => (
-                                        <div key={i} style={{ backgroundColor: d.card, padding: "18px", borderRadius: "12px", border: `1px solid ${d.border}` }}>
-                                            <p style={{ margin: "0 0 4px", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</p>
-                                            <p style={{ margin: "0 0 3px", fontSize: "26px", fontWeight: "800", color: d.text, lineHeight: 1 }}>{s.value}</p>
-                                            <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>{s.sub}</p>
-                                        </div>
-                                    ))}
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Insights</h1>
+                                        <p className="dx-sub">What sells, and a way to reach every customer at once.</p>
+                                    </div>
                                 </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "18px", border: `1px solid ${d.border}` }}>
-                                        <h2 style={{ margin: "0 0 14px", fontSize: "13px", fontWeight: "700", color: d.text }}>Best Sellers</h2>
-                                        {insights.topItems.length === 0 ? <p style={{ color: d.muted, fontSize: "13px" }}>No data yet</p>
-                                            : insights.topItems.map((item, i) => (
-                                                <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "11px" }}>
-                                                    <span style={{ width: "20px", height: "20px", borderRadius: "5px", backgroundColor: i === 0 ? "#f59e0b" : i === 1 ? "#94a3b8" : i === 2 ? "#d97706" : d.bg3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "800", color: i < 3 ? "white" : d.muted, flexShrink: 0 }}>{i + 1}</span>
-                                                    <span style={{ flex: 1, fontSize: "12px", fontWeight: "500", color: d.text }}>{item.name}</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: "700", color: "#22c55e" }}>{item.count}x</span>
-                                                    <div style={{ width: "60px", height: "3px", backgroundColor: d.bg3, borderRadius: "2px", overflow: "hidden" }}>
-                                                        <div style={{ height: "100%", backgroundColor: "#22c55e", width: Math.round((item.count / (insights.topItems[0]?.count || 1)) * 100) + "%" }} />
-                                                    </div>
+                                <div className="dx-kpis" style={{ "--cols": 3, marginBottom: 20 }}>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Customers</p><p className="dx-kpi-value">{insights.totalCustomers}</p><p className="dx-kpi-note">Unique WhatsApp numbers</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Average order</p><p className="dx-kpi-value"><small>GHS</small>{money(insights.avgOrderValue)}</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Delivered</p><p className="dx-kpi-value">{Math.round((stats.delivered / (stats.total || 1)) * 100)}<small style={{ marginLeft: 2 }}>%</small></p><p className="dx-kpi-note">{stats.delivered} of {stats.total} orders</p></div>
+                                </div>
+                                <div className="dx-grid-2">
+                                    <section className="dx-panel">
+                                        <div className="dx-panel-head"><h2 className="dx-panel-title">Best sellers</h2><span className="dx-hint">Portions ordered</span></div>
+                                        <div className="dx-panel-body">
+                                            {insights.topItems.length === 0 ? <p className="dx-hint">Your best sellers show up after your first orders.</p> : (
+                                                <div className="dx-bars">
+                                                    {insights.topItems.map(item => (
+                                                        <div key={item.name} className="dx-bar-row">
+                                                            <span className="truncate">{item.name}</span>
+                                                            <span className="num" style={{ fontWeight: 600 }}>{item.count}</span>
+                                                            <div className="dx-bar"><i style={{ width: Math.round((item.count / (insights.topItems[0]?.count || 1)) * 100) + "%" }} /></div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                    </div>
-                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "18px", border: `1px solid ${d.border}` }}>
-                                        <h2 style={{ margin: "0 0 4px", fontSize: "13px", fontWeight: "700", color: d.text }}>Broadcast</h2>
-                                        <p style={{ margin: "0 0 12px", fontSize: "11px", color: d.muted }}>Send to all {insights.totalCustomers} customers</p>
-                                        <textarea value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} placeholder="e.g. Special offer today! 20% off all orders." style={{ width: "100%", padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "12px", color: d.text, outline: "none", height: "80px", resize: "none", boxSizing: "border-box", marginBottom: "9px" }} />
-                                        <button onClick={sendBroadcast} disabled={broadcastSending || !broadcastMsg.trim()} style={{ width: "100%", padding: "10px", backgroundColor: broadcastSending ? d.muted : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "12px", cursor: broadcastSending ? "not-allowed" : "pointer" }}>
-                                            {broadcastSending ? "Sending..." : "Send to All Customers"}
-                                        </button>
-                                        {broadcastResult && (
-                                            <div style={{ marginTop: "8px", padding: "9px 12px", backgroundColor: broadcastResult.success ? (dm ? "rgba(22,163,74,0.08)" : "#f0fdf4") : (dm ? "rgba(220,38,38,0.08)" : "#fef2f2"), borderRadius: "7px" }}>
-                                                <p style={{ margin: 0, fontSize: "11px", fontWeight: "600", color: broadcastResult.success ? "#16a34a" : "#dc2626" }}>{broadcastResult.success ? "Sent to " + broadcastResult.sent + "/" + broadcastResult.total + " customers" : "Error: " + broadcastResult.error}</p>
+                                            )}
+                                        </div>
+                                    </section>
+                                    <section className="dx-panel">
+                                        <div className="dx-panel-head"><h2 className="dx-panel-title">Message all customers</h2><span className="dx-hint num">{insights.totalCustomers} people</span></div>
+                                        <div className="dx-panel-body dx-stack" style={{ gap: 12 }}>
+                                            <label className="dx-field"><span className="sr-only">Message</span>
+                                                <textarea className="dx-textarea" value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} maxLength={900}
+                                                    placeholder="e.g. Fresh banku and tilapia from 12pm today. Reply 'menu' to order." /></label>
+                                            <div className="dx-chat" aria-label="Preview">
+                                                <div className="dx-bubble">{broadcastMsg.trim() || <span className="faint">Your message preview</span>}<small>{timeOf(new Date().toISOString())}</small></div>
                                             </div>
-                                        )}
-                                    </div>
+                                            <div className="dx-spread">
+                                                <span className="dx-hint">Sent on WhatsApp from your shop's bot.</span>
+                                                <button type="button" className="dx-btn is-primary" disabled={broadcastSending || !broadcastMsg.trim()} onClick={() => {
+                                                    if (window.confirm(`Send this message to ${insights.totalCustomers} customers?`)) sendBroadcast();
+                                                }}>{broadcastSending ? "Sending…" : "Send"}</button>
+                                            </div>
+                                            {broadcastResult && (
+                                                <p className={"dx-msg " + (broadcastResult.success ? "is-ok" : "is-error")} role="status">
+                                                    {broadcastResult.success ? `Sent to ${broadcastResult.sent} of ${broadcastResult.total} customers.` : "Couldn't send: " + broadcastResult.error}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </section>
                                 </div>
                             </div>
                         )}
 
                         {/* SETTINGS */}
                         {activePage === "settings" && (
-                            <div style={{ maxWidth: "520px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {/* BUSINESS PROFILE */}
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}`, marginBottom: "0" }}>
-                                    <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Business Profile</h2>
-                                    {/* Profile picture */}
-                                    <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "16px" }}>
-                                        <div style={{ width: "64px", height: "64px", borderRadius: "50%", overflow: "hidden", border: `2px solid ${d.border}`, flexShrink: 0, backgroundColor: d.bg3, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                            {profilePicture
-                                                ? <img src={profilePicture} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                                : <span style={{ fontSize: "24px", fontWeight: "800", color: "#22c55e" }}>{(businessName || "?").charAt(0).toUpperCase()}</span>}
-                                        </div>
-                                        <div>
-                                            <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: "600", color: d.text }}>Profile Picture</p>
-                                            <input type="file" accept="image/*" onChange={e => setNewProfilePic(e.target.files?.[0] || null)}
-                                                style={{ fontSize: "11px", color: d.muted }} />
-                                            {newProfilePic && <p style={{ fontSize: "11px", color: "#22c55e", margin: "4px 0 0" }}>✓ Ready to save</p>}
-                                            {profilePicture && !newProfilePic && (
-                                                <button onClick={async () => {
-                                                    try {
-                                                        await supabase.from('businesses').update({ profile_picture: null }).eq('name', businessNameRef.current || businessName);
-                                                        setProfilePicture("");
-                                                        addNotif("Profile picture removed", "success");
-                                                    } catch {
-                                                        addNotif("Failed to remove picture", "error");
-                                                    }
-                                                }} style={{ marginTop: "6px", padding: "5px 12px", backgroundColor: "transparent", border: "1px solid #dc2626", borderRadius: "7px", color: "#dc2626", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-                                                    Remove Photo
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {/* Contact number */}
+                            <div>
+                                <div className="dx-page-head">
                                     <div>
-                                        <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Contact Number (shown to customers)</label>
-                                        <input value={contactNumber} onChange={e => setContactNumber(e.target.value)}
-                                            placeholder="e.g. 0241234567" style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }} />
-                                        <p style={{ margin: "4px 0 0", fontSize: "10px", color: d.muted }}>Customers can use this to call or message you directly</p>
-                                    </div>
-                                    {/* MoMo number */}
-                                    <div style={{ marginTop: "16px" }}>
-                                        <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>MoMo Number for Payments</label>
-                                        <input value={momoNumber} onChange={e => setMomoNumber(e.target.value)}
-                                            placeholder="e.g. 0241234567" style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }} />
-                                        <p style={{ margin: "4px 0 0", fontSize: "10px", color: d.muted }}>This number will be shown to customers for direct MoMo payments (can be different from contact number)</p>
+                                        <h1 className="dx-title">Settings</h1>
+                                        <p className="dx-sub">How your shop, your bot and your payments work.</p>
                                     </div>
                                 </div>
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                    <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Business Hours</h2>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-                                        <div>
-                                            <p style={{ margin: 0, fontWeight: "600", fontSize: "13px", color: d.text }}>Shop Status</p>
-                                            <p style={{ margin: "2px 0 0", fontSize: "11px", color: d.muted }}>Customers can't order when closed</p>
-                                        </div>
-                                        <div onClick={() => setSettings(s => ({ ...s, is_open: !s.is_open }))} style={{ width: "44px", height: "22px", backgroundColor: settings.is_open ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                            <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings.is_open ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                                        </div>
-                                    </div>
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                        {[{ label: "Opening Time", key: "open_time" }, { label: "Closing Time", key: "close_time" }].map(f => (
-                                            <div key={f.key}>
-                                                <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>{f.label}</label>
-                                                <input type="time" value={settings[f.key]} onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.value }))} style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: d.text, outline: "none", boxSizing: "border-box" }} />
+                                <div className="dx-settings">
+                                    <section className="dx-setting-group">
+                                        <div><h2>Shop profile</h2><p>Shown to customers in WhatsApp.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <div className="dx-row" style={{ gap: 16 }}>
+                                                {avatar("is-lg")}
+                                                <div className="dx-stack" style={{ gap: 8 }}>
+                                                    <label className="dx-btn is-sm" style={{ alignSelf: "flex-start" }}>
+                                                        <Icon name="upload" size={15} />{profilePicture ? "Change picture" : "Add a picture"}
+                                                        <input type="file" accept="image/*" className="sr-only" onChange={e => setNewProfilePic(e.target.files?.[0] || null)} />
+                                                    </label>
+                                                    {newProfilePic && <p className="dx-hint accent-text">New picture ready. Save to apply.</p>}
+                                                    {profilePicture && !newProfilePic && (
+                                                        <button type="button" className="dx-btn is-danger is-sm" style={{ alignSelf: "flex-start" }} onClick={async () => {
+                                                            try {
+                                                                await supabase.from('businesses').update({ profile_picture: null }).eq('name', businessNameRef.current || businessName);
+                                                                setProfilePicture("");
+                                                                addNotif("Shop picture removed", "success");
+                                                            } catch {
+                                                                addNotif("Couldn't remove the picture", "error");
+                                                            }
+                                                        }}>Remove picture</button>
+                                                    )}
+                                                </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                {/* ── BOT CONFIGURATION ── */}
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: d.text }}>Bot Configuration</h2>
-                                        <span style={{ fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "20px", backgroundColor: "#dcfce7", color: "#15803d" }}>Active</span>
-                                    </div>
-                                    <p style={{ margin: "0 0 16px", fontSize: "11px", color: d.muted }}>Customise how your AI ordering bot behaves and introduces itself</p>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                        <div>
-                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Bot Name</label>
-                                            <input
-                                                value={botConfig.bot_name}
-                                                onChange={e => setBotConfig(s => ({ ...s, bot_name: e.target.value }))}
-                                                placeholder="e.g. Kojo, Ama, DelivaBot"
-                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }}
-                                            />
+                                            <label className="dx-field"><span className="dx-label">Contact number</span>
+                                                <input className="dx-input num" type="tel" inputMode="tel" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="024 123 4567" />
+                                                <span className="dx-hint">The bot gives customers this number when they need to reach you.</span></label>
+                                            <label className="dx-field"><span className="dx-label">MoMo number</span>
+                                                <input className="dx-input num" type="tel" inputMode="tel" value={momoNumber} onChange={e => setMomoNumber(e.target.value)} placeholder="024 123 4567" />
+                                                <span className="dx-hint">Can be different from your contact number.</span></label>
                                         </div>
-                                        <div>
-                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Welcome Greeting</label>
-                                            <textarea
-                                                value={botConfig.bot_greeting}
-                                                onChange={e => setBotConfig(s => ({ ...s, bot_greeting: e.target.value }))}
-                                                placeholder="e.g. Hey! Welcome to Kelewele Hub 🔥 I'm Kojo, your ordering assistant. What can I get for you today?"
-                                                rows={3}
-                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
-                                            />
+                                    </section>
+
+                                    <section className="dx-setting-group">
+                                        <div><h2>Opening hours</h2><p>Outside these hours the bot tells customers you're closed and when you open.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <div className="dx-toggle-row">
+                                                <div><strong>Shop is {settings.is_open ? "open" : "closed"}</strong><span>Turn off to stop all orders, e.g. on a day off.</span></div>
+                                                {switchEl(settings.is_open, () => setSettings(s => ({ ...s, is_open: !s.is_open })), "Shop open")}
+                                            </div>
+                                            <div className="dx-form-grid">
+                                                <label className="dx-field"><span className="dx-label">Opens at</span>
+                                                    <input className="dx-input num" type="time" value={settings.open_time} onChange={e => setSettings(s => ({ ...s, open_time: e.target.value }))} /></label>
+                                                <label className="dx-field"><span className="dx-label">Closes at</span>
+                                                    <input className="dx-input num" type="time" value={settings.close_time} onChange={e => setSettings(s => ({ ...s, close_time: e.target.value }))} /></label>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Bot Persona</label>
-                                            <input
-                                                value={botConfig.bot_persona}
-                                                onChange={e => setBotConfig(s => ({ ...s, bot_persona: e.target.value }))}
-                                                placeholder="e.g. Friendly, energetic, speaks Ghanaian slang"
-                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box" }}
-                                            />
+                                    </section>
+
+                                    <section className="dx-setting-group">
+                                        <div><h2>Orders and delivery</h2><p>How customers get their food.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <div className="dx-toggle-row">
+                                                <div><strong>Accept orders automatically</strong><span>{settings.auto_accept ? "On: orders are accepted as they arrive." : "Off: you accept each order yourself."}</span></div>
+                                                {switchEl(settings.auto_accept, () => setSettings(s => ({ ...s, auto_accept: !s.auto_accept })), "Accept orders automatically")}
+                                            </div>
+                                            <div className="dx-toggle-row">
+                                                <div><strong>Delivery</strong><span>You or your rider brings the order.</span></div>
+                                                {switchEl(settings.delivery_enabled, () => setSettings(s => ({ ...s, delivery_enabled: !s.delivery_enabled })), "Delivery")}
+                                            </div>
+                                            <div className="dx-toggle-row">
+                                                <div><strong>Pickup</strong><span>The customer collects from you.</span></div>
+                                                {switchEl(settings.pickup_enabled, () => setSettings(s => ({ ...s, pickup_enabled: !s.pickup_enabled })), "Pickup")}
+                                            </div>
+                                            <label className="dx-field" style={{ maxWidth: 220 }}><span className="dx-label">Delivery fee (GHS)</span>
+                                                <input className="dx-input num" type="number" min="0" step="0.5" inputMode="decimal" value={settings.delivery_fee} onChange={e => setSettings(s => ({ ...s, delivery_fee: e.target.value }))} placeholder="0" />
+                                                <span className="dx-hint">0 means free delivery.</span></label>
                                         </div>
-                                        <div>
-                                            <label style={{ display: "block", fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "5px" }}>Special Instructions</label>
-                                            <textarea
-                                                value={botConfig.bot_special_instructions}
-                                                onChange={e => setBotConfig(s => ({ ...s, bot_special_instructions: e.target.value }))}
-                                                placeholder="e.g. Always upsell drinks. Never mention competitors. Remind customers of free delivery on orders above GHS 50."
-                                                rows={3}
-                                                style={{ width: "100%", padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
-                                            />
+                                    </section>
+
+                                    <section className="dx-setting-group">
+                                        <div><h2>Payments</h2><p>The ways customers can pay you.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <div className="dx-toggle-row">
+                                                <div><strong>MoMo</strong><span>Customers get a MoMo prompt on their phone.</span></div>
+                                                {switchEl(settings.pay_online_enabled, () => setSettings(s => ({ ...s, pay_online_enabled: !s.pay_online_enabled })), "MoMo payments")}
+                                            </div>
+                                            <div className="dx-toggle-row">
+                                                <div><strong>Cash</strong><span>Paid when the order is delivered or picked up.</span></div>
+                                                {switchEl(settings.pay_directly_enabled, () => setSettings(s => ({ ...s, pay_directly_enabled: !s.pay_directly_enabled })), "Cash payments")}
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={saveBotConfig}
-                                            style={{ padding: "10px 20px", backgroundColor: botConfigSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer", alignSelf: "flex-start", transition: "background 0.3s" }}
-                                        >
-                                            {botConfigSaved ? "✓ Saved!" : "Save Bot Config"}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                    <h2 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: "700", color: d.text }}>Auto-Accept Orders</h2>
-                                    <p style={{ margin: "0 0 14px", fontSize: "11px", color: d.muted }}>Orders confirmed & payment link sent automatically</p>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                        <div>
-                                            <p style={{ margin: 0, fontWeight: "600", fontSize: "13px", color: d.text }}>Auto-Accept</p>
-                                            <p style={{ margin: "2px 0 0", fontSize: "11px", color: settings.auto_accept ? "#16a34a" : d.muted }}>{settings.auto_accept ? "Enabled" : "Disabled — manual review required"}</p>
+                                    </section>
+
+                                    <section className="dx-setting-group">
+                                        <div><h2>Your bot</h2><p>How the WhatsApp bot introduces itself and talks to customers. Saved separately.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <label className="dx-field"><span className="dx-label">Bot name</span>
+                                                <input className="dx-input" value={botConfig.bot_name} onChange={e => setBotConfig(s => ({ ...s, bot_name: e.target.value }))} placeholder="e.g. Esi" /></label>
+                                            <label className="dx-field"><span className="dx-label">Welcome message</span>
+                                                <textarea className="dx-textarea" rows={3} value={botConfig.bot_greeting} onChange={e => setBotConfig(s => ({ ...s, bot_greeting: e.target.value }))}
+                                                    placeholder="e.g. Hi! Welcome to Auntie Esi's Kitchen. What can I get you today?" /></label>
+                                            <label className="dx-field"><span className="dx-label">Tone</span>
+                                                <input className="dx-input" value={botConfig.bot_persona} onChange={e => setBotConfig(s => ({ ...s, bot_persona: e.target.value }))} placeholder="e.g. Warm and friendly, short replies" /></label>
+                                            <label className="dx-field"><span className="dx-label">Things the bot should know</span>
+                                                <textarea className="dx-textarea" rows={3} value={botConfig.bot_special_instructions} onChange={e => setBotConfig(s => ({ ...s, bot_special_instructions: e.target.value }))}
+                                                    placeholder="e.g. Waakye is only sold in the morning. Large orders need a day's notice." /></label>
+                                            <div className="dx-row">
+                                                <button type="button" className="dx-btn is-primary" onClick={saveBotConfig}>Save bot settings</button>
+                                                {botConfigSaved && <span className="accent-text dx-row" style={{ gap: 4, fontSize: 13, fontWeight: 550 }}><Icon name="check" size={15} />Saved</span>}
+                                            </div>
                                         </div>
-                                        <div onClick={() => setSettings(s => ({ ...s, auto_accept: !s.auto_accept }))} style={{ width: "44px", height: "22px", backgroundColor: settings.auto_accept ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                            <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings.auto_accept ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* ── DELIVERY & PAYMENT OPTIONS ── */}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                        <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Delivery Options</h2>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                            {[
-                                                { label: "Delivery", key: "delivery_enabled" },
-                                                { label: "Pick Up", key: "pickup_enabled" },
-                                            ].map(({ label, key }) => (
-                                                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: d.text }}>{label}</p>
-                                                    <div onClick={() => setSettings(s => ({ ...s, [key]: !s[key] }))}
-                                                        style={{ width: "44px", height: "22px", backgroundColor: settings[key] ? "#22c55e" : d.border, borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                                        <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings[key] ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div style={{ marginTop: "14px", borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
-                                            <p style={{ margin: "0 0 6px", fontSize: "13px", fontWeight: "600", color: d.text }}>Delivery Fee (GHS)</p>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.50"
-                                                value={settings.delivery_fee}
-                                                onChange={e => setSettings(s => ({ ...s, delivery_fee: e.target.value }))}
-                                                placeholder="0.00"
-                                                style={{ padding: "8px 10px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box" }}
-                                            />
-                                            <p style={{ margin: "4px 0 0", fontSize: "11px", color: d.muted }}>Added to order total for delivery orders. Set 0 for free delivery.</p>
-                                        </div>
-                                    </div>
-                                    <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                        <h2 style={{ margin: "0 0 14px", fontSize: "14px", fontWeight: "700", color: d.text }}>Payment Options</h2>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                            {[
-                                                { label: "Pay Directly", key: "pay_directly_enabled" },
-                                                { label: "Pay Online", key: "pay_online_enabled" },
-                                            ].map(({ label, key }) => (
-                                                <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: d.text }}>{label}</p>
-                                                    <div onClick={() => setSettings(s => ({ ...s, [key]: !s[key] }))}
-                                                        style={{ width: "44px", height: "22px", backgroundColor: settings[key] ? "#22c55e" : "#ef4444", borderRadius: "11px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                                        <div style={{ position: "absolute", width: "16px", height: "16px", backgroundColor: "white", borderRadius: "50%", top: "3px", left: settings[key] ? "25px" : "3px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div style={{ backgroundColor: d.card, borderRadius: "12px", padding: "20px", border: `1px solid ${d.border}` }}>
-                                    <h2 style={{ margin: "0 0 4px", fontSize: "14px", fontWeight: "700", color: d.text }}>Change Password</h2>
-                                    <p style={{ margin: "0 0 14px", fontSize: "11px", color: d.muted }}>You must enter your current password to set a new one</p>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                        <input
-                                            type="password"
-                                            value={currentPassword}
-                                            onChange={e => setCurrentPassword(e.target.value)}
-                                            placeholder="Current password"
-                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
-                                        />
-                                        <input
-                                            type="password"
-                                            value={newPassword}
-                                            onChange={e => setNewPassword(e.target.value)}
-                                            placeholder="New password (min 6 characters)"
-                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
-                                        />
-                                        <input
-                                            type="password"
-                                            value={confirmPassword}
-                                            onChange={e => setConfirmPassword(e.target.value)}
-                                            placeholder="Confirm new password"
-                                            style={{ padding: "9px 11px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", boxSizing: "border-box", width: "100%" }}
-                                        />
-                                        {passwordError && <p style={{ margin: 0, fontSize: "11px", color: "#dc2626", fontWeight: "600" }}>{passwordError}</p>}
-                                        {passwordSuccess && <p style={{ margin: 0, fontSize: "11px", color: "#16a34a", fontWeight: "600" }}>✓ Password updated successfully</p>}
-                                        <button onClick={async () => {
+                                    </section>
+
+                                    <section className="dx-setting-group">
+                                        <div><h2>Password</h2><p>Enter your current password to set a new one.</p></div>
+                                        <form className="dx-setting-fields" onSubmit={async e => {
+                                            e.preventDefault();
                                             setPasswordError("");
                                             setPasswordSuccess(false);
-                                            if (!currentPassword) { setPasswordError("Please enter your current password."); return; }
-                                            if (!newPassword) { setPasswordError("Please enter a new password."); return; }
-                                            if (newPassword.length < 6) { setPasswordError("New password must be at least 6 characters."); return; }
-                                            if (newPassword !== confirmPassword) { setPasswordError("New passwords do not match."); return; }
-                                            if (currentPassword === newPassword) { setPasswordError("New password must be different from your current password."); return; }
+                                            if (!currentPassword) { setPasswordError("Enter your current password."); return; }
+                                            if (!newPassword) { setPasswordError("Enter a new password."); return; }
+                                            if (newPassword.length < 6) { setPasswordError("The new password must be at least 6 characters."); return; }
+                                            if (newPassword !== confirmPassword) { setPasswordError("The new passwords don't match."); return; }
+                                            if (currentPassword === newPassword) { setPasswordError("The new password must be different from the current one."); return; }
                                             setPasswordLoading(true);
                                             try {
-                                                const { error: signInError } = await supabase.auth.signInWithPassword({
-                                                    email: user.email,
-                                                    password: currentPassword
-                                                });
+                                                const { error: signInError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
                                                 if (signInError) {
-                                                    setPasswordError("Current password is incorrect.");
+                                                    setPasswordError("Your current password is incorrect.");
                                                     setPasswordLoading(false);
                                                     return;
                                                 }
@@ -2531,21 +2356,44 @@ export default function App() {
                                                 setPasswordError("Something went wrong. Please try again.");
                                             }
                                             setPasswordLoading(false);
-                                        }} disabled={passwordLoading}
-                                            style={{ padding: "10px 20px", backgroundColor: passwordLoading ? d.border : "#22c55e", color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: passwordLoading ? "not-allowed" : "pointer", alignSelf: "flex-start" }}>
-                                            {passwordLoading ? "Verifying..." : "Update Password"}
-                                        </button>
-                                    </div>
+                                        }}>
+                                            <label className="dx-field"><span className="dx-label">Current password</span>
+                                                <input className="dx-input" type="password" autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+                                            <div className="dx-form-grid">
+                                                <label className="dx-field"><span className="dx-label">New password</span>
+                                                    <input className="dx-input" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+                                                <label className="dx-field"><span className="dx-label">Confirm new password</span>
+                                                    <input className="dx-input" type="password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
+                                            </div>
+                                            {passwordError && <p className="dx-msg is-error" role="alert">{passwordError}</p>}
+                                            {passwordSuccess && <p className="dx-msg is-ok" role="status">Password updated.</p>}
+                                            <button type="submit" className="dx-btn" style={{ alignSelf: "flex-start" }} disabled={passwordLoading}>{passwordLoading ? "Checking…" : "Update password"}</button>
+                                        </form>
+                                    </section>
                                 </div>
-                                <button onClick={saveSettings} style={{ padding: "12px", backgroundColor: settingsSaved ? "#16a34a" : "#22c55e", color: "white", border: "none", borderRadius: "10px", fontWeight: "700", fontSize: "13px", cursor: "pointer", transition: "background 0.3s" }}>
-                                    {settingsSaved ? "✓ Saved!" : "Save Settings"}
-                                </button>
+                                <div className="dx-savebar">
+                                    <span className="dx-hint">Profile, hours, delivery and payments are saved together.</span>
+                                    <button type="button" className="dx-btn is-primary" onClick={saveSettings}>
+                                        {settingsSaved ? <><Icon name="check" size={15} />Saved</> : "Save settings"}
+                                    </button>
+                                </div>
                             </div>
                         )}
 
                     </div>
                 </main>
             </div>
-        </>
+
+            {/* BOTTOM TABS (phones) */}
+            <nav className="dx-tabs-bar" style={{ "--tabs": navItems.length }} aria-label="Main navigation">
+                {navItems.map(item => (
+                    <button key={item.id} type="button" className="dx-tab" aria-current={activePage === item.id ? "page" : undefined} onClick={() => goTo(item.id)}>
+                        <Icon name={item.icon} size={21} />
+                        {item.label}
+                        {item.badge > 0 && <span className="dx-count">{item.badge}</span>}
+                    </button>
+                ))}
+            </nav>
+        </div>
     );
 }

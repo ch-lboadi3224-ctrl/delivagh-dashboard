@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { handleAuthError } from "./authUtils";
+import Icon from "./ui/Icon";
+import "./ui/dash.css";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://api.delivagh.app";
 const API = BACKEND_URL;
@@ -44,30 +46,14 @@ export default function Admin() {
     const [webhookLogs, setWebhookLogs] = useState([]);
     const [webhookLogsError, setWebhookLogsError] = useState("");
     const [webhookFilter, setWebhookFilter] = useState("");
-    const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "dark");
+    const [theme, setTheme] = useState(() => localStorage.getItem("admin_theme") || "light");
+    const [bizFilter, setBizFilter] = useState("all");
 
     // Bot Control
     const [botActive, setBotActive] = useState(true);
     const [botOfflineMessage, setBotOfflineMessage] = useState("Sorry, we are currently unavailable. Please try again later. 🙏");
     const [botSwitchLoading, setBotSwitchLoading] = useState(false);
     const [botSwitchSaved, setBotSwitchSaved] = useState(false);
-
-    const themes = {
-        dark: {
-            bg: "#0a0e1a", bg2: "#0f1524", bg3: "#141929", card: "#0f1524",
-            border: "rgba(255,255,255,0.07)", text: "#e2e8f0", muted: "rgba(226,232,240,0.5)", strongMuted: "rgba(226,232,240,0.75)",
-            hover: "rgba(255,255,255,0.04)", input: "rgba(255,255,255,0.05)", inputBorder: "rgba(255,255,255,0.1)", shadow: "0 4px 24px rgba(0,0,0,0.4)",
-        },
-        light: {
-            bg: "#f8fafc", bg2: "#ffffff", bg3: "#f1f5f9", card: "#ffffff",
-            border: "#e2e8f0", text: "#0f172a", muted: "#64748b", strongMuted: "#334155",
-            hover: "#f8fafc", input: "#ffffff", inputBorder: "#cbd5e1", shadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)",
-        },
-    };
-    const d = themes[theme] || themes.dark;
-    const isDark = theme === "dark";
-    const accent = "#16a34a";
-    const accentSoft = isDark ? "rgba(22,163,74,0.15)" : "#f0fdf4";
 
     async function handleLogin() {
         const key = pwInput;
@@ -110,10 +96,18 @@ export default function Admin() {
         return () => clearInterval(interval);
     }, [authed]);
 
+    // One timer for the page message: a new message restarts it, so an older
+    // message's timer can't clear a newer one early.
+    useEffect(() => {
+        if (!saveMsg) return undefined;
+        const t = setTimeout(() => setSaveMsg(""), 5000);
+        return () => clearTimeout(t);
+    }, [saveMsg]);
+
     useEffect(() => {
         localStorage.setItem("admin_theme", theme);
-        document.body.style.background = d.bg;
-    }, [theme, d.bg]);
+        document.body.style.background = theme === "dark" ? "#12110f" : "#f4f2ec";
+    }, [theme]);
 
     useEffect(() => {
         if (!supabase || !authed || activePage !== "webhooks") return undefined;
@@ -244,7 +238,6 @@ export default function Admin() {
             setSaveMsg(biz.name + " approved and live on bot ✓");
             setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "active" } : b));
         }
-        setTimeout(() => setSaveMsg(""), 4000);
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
     }
@@ -264,7 +257,6 @@ export default function Admin() {
         if (r.ok) {
             setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: "rejected" } : b));
             setSaveMsg(biz.name + " rejected ✓");
-            setTimeout(() => setSaveMsg(""), 4000);
         }
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
@@ -289,7 +281,6 @@ export default function Admin() {
             setSaveMsg(biz.name + (newStatus === "suspended" ? " suspended ✓" : " reactivated ✓"));
             setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
         }
-        setTimeout(() => setSaveMsg(""), 4000);
         setActionLoading(p => ({ ...p, [id]: null }));
         await fetchAll();
     }
@@ -329,7 +320,6 @@ export default function Admin() {
         } else {
             setSaveMsg("Saved!");
         }
-        setTimeout(() => setSaveMsg(""), 3000);
         setSaving(false);
         await fetchAll();
     }
@@ -379,11 +369,9 @@ export default function Admin() {
             } else {
                 setSaveMsg(`Bot resync complete: ${data.synced}/${data.totalActive} active businesses synced`);
             }
-            setTimeout(() => setSaveMsg(""), 5000);
         } catch (e) {
             if (await handleAuthError(e)) return;
             setSaveMsg("Bot resync failed: " + e.message);
-            setTimeout(() => setSaveMsg(""), 5000);
         } finally {
             setResyncingBot(false);
         }
@@ -513,70 +501,6 @@ export default function Admin() {
         return sum + orderPlatformCut(order, biz);
     }, 0);
 
-    function HealthDot({ status }) {
-        const colors = { ok: "#22c55e", warn: "#f59e0b", error: "#ef4444", checking: "#64748b" };
-        const labels = { ok: "Operational", warn: "Degraded", error: "Down", checking: "Checking..." };
-        return (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: colors[status] || "#64748b", boxShadow: status === "ok" ? `0 0 6px ${colors.ok}` : "none" }} />
-                <span style={{ fontSize: "12px", color: colors[status] || "#64748b", fontWeight: "600" }}>{labels[status] || "Unknown"}</span>
-            </div>
-        );
-    }
-
-    function StatusBadge({ status }) {
-        const cfg = {
-            pending: { bg: "rgba(245,158,11,0.1)", c: "#f59e0b", border: "rgba(245,158,11,0.2)", label: "Pending" },
-            active: { bg: "rgba(34,197,94,0.1)", c: "#22c55e", border: "rgba(34,197,94,0.2)", label: "Active" },
-            rejected: { bg: "rgba(239,68,68,0.1)", c: "#ef4444", border: "rgba(239,68,68,0.2)", label: "Rejected" },
-            suspended: { bg: "rgba(100,116,139,0.1)", c: "#64748b", border: "rgba(100,116,139,0.2)", label: "Suspended" },
-        };
-        const s = cfg[status] || cfg.pending;
-        return (
-            <span style={{ backgroundColor: s.bg, color: s.c, border: `1px solid ${s.border}`, padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{s.label}</span>
-        );
-    }
-
-    const inp = (extra = {}) => ({ padding: "10px 13px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit", ...extra });
-    const cardStyle = {
-        backgroundColor: d.card,
-        border: `1px solid ${d.border}`,
-        borderRadius: "12px",
-        boxShadow: d.shadow,
-    };
-    const pageNames = {
-        overview: "Overview",
-        approvals: "Pending Approvals",
-        businesses: "Businesses",
-        webhooks: "Webhook Logs",
-        health: "System Health",
-        analytics: "Analytics",
-        botconfig: "Bot Configuration",
-        payments: "Payments",
-        botcontrol: "Bot Control",
-        customers: "Customers",
-    };
-
-    const navItems = [
-        { id: "overview", icon: "▪", label: "Overview", badge: 0 },
-        { id: "approvals", icon: "▪", label: "Approvals", badge: pending.length },
-        { id: "customers", icon: "▪", label: "Customers", badge: 0 },
-        { id: "businesses", icon: "▪", label: "Businesses", badge: 0 },
-        { id: "webhooks", icon: "▪", label: "Webhook Logs", badge: 0 },
-        { id: "payments", icon: "▪", label: "Payments", badge: 0 },
-        { id: "health", icon: "▪", label: "System Health", badge: 0 },
-        { id: "analytics", icon: "▪", label: "Analytics", badge: 0 },
-        { id: "botcontrol", icon: "▪", label: "Bot Control", badge: 0 },
-    ];
-
-    function outcomeStyle(o) {
-        const x = (o || "").toLowerCase();
-        if (x === "replied") return { bg: "rgba(34,197,94,0.12)", c: "#86efac", b: "rgba(34,197,94,0.25)" };
-        if (x === "skipped") return { bg: "rgba(245,158,11,0.12)", c: "#fcd34d", b: "rgba(245,158,11,0.25)" };
-        if (x === "no_reply") return { bg: "rgba(148,163,184,0.12)", c: "#94a3b8", b: "rgba(148,163,184,0.2)" };
-        if (x === "send_failed") return { bg: "rgba(249,115,22,0.12)", c: "#fdba74", b: "rgba(249,115,22,0.25)" };
-        return { bg: "rgba(239,68,68,0.12)", c: "#fca5a5", b: "rgba(239,68,68,0.25)" };
-    }
 
     const whFilter = webhookFilter.trim().toLowerCase();
     const filteredWebhookLogs = whFilter
@@ -587,870 +511,716 @@ export default function Admin() {
         })
         : webhookLogs;
 
+    // ── Presentation ────────────────────────────────────────────
+    const money = n => (parseFloat(n) || 0).toFixed(2);
+    const shortId = id => "#" + String(id || "").substring(0, 8).toUpperCase();
+    const phoneOf = p => String(p || "").replace(/^whatsapp:/i, "");
+    const dateOf = iso => iso ? new Date(iso).toLocaleDateString("en-GH", { day: "numeric", month: "short", year: "numeric" }) : "—";
+    const paidTotal = orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0);
+    const statusTag = status => {
+        const map = { active: ["is-accent", "Active"], pending: ["is-attn", "Waiting for approval"], suspended: ["", "Suspended"], rejected: ["is-danger", "Rejected"] };
+        const [cls, label] = map[status] || map.pending;
+        return <span className={"dx-tag " + cls}>{label}</span>;
+    };
+    const orderTag = o => {
+        const map = { pending: ["is-attn", "New"], confirmed: ["is-accent", "Accepted"], preparing: ["is-accent", "Preparing"], ready: ["is-accent", "Ready"], delivered: ["is-plain is-outline", "Delivered"], rejected: ["is-danger", "Rejected"], cancelled: ["is-danger", "Cancelled"] };
+        const [cls, label] = map[o.status] || ["", o.status || "—"];
+        return <span className={"dx-tag " + cls}>{label}</span>;
+    };
+    const outcomeTag = outcome => {
+        const x = (outcome || "").toLowerCase();
+        const cls = x === "replied" ? "is-accent" : x === "skipped" ? "is-attn" : x === "no_reply" ? "" : "is-danger";
+        return <span className={"dx-tag " + cls}>{outcome || "—"}</span>;
+    };
+    const health_ = status => {
+        const map = { ok: ["is-ok", "Working"], warn: ["is-warn", "Needs a look"], error: ["is-down", "Down"], checking: ["", "Checking…"] };
+        const [cls, label] = map[status] || ["", "Unknown"];
+        return <span className={"dx-health " + cls}><span className="dx-led" />{label}</span>;
+    };
+    const commissionText = biz => biz.commission_type === "percent" ? `${parseFloat(biz.commission_value || 0)}%`
+        : biz.commission_type === "none" ? "None" : `GHS ${money(biz.commission_value)}`;
+    const shopInitial = name => (name || "?").trim().charAt(0).toUpperCase();
+    const themeName = theme === "dark" ? "dark" : "light";
+    const toggleTheme = () => setTheme(themeName === "dark" ? "light" : "dark");
+    const flashIsError = /^(Could not|Action failed|Bot resync failed)/.test(saveMsg);
+
+    const pageNames = {
+        overview: "Overview", approvals: "Approvals", businesses: "Shops", customers: "Customers", payments: "Payouts",
+        analytics: "Analytics", botcontrol: "Bot switch", webhooks: "Message log", health: "System health", botconfig: "Bot settings",
+    };
+    const navGroups = [
+        { label: "Platform", items: [
+            { id: "overview", label: "Overview", icon: "today" },
+            { id: "approvals", label: "Approvals", icon: "approvals", badge: pending.length },
+            { id: "businesses", label: "Shops", icon: "store" },
+            { id: "customers", label: "Customers", icon: "customers" },
+            { id: "payments", label: "Payouts", icon: "coins" },
+            { id: "analytics", label: "Analytics", icon: "insights" },
+        ] },
+        { label: "Bot", items: [
+            { id: "botcontrol", label: "Bot switch", icon: "power" },
+            { id: "webhooks", label: "Message log", icon: "webhook" },
+            { id: "health", label: "System health", icon: "pulse" },
+        ] },
+    ];
+    const allNav = navGroups.flatMap(g => g.items);
+    const go = id => { if (id === "payments") setSelectedBiz(null); setActivePage(id); window.scrollTo({ top: 0 }); };
+    const shopsShown = bizFilter === "all" ? businesses : businesses.filter(b => (b.status || "pending") === bizFilter);
+    const Brand = ({ sub }) => <div className="dx-wordmark">Delivagh<i>.</i>{sub && <small>{sub}</small>}</div>;
+
     if (!supabase) return (
-        <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", color: d.text, padding: "24px" }}>
-            <div style={{ ...cardStyle, maxWidth: "640px", padding: "22px" }}>
-                <h2 style={{ margin: "0 0 10px", fontSize: "18px" }}>Missing Supabase Configuration</h2>
-                <p style={{ margin: "0 0 8px", fontSize: "14px", color: d.strongMuted }}>Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` in your Vercel environment variables, then redeploy.</p>
-                <p style={{ margin: 0, fontSize: "12px", color: d.muted }}>The admin panel cannot query businesses or orders until this is configured.</p>
+        <div className="dx" data-theme={themeName}><div className="dx-center">
+            <div className="dx-card is-wide">
+                <Brand sub="Admin" />
+                <h1 className="dx-title-sm">The admin panel isn't configured</h1>
+                <p className="dx-sub">Set <code className="mono">VITE_SUPABASE_URL</code> and <code className="mono">VITE_SUPABASE_KEY</code> in the Vercel environment variables, then redeploy.</p>
             </div>
-        </div>
+        </div></div>
     );
 
     if (!authed) return (
-        <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-            <div style={{ minHeight: "100vh", backgroundColor: d.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif", color: d.text }}>
-                <div style={{ width: "100%", maxWidth: "360px", padding: "20px" }}>
-                    <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                        <div style={{ fontSize: "20px", fontWeight: "800", color: d.text, marginBottom: "4px" }}>Delivagh<span style={{ color: accent }}>.</span></div>
-                        <p style={{ fontSize: "12px", color: d.muted }}>Admin Portal</p>
-                    </div>
-                    <div style={{ ...cardStyle, borderRadius: "16px", padding: "32px", boxShadow: d.shadow }}>
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
-                            <button onClick={() => setTheme(isDark ? "light" : "dark")}
-                                style={{ padding: "6px 10px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.strongMuted, fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>
-                                {isDark ? "Light Mode" : "Dark Mode"}
-                            </button>
-                        </div>
-                        <h2 style={{ color: d.text, fontSize: "18px", fontWeight: "700", marginBottom: "24px", textAlign: "center" }}>Admin Access</h2>
-                        {pwError && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", marginBottom: "16px" }}>{pwError}</div>}
-                        <input type="password" value={pwInput} onChange={e => setPwInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !loggingIn && handleLogin()}
-                            placeholder="Admin password" style={{ width: "100%", padding: "12px 14px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "10px", fontSize: "14px", color: d.text, outline: "none", boxSizing: "border-box", marginBottom: "14px", fontFamily: "inherit" }} />
-                        <button onClick={handleLogin} disabled={loggingIn} style={{ width: "100%", padding: "12px", backgroundColor: accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: loggingIn ? "not-allowed" : "pointer", opacity: loggingIn ? 0.7 : 1 }}>
-                            {loggingIn ? "Checking…" : "Enter Admin"}
-                        </button>
-                    </div>
+        <div className="dx" data-theme={themeName}><div className="dx-center">
+            <div className="dx-card">
+                <div className="dx-spread" style={{ alignItems: "flex-start" }}>
+                    <Brand sub="Admin" />
+                    <button type="button" className="dx-icon-btn" aria-label={themeName === "dark" ? "Use light theme" : "Use dark theme"} onClick={toggleTheme}>
+                        <Icon name={themeName === "dark" ? "sun" : "moon"} />
+                    </button>
                 </div>
+                <h1 className="dx-title-sm">Sign in</h1>
+                <p className="dx-sub" style={{ marginBottom: 20 }}>For the Delivagh team only.</p>
+                <form className="dx-stack" style={{ gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loggingIn) handleLogin(); }}>
+                    <label className="dx-field"><span className="dx-label">Admin password</span>
+                        <input className={"dx-input" + (pwError ? " is-invalid" : "")} type="password" autoComplete="current-password" autoFocus value={pwInput} onChange={e => setPwInput(e.target.value)} /></label>
+                    {pwError && <p className="dx-msg is-error" role="alert">{pwError}</p>}
+                    <button type="submit" className="dx-btn is-primary is-lg is-block" disabled={loggingIn}>{loggingIn ? "Checking…" : "Sign in"}</button>
+                </form>
             </div>
-        </>
+        </div></div>
     );
 
     return (
-        <>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-            <style>{`
-                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-                body { background: ${d.bg}; }
-                ::-webkit-scrollbar { width: 5px; height: 5px; } 
-                ::-webkit-scrollbar-track { background: transparent; }
-                ::-webkit-scrollbar-thumb { background: ${d.border}; border-radius: 3px; }
-                .row-h:hover td { background: ${d.hover} !important; transition: background 0.1s; }
-                @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-                input, button, textarea { font-family: inherit; }
-            `}</style>
-
-            <div style={{ display: "flex", minHeight: "100vh", backgroundColor: d.bg, color: d.text }}>
-
-                {/* SIDEBAR */}
-                <aside style={{ width: "220px", backgroundColor: d.bg2, borderRight: `1px solid ${d.border}`, position: "fixed", top: 0, left: 0, bottom: 0, display: "flex", flexDirection: "column", zIndex: 50 }}>
-                    <div style={{ padding: "24px 20px", borderBottom: `1px solid ${d.border}` }}>
-                        <div style={{ fontSize: "16px", fontWeight: "800", color: d.text, letterSpacing: "-0.5px" }}>Delivagh<span style={{ color: accent }}>.</span></div>
-                        <p style={{ fontSize: "10px", color: d.muted, marginTop: "3px", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: "600" }}>Admin Portal</p>
-                    </div>
-                    <nav style={{ flex: 1, padding: "10px 8px", display: "flex", flexDirection: "column", gap: "2px" }}>
-                        {navItems.map(item => (
-                            <button key={item.id} onClick={() => setActivePage(item.id)}
-                                style={{ 
-                                    display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", 
-                                    borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: activePage === item.id ? "700" : "500", 
-                                    fontSize: "13px", textAlign: "left", width: "100%",
-                                    backgroundColor: activePage === item.id ? accentSoft : "transparent", 
-                                    color: activePage === item.id ? accent : d.muted, 
-                                    transition: "all 0.15s"
-                                }}>
-                                <span>{item.icon}</span>
-                                <span style={{ flex: 1 }}>{item.label}</span>
-                                {item.badge > 0 && <span style={{ backgroundColor: "#ef4444", color: "white", fontSize: "9px", padding: "1px 6px", borderRadius: "999px", fontWeight: "800" }}>{item.badge}</span>}
-                            </button>
+        <div className="dx" data-theme={themeName}>
+            <div className="dx-shell">
+                <aside className="dx-side" aria-label="Admin navigation">
+                    <div className="dx-brand"><Brand sub="Admin" /></div>
+                    <nav className="dx-nav">
+                        {navGroups.map(group => (
+                            <React.Fragment key={group.label}>
+                                <div className="dx-nav-label">{group.label}</div>
+                                {group.items.map(item => (
+                                    <button key={item.id} type="button" className="dx-nav-item" onClick={() => go(item.id)}
+                                        aria-current={activePage === item.id || (item.id === "businesses" && activePage === "botconfig") ? "page" : undefined}>
+                                        <Icon name={item.icon} /><span>{item.label}</span>
+                                        {item.badge > 0 && <span className="dx-count">{item.badge}</span>}
+                                    </button>
+                                ))}
+                            </React.Fragment>
                         ))}
                     </nav>
-                    <div style={{ padding: "12px", borderTop: `1px solid ${d.border}` }}>
-                        <button onClick={() => setTheme(isDark ? "light" : "dark")}
-                            style={{ width: "100%", marginBottom: "8px", padding: "9px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                            {isDark ? "Switch to Light" : "Switch to Dark"}
-                        </button>
-                        <button onClick={() => { setAdminKey(""); setAuthed(false); }}
-                            style={{ width: "100%", padding: "9px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
-                            Sign Out
-                        </button>
+                    <div className="dx-side-foot">
+                        <button type="button" className="dx-nav-item" onClick={toggleTheme}><Icon name={themeName === "dark" ? "sun" : "moon"} /><span>{themeName === "dark" ? "Light theme" : "Dark theme"}</span></button>
+                        <button type="button" className="dx-nav-item" onClick={() => { setAdminKey(""); setAuthed(false); }}><Icon name="logout" /><span>Sign out</span></button>
                     </div>
                 </aside>
 
-                {/* MAIN */}
-                <main style={{ marginLeft: "220px", flex: 1, padding: "24px 28px", overflowY: "auto" }}>
-                    <div style={{ ...cardStyle, marginBottom: "20px", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: d.shadow }}>
-                        <div>
-                            <p style={{ fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Current Section</p>
-                            <p style={{ fontSize: "16px", fontWeight: "700", color: d.text }}>{pageNames[activePage] || "Dashboard"}</p>
+                <main className="dx-main">
+                    <header className="dx-top">
+                        <div className="dx-row" style={{ flexWrap: "nowrap", minWidth: 0 }}>
+                            <div className="dx-show-phone dx-wordmark" style={{ fontSize: 22 }}>Delivagh<i>.</i></div>
+                            <span className="dx-crumb dx-hide-phone">Admin / <strong>{pageNames[activePage] || "Overview"}</strong></span>
                         </div>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                            <button onClick={fetchAll}
-                                style={{ padding: "8px 12px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.strongMuted, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                Refresh Data
+                        <div className="dx-top-actions">
+                            <button type="button" className="dx-btn is-sm" onClick={resyncBotBusinesses} disabled={resyncingBot} title="Re-list every active shop in the bot's shop picker">
+                                <Icon name="bot" size={15} />{resyncingBot ? "Syncing…" : <span className="dx-hide-phone">Resync bot shops</span>}
                             </button>
-                            <button onClick={resyncBotBusinesses} disabled={resyncingBot}
-                                style={{ padding: "8px 12px", backgroundColor: resyncingBot ? d.muted : accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: resyncingBot ? "not-allowed" : "pointer" }}>
-                                {resyncingBot ? "Resyncing..." : "Resync Bot Directory"}
-                            </button>
-                            <button onClick={() => setTheme(isDark ? "light" : "dark")}
-                                style={{ padding: "8px 12px", backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(15,23,42,0.07)", border: `1px solid ${isDark ? "rgba(245,158,11,0.25)" : d.border}`, borderRadius: "8px", color: isDark ? "#f59e0b" : d.strongMuted, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                {isDark ? "Light Mode" : "Dark Mode"}
-                            </button>
+                            <button type="button" className="dx-icon-btn" aria-label="Reload data" onClick={() => { fetchAll(); checkHealth(); }}><Icon name="refresh" /></button>
+                            <button type="button" className="dx-icon-btn dx-show-phone" aria-label={themeName === "dark" ? "Use light theme" : "Use dark theme"} onClick={toggleTheme}><Icon name={themeName === "dark" ? "sun" : "moon"} /></button>
                         </div>
-                    </div>
+                    </header>
 
-                    {/* ── OVERVIEW ── */}
-                    {activePage === "overview" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div>
-                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Overview</h1>
-                                <p style={{ fontSize: "12px", color: d.muted }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
-                                {[
-                                    { label: "Total Businesses", value: businesses.length, sub: `${active.length} active`, color: accent },
-                                    { label: "Pending Approval", value: pending.length, sub: "Need review", color: pending.length > 0 ? "#f59e0b" : d.muted, alert: pending.length > 0 },
-                                    { label: "Total Orders", value: orders.length, sub: `${todayOrders.length} today`, color: "#22c55e" },
-                                    { label: "Platform Revenue", value: "GHS " + (orders.length * 1).toFixed(2), sub: "@ GHS 1/order", color: "#8b5cf6" },
-                                ].map((s, i) => (
-                                    <div key={i} style={{ ...cardStyle, padding: "18px", borderColor: s.alert ? "rgba(245,158,11,0.3)" : d.border }}>
-                                        <p style={{ fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>{s.label}</p>
-                                        <p style={{ fontSize: "32px", fontWeight: "800", color: s.color, lineHeight: 1, marginBottom: "6px", letterSpacing: "-1px" }}>{s.value}</p>
-                                        <p style={{ fontSize: "11px", color: d.muted }}>{s.sub}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>System Status</p>
-                                </div>
-                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-                                    {[
-                                        { label: "Backend (Heroku)", status: health.backend },
-                                        { label: "Database (Supabase)", status: health.supabase },
-                                        { label: "WhatsApp Bot", status: health.groq },
-                                    ].map((h, i) => (
-                                        <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                            <p style={{ fontSize: "11px", color: d.muted, marginBottom: "6px" }}>{h.label}</p>
-                                            <HealthDot status={h.status} />
-                                        </div>
-                                    ))}
-                                </div>
-                                <div style={{ padding: "12px 18px", borderTop: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "11px", color: d.muted }}>
-                                        Last order: {lastOrder ? new Date(lastOrder.created_at).toLocaleString("en-GH") : "No orders yet"} {lastOrder ? `— ${lastOrder.business_name}` : ""}
-                                    </p>
-                                </div>
-                            </div>
-                            {pending.length > 0 && (
-                                <div style={{ backgroundColor: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div className="dx-content">
+                        {/* Phone navigation */}
+                        <div className="dx-seg dx-show-phone" role="group" aria-label="Admin pages" style={{ marginBottom: 16, display: "flex" }}>
+                            {allNav.map(item => (
+                                <button key={item.id} type="button" aria-pressed={activePage === item.id} onClick={() => go(item.id)}>
+                                    {item.label}{item.badge > 0 && <span className="dx-count">{item.badge}</span>}
+                                </button>
+                            ))}
+                        </div>
+
+                        {saveMsg && activePage !== "botconfig" && (
+                            <p className={"dx-msg " + (flashIsError ? "is-error" : "is-ok")} role="status" style={{ marginBottom: 16 }}>{saveMsg.replace(/ ✓$/, ".")}</p>
+                        )}
+
+                        {/* OVERVIEW */}
+                        {activePage === "overview" && (
+                            <div className="dx-stack" style={{ gap: 24 }}>
+                                <div className="dx-page-head" style={{ marginBottom: 0 }}>
                                     <div>
-                                        <p style={{ fontSize: "14px", fontWeight: "700", color: "#f59e0b", marginBottom: "3px" }}>{pending.length} business{pending.length > 1 ? "es" : ""} waiting for approval</p>
-                                        <p style={{ fontSize: "12px", color: "rgba(245,158,11,0.6)" }}>{pending.map(b => b.name).join(", ")}</p>
+                                        <p className="dx-crumb" style={{ margin: 0 }}>{new Date().toLocaleDateString("en-GH", { weekday: "long", day: "numeric", month: "long" })}</p>
+                                        <h1 className="dx-title" style={{ marginTop: 6 }}>Overview</h1>
                                     </div>
-                                    <button onClick={() => setActivePage("approvals")} style={{ padding: "8px 18px", backgroundColor: "#f59e0b", color: "#0a0d12", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                        Review Now
-                                    </button>
                                 </div>
-                            )}
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Businesses</p>
-                                    <button onClick={() => setActivePage("businesses")} style={{ fontSize: "11px", color: accent, background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}>View all</button>
-                                </div>
-                                <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                        <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Phone", "Email", "Status", "Orders", "Revenue", "Joined"].map(h => (
-                                                <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                                            ))}
-                                        </tr></thead>
-                                        <tbody>
-                                            {businesses.slice(0, 6).map(biz => (
-                                                <tr key={biz.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                    <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "12px", color: d.muted }}>{biz.email || "—"}</td>
-                                                    <td style={{ padding: "11px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: d.text }}>{bizOrders(biz.name).length}</td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
-                                                    <td style={{ padding: "11px 14px", fontSize: "11px", color: d.muted }}>{new Date(biz.created_at).toLocaleDateString("en-GH")}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── APPROVALS ── */}
-                    {activePage === "approvals" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div>
-                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Pending Approvals</h1>
-                                <p style={{ fontSize: "12px", color: d.muted }}>{pending.length} business{pending.length !== 1 ? "es" : ""} waiting for review</p>
-                            </div>
-                            {pending.length === 0 ? (
-                                <div style={{ ...cardStyle, padding: "64px", textAlign: "center" }}>
-                                    <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "rgba(22,163,74,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", color: "#16a34a", fontSize: "18px", fontWeight: "700" }}>✓</div>
-                                    <p style={{ fontSize: "14px", fontWeight: "600", color: d.text, marginBottom: "4px" }}>All caught up!</p>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>No pending approvals right now</p>
-                                </div>
-                            ) : (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                    {pending.map(biz => (
-                                        <div key={biz.id} style={{ ...cardStyle, padding: "22px", borderColor: "rgba(245,158,11,0.2)" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                                                        <div style={{ width: "40px", height: "40px", borderRadius: "10px", backgroundColor: accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "16px", color: "white", flexShrink: 0 }}>
-                                                            {biz.name.charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <p style={{ fontSize: "15px", fontWeight: "700", color: d.text, margin: 0 }}>{biz.name}</p>
-                                                            <p style={{ fontSize: "11px", color: d.muted, margin: 0 }}>Registered {new Date(biz.created_at).toLocaleString("en-GH")}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", maxWidth: "400px" }}>
-                                                        {[
-                                                            { label: "Phone", value: biz.phone || "Not provided" },
-                                                            { label: "Email", value: biz.email || "Not provided" },
-                                                        ].map(row => (
-                                                            <div key={row.label} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "10px 12px", border: `1px solid ${d.border}` }}>
-                                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px" }}>{row.label}</p>
-                                                                <p style={{ fontSize: "12px", fontWeight: "600", color: d.text }}>{row.value}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                                                    <button onClick={() => openBotConfig(biz)} style={{ padding: "8px 16px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                                                        Configure Bot
-                                                    </button>
-                                                    <button onClick={() => rejectBusiness(biz.id)} disabled={actionLoading[biz.id] === "rejecting"}
-                                                        style={{ padding: "8px 16px", backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "8px", color: "#ef4444", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                        {actionLoading[biz.id] === "rejecting" ? "..." : "Reject"}
-                                                    </button>
-                                                    <button onClick={() => approveBusiness(biz.id)} disabled={actionLoading[biz.id] === "approving"}
-                                                        style={{ padding: "8px 20px", backgroundColor: "#16a34a", border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                                        {actionLoading[biz.id] === "approving" ? "..." : "Approve"}
-                                                    </button>
-                                                </div>
-                                            </div>
+                                {pending.length > 0 && (
+                                    <div className="dx-panel dx-panel-body dx-spread" style={{ background: "var(--attn-soft)", borderColor: "var(--attn-line)" }}>
+                                        <div>
+                                            <strong>{pending.length} {pending.length === 1 ? "shop is" : "shops are"} waiting for approval</strong>
+                                            <div className="dx-hint" style={{ color: "var(--ink-2)" }}>{pending.map(b => b.name).join(", ")}</div>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ── CUSTOMERS (WhatsApp Flow registration) ── */}
-                    {activePage === "customers" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div>
-                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Registered Customers</h1>
-                                <p style={{ fontSize: "12px", color: d.muted }}>{registeredCustomers.length} customers via WhatsApp Flow signup</p>
-                            </div>
-                            <div style={cardStyle}>
-                                {registeredCustomers.length === 0 ? (
-                                    <p style={{ padding: "24px", textAlign: "center", color: d.muted, fontSize: "13px", margin: 0 }}>No registered customers yet. They appear here after completing the WhatsApp registration flow.</p>
-                                ) : (
-                                    <div style={{ overflowX: "auto" }}>
-                                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: d.bg3 }}>
-                                                    {["Name", "First name", "Phone", "Email", "Registered"].map(h => (
-                                                        <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {registeredCustomers.map(c => (
-                                                    <tr key={c.id || c.phone} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                        <td style={{ padding: "12px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{c.full_name || "—"}</td>
-                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{c.first_name || "—"}</td>
-                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{(c.phone || "").replace(/^whatsapp:/i, "")}</td>
-                                                        <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{c.email || "—"}</td>
-                                                        <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>
-                                                            {c.registered_at ? new Date(c.registered_at).toLocaleString("en-GH") : "—"}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                        <button type="button" className="dx-btn" onClick={() => go("approvals")}>Review</button>
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── BUSINESSES ── */}
-                    {activePage === "businesses" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
-                                <div>
-                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>All Businesses</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>{businesses.length} registered businesses</p>
+                                <div className="dx-kpis">
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Live shops</p><p className="dx-kpi-value">{active.length}</p><p className="dx-kpi-note">{businesses.length} signed up</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Orders today</p><p className="dx-kpi-value">{todayOrders.length}</p><p className="dx-kpi-note">{orders.length} in the last 500</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Paid order value</p><p className="dx-kpi-value"><small>GHS</small>{money(paidTotal)}</p><p className="dx-kpi-note">All shops</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Platform earnings</p><p className="dx-kpi-value"><small>GHS</small>{money(platformRevenueByRules)}</p><p className="dx-kpi-note">From each shop's commission</p></div>
                                 </div>
-                                <button onClick={openCreateVendorModal}
-                                    style={{ padding: "9px 14px", backgroundColor: accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                    + Add Vendor
-                                </button>
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
-                                        <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Phone", "Email", "Status", "Commission", "Orders", "Revenue", "Platform Cut", "Joined", "Actions"].map(h => (
-                                                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
+                                <div className="dx-grid-2">
+                                    <section className="dx-panel">
+                                        <div className="dx-panel-head"><h2 className="dx-panel-title">Latest orders</h2><span className="dx-hint">All shops</span></div>
+                                        {orders.length === 0 ? <div className="dx-empty"><p>No orders yet.</p></div> : (
+                                            <div className="dx-table-wrap">
+                                                <table className="dx-table">
+                                                    <thead><tr><th>Order</th><th>Shop</th><th className="is-right">GHS</th><th>Status</th></tr></thead>
+                                                    <tbody>
+                                                        {orders.slice(0, 8).map(o => (
+                                                            <tr key={o.id}>
+                                                                <td><div className="mono">{shortId(o.id)}</div><div className="dx-cell-sub num">{new Date(o.created_at).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div></td>
+                                                                <td><div className="dx-cell-main truncate" style={{ maxWidth: 200 }}>{o.business_name}</div><div className="dx-cell-sub">{o.customer_name || phoneOf(o.customer_phone)}</div></td>
+                                                                <td className="is-right dx-price">{money(o.total_amount)}</td>
+                                                                <td>{orderTag(o)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </section>
+                                    <section className="dx-panel">
+                                        <div className="dx-panel-head"><h2 className="dx-panel-title">System</h2><button type="button" className="dx-link" onClick={() => go("health")}>Details</button></div>
+                                        <div className="dx-list">
+                                            {[["Backend API", health.backend], ["Database", health.supabase], ["WhatsApp bot", health.groq]].map(([label, st]) => (
+                                                <div key={label} className="dx-list-row"><span style={{ flex: 1 }}>{label}</span>{health_(st)}</div>
                                             ))}
-                                        </tr></thead>
-                                        <tbody>
-                                            {businesses.map(biz => (
-                                                <tr key={biz.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                    <td style={{ padding: "12px 14px" }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                                                            <div style={{ width: "30px", height: "30px", borderRadius: "7px", backgroundColor: accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "800", fontSize: "12px", color: "white", flexShrink: 0 }}>{biz.name.charAt(0).toUpperCase()}</div>
-                                                            <span style={{ fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.phone || "—"}</td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.muted }}>{biz.email || "—"}</td>
-                                                    <td style={{ padding: "12px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", color: d.text }}>
-                                                        {biz.commission_type === "percent" ? `${parseFloat(biz.commission_value || 0).toFixed(2)}%` : `GHS ${(parseFloat(biz.commission_value || 0) || 0).toFixed(2)}`}
-                                                    </td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: d.text }}>{bizOrders(biz.name).length}</td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "12px", fontWeight: "700", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(biz.name).toFixed(2)}</td>
-                                                    <td style={{ padding: "12px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(biz.created_at).toLocaleDateString("en-GH")}</td>
-                                                    <td style={{ padding: "12px 14px" }}>
-                                                        <div style={{ display: "flex", gap: "6px" }}>
-                                                            <button onClick={() => openBotConfig(biz)} style={{ padding: "5px 10px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "6px", color: accent, fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>Bot Config</button>
-                                                            <button onClick={() => openPaymentConfig(biz)} style={{ padding: "5px 10px", backgroundColor: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.28)", borderRadius: "6px", color: "#8b5cf6", fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap" }}>Payments</button>
-                                                            {biz.status === "active" && (
-                                                                <button onClick={() => suspendBusiness(biz.id, biz.status)} disabled={actionLoading[biz.id] === "suspending"}
-                                                                    style={{ padding: "5px 10px", backgroundColor: "rgba(100,116,139,0.1)", border: "1px solid rgba(100,116,139,0.2)", borderRadius: "6px", color: "#64748b", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-                                                                    {actionLoading[biz.id] ? "..." : "Suspend"}
-                                                                </button>
-                                                            )}
-                                                            {biz.status === "suspended" && (
-                                                                <button onClick={() => suspendBusiness(biz.id, biz.status)} disabled={actionLoading[biz.id] === "suspending"}
-                                                                    style={{ padding: "5px 10px", backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "6px", color: "#22c55e", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-                                                                    {actionLoading[biz.id] ? "..." : "Reactivate"}
-                                                                </button>
-                                                            )}
-                                                            {biz.status === "pending" && (
-                                                                <button onClick={() => approveBusiness(biz.id)} disabled={actionLoading[biz.id] === "approving"}
-                                                                    style={{ padding: "5px 10px", backgroundColor: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "6px", color: "#22c55e", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-                                                                    {actionLoading[biz.id] ? "..." : "Approve"}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── WEBHOOK LOGS ── */}
-                    {activePage === "webhooks" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "slideDown 0.2s ease", maxWidth: "1200px" }}>
-                            <div>
-                                <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>Webhook logs</h1>
-                                <p style={{ fontSize: "12px", color: d.muted, lineHeight: 1.5 }}>Live feed of inbound customer messages (Meta + Twilio paths).</p>
-                            </div>
-                            {webhookLogsError && (
-                                <div style={{ ...cardStyle, padding: "14px 18px", borderColor: "rgba(239,68,68,0.35)", backgroundColor: "rgba(239,68,68,0.06)" }}>
-                                    <p style={{ margin: 0, fontSize: "13px", color: "#fca5a5", fontWeight: "600" }}>{webhookLogsError}</p>
-                                </div>
-                            )}
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-                                <input value={webhookFilter} onChange={(e) => setWebhookFilter(e.target.value)}
-                                    placeholder="Filter: phone, business, text, outcome…"
-                                    style={{ ...inp({ flex: "1", minWidth: "220px", maxWidth: "420px" }) }} />
-                                <span style={{ fontSize: "12px", color: d.muted }}>{filteredWebhookLogs.length} row{filteredWebhookLogs.length !== 1 ? "s" : ""}</span>
-                            </div>
-                            <div style={{ ...cardStyle, overflow: "hidden" }}>
-                                <div style={{ overflowX: "auto", maxHeight: "70vh", overflowY: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "960px" }}>
-                                        <thead>
-                                            <tr style={{ backgroundColor: d.bg3, position: "sticky", top: 0, zIndex: 1 }}>
-                                                {["Time", "Src", "Customer", "Business", "Message", "Outcome", "Note / reply"].map((h) => (
-                                                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap", borderBottom: `1px solid ${d.border}` }}>{h}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredWebhookLogs.length === 0 && !webhookLogsError && (
-                                                <tr><td colSpan={7} style={{ padding: "28px", textAlign: "center", color: d.muted, fontSize: "13px" }}>No log rows yet.</td></tr>
-                                            )}
-                                            {filteredWebhookLogs.map((row) => {
-                                                const os = outcomeStyle(row.outcome);
-                                                const t = row.created_at ? new Date(row.created_at).toLocaleString("en-GH", { hour12: false }) : "—";
-                                                const msg = (row.body || "").length > 120 ? (row.body || "").slice(0, 120) + "…" : row.body || "—";
-                                                const note = row.skip_reason || row.error_message || (row.reply_preview ? row.reply_preview.slice(0, 160) + (row.reply_preview.length > 160 ? "…" : "") : "—");
-                                                return (
-                                                    <tr key={row.id} className="row-h" style={{ borderTop: `1px solid ${d.border}`, verticalAlign: "top" }}>
-                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{t}</td>
-                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.text, fontWeight: "600" }}>{row.source || "—"}</td>
-                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.text, maxWidth: "140px", wordBreak: "break-all" }}>{(row.customer_phone || "").replace("whatsapp:", "") || "—"}</td>
-                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.strongMuted, maxWidth: "120px" }}>{row.business_name || "—"}</td>
-                                                        <td style={{ padding: "10px 12px", fontSize: "12px", color: d.text, maxWidth: "280px" }} title={row.body || ""}>{msg}</td>
-                                                        <td style={{ padding: "10px 12px" }}>
-                                                            <span style={{ display: "inline-block", backgroundColor: os.bg, color: os.c, border: `1px solid ${os.b}`, padding: "2px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "800" }}>{row.outcome || "—"}</span>
-                                                        </td>
-                                                        <td style={{ padding: "10px 12px", fontSize: "11px", color: d.muted, maxWidth: "320px" }} title={note}>{note}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── SYSTEM HEALTH ── */}
-                    {activePage === "health" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                <div>
-                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "4px" }}>System Health</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>Live status of all platform services</p>
-                                </div>
-                                <button onClick={checkHealth} style={{ padding: "8px 16px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "8px", color: accent, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                                    Refresh
-                                </button>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                                {[
-                                    { label: "Backend API", sub: "Heroku — Node.js/Express", status: health.backend, detail: health.backend === "ok" ? "Responding normally" : "Not reachable" },
-                                    { label: "Database", sub: "Supabase — PostgreSQL", status: health.supabase, detail: health.supabase === "ok" ? "Connected, queries working" : "Connection failed" },
-                                    { label: "WhatsApp Bot", sub: "Webhook route and Meta settings", status: health.groq, detail: health.groq === "ok" ? "Responding, Meta settings present" : "Unreachable or Meta settings missing" },
-                                    { label: "WhatsApp Bridge", sub: "Meta Cloud API", status: "warn", detail: "Check Meta Business Manager for status" },
-                                ].map((s, i) => (
-                                    <div key={i} style={{ ...cardStyle, padding: "22px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                                            <div>
-                                                <p style={{ fontSize: "14px", fontWeight: "700", color: d.text, marginBottom: "3px" }}>{s.label}</p>
-                                                <p style={{ fontSize: "11px", color: d.muted }}>{s.sub}</p>
-                                            </div>
-                                            <HealthDot status={s.status} />
+                                            <div className="dx-list-row"><span style={{ flex: 1 }}>Bot replies</span><span className={"dx-tag " + (botActive ? "is-accent" : "is-danger")}>{botActive ? "On" : "Off for everyone"}</span></div>
                                         </div>
-                                        <p style={{ fontSize: "12px", color: d.muted, padding: "10px 12px", backgroundColor: d.bg3, borderRadius: "8px", border: `1px solid ${d.border}` }}>{s.detail}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Database Tables</p>
-                                </div>
-                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-                                    {[
-                                        { table: "orders", count: orders.length },
-                                        { table: "businesses", count: businesses.length },
-                                        { table: "conversations", count: "—" },
-                                    ].map((t, i) => (
-                                        <div key={i} style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                            <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>{t.table}</p>
-                                            <p style={{ fontSize: "22px", fontWeight: "800", color: d.text }}>{t.count}</p>
-                                            <p style={{ fontSize: "10px", color: d.muted }}>rows</p>
+                                        <div className="dx-panel-body" style={{ borderTop: "1px solid var(--line)", paddingTop: 12, paddingBottom: 14 }}>
+                                            <p className="dx-hint">Last order {lastOrder ? `${new Date(lastOrder.created_at).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} at ${lastOrder.business_name}` : "— none yet"}</p>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Recent Orders (All Businesses)</p>
-                                </div>
-                                <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                        <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Order", "Business", "Customer", "Amount", "Status", "Time"].map(h => (
-                                                <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
-                                            ))}
-                                        </tr></thead>
-                                        <tbody>
-                                            {orders.slice(0, 10).map(o => (
-                                                <tr key={o.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                    <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11px", color: d.muted }}>#{o.id.substring(0, 8).toUpperCase()}</td>
-                                                    <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "600", color: d.text }}>{o.business_name}</td>
-                                                    <td style={{ padding: "10px 14px", fontSize: "12px", color: d.muted }}>{o.customer_phone?.replace("whatsapp:", "")}</td>
-                                                    <td style={{ padding: "10px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>{o.total_amount ? "GHS " + parseFloat(o.total_amount).toFixed(2) : "—"}</td>
-                                                    <td style={{ padding: "10px 14px" }}>
-                                                        <span style={{ fontSize: "10px", fontWeight: "700", padding: "2px 8px", borderRadius: "5px", backgroundColor: o.status === "delivered" ? "rgba(34,197,94,0.1)" : o.status === "pending" ? "rgba(245,158,11,0.1)" : accentSoft, color: o.status === "delivered" ? "#22c55e" : o.status === "pending" ? "#f59e0b" : accent }}>
-                                                            {o.status}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: "10px 14px", fontSize: "11px", color: d.muted, whiteSpace: "nowrap" }}>{new Date(o.created_at).toLocaleString("en-GH", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── ANALYTICS ── */}
-                    {activePage === "analytics" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease" }}>
-                            <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text }}>Platform Analytics</h1>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
-                                {[
-                                    { label: "Total Revenue Processed", value: "GHS " + orders.filter(o => o.payment_status === "paid").reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0).toFixed(2), sub: "All paid orders", color: "#22c55e" },
-                                    { label: "Platform Earnings", value: "GHS " + platformRevenueByRules.toFixed(2), sub: "Based on configured commission rules", color: "#8b5cf6" },
-                                    { label: "Avg Order Value", value: "GHS " + (orders.length > 0 ? (orders.filter(o => o.total_amount).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / orders.filter(o => o.total_amount).length || 0).toFixed(2) : "0.00"), sub: "Across all businesses", color: accent },
-                                ].map((s, i) => (
-                                    <div key={i} style={{ ...cardStyle, padding: "20px" }}>
-                                        <p style={{ fontSize: "10px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>{s.label}</p>
-                                        <p style={{ fontSize: "26px", fontWeight: "800", color: s.color, marginBottom: "4px" }}>{s.value}</p>
-                                        <p style={{ fontSize: "11px", color: d.muted }}>{s.sub}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Business Performance</p>
-                                </div>
-                                <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                                        <thead><tr style={{ backgroundColor: d.bg3 }}>
-                                            {["Business", "Status", "Total Orders", "Today", "Revenue", "Platform Cut", "Paid", "Pending", "Delivered"].map(h => (
-                                                <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: "10px", fontWeight: "700", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{h}</th>
-                                            ))}
-                                        </tr></thead>
-                                        <tbody>
-                                            {businesses.map(biz => {
-                                                const bo = bizOrders(biz.name);
-                                                const bt = bo.filter(o => new Date(o.created_at).toDateString() === today);
-                                                return (
-                                                    <tr key={biz.id} className="row-h" style={{ borderTop: `1px solid ${d.border}` }}>
-                                                        <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "600", color: d.text }}>{biz.name}</td>
-                                                        <td style={{ padding: "11px 14px" }}><StatusBadge status={biz.status || "pending"} /></td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "13px", fontWeight: "700", color: d.text }}>{bo.length}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "13px", color: accent, fontWeight: "700" }}>{bt.length}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#22c55e" }}>GHS {bizRevenue(biz.name).toFixed(2)}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "12px", fontWeight: "700", color: "#8b5cf6" }}>GHS {bizPlatformEarnings(biz.name).toFixed(2)}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "12px", color: "#22c55e" }}>{bo.filter(o => o.payment_status === "paid").length}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "12px", color: "#f59e0b" }}>{bo.filter(o => o.status === "pending").length}</td>
-                                                        <td style={{ padding: "11px 14px", fontSize: "12px", color: "#22c55e" }}>{bo.filter(o => o.status === "delivered").length}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── PAYMENT SETTINGS ── */}
-                    {activePage === "payments" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease", maxWidth: "760px" }}>
-                            {!selectedBiz ? (
-                                <div style={cardStyle}>
-                                    <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                        <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Choose a business</p>
-                                    </div>
-                                    <div style={{ padding: "14px 18px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-                                        {businesses.map(b => (
-                                            <button key={b.id} onClick={() => openPaymentConfig(b)}
-                                                style={{ padding: "8px 12px", borderRadius: "8px", border: `1px solid ${d.border}`, backgroundColor: d.bg3, color: d.text, fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                                                {b.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                        <button onClick={() => { setSelectedBiz(null); setPaymentMsg(""); }} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← All Businesses</button>
-                                        <div>
-                                            <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Payments — {selectedBiz.name}</h1>
-                                            <p style={{ fontSize: "12px", color: d.muted }}>MoMo payments land in the DelivaGH Kora account. Pay vendors out manually using the figures below.</p>
-                                        </div>
-                                    </div>
-                                    {(() => {
-                                        const p = bizPayout(selectedBiz.name);
-                                        const tile = (label, value, color, note) => (
-                                            <div style={{ backgroundColor: d.bg3, borderRadius: "8px", padding: "12px 14px", border: `1px solid ${d.border}` }}>
-                                                <p style={{ fontSize: "10px", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "4px" }}>{label}</p>
-                                                <p style={{ fontSize: "22px", fontWeight: "800", color }}>GHS {value.toFixed(2)}</p>
-                                                <p style={{ fontSize: "10px", color: d.muted, marginTop: "2px" }}>{note}</p>
-                                            </div>
-                                        );
-                                        return (
-                                            <div style={cardStyle}>
-                                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Payout Summary (all paid orders)</p>
-                                                </div>
-                                                <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
-                                                    {tile("MoMo collected by DelivaGH", p.momo, "#22c55e", "Held in the Kora account")}
-                                                    {tile("Cash collected by vendor", p.cash, d.text, "Already with the vendor")}
-                                                    {tile("Platform commission", p.commission, "#8b5cf6", "On all paid orders")}
-                                                    {tile(p.owed >= 0 ? "To pay the vendor" : "Vendor owes DelivaGH", Math.abs(p.owed), p.owed >= 0 ? "#22c55e" : "#ef4444", "MoMo collected minus commission")}
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-                                    <div style={cardStyle}>
-                                        <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                            <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Platform Commission Rule</p>
-                                        </div>
-                                        <div style={{ padding: "18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                                            <div>
-                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Commission Type</label>
-                                                <select value={paymentConfig.commission_type || "flat"} onChange={e => setPaymentConfig(p => ({ ...p, commission_type: e.target.value }))} style={inp()}>
-                                                    <option value="flat">Flat amount (GHS)</option>
-                                                    <option value="percent">Percentage (%)</option>
-                                                    <option value="none">No commission</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Commission Value</label>
-                                                <input type="number" min="0" step="0.01" value={paymentConfig.commission_value ?? 0}
-                                                    onChange={e => setPaymentConfig(p => ({ ...p, commission_value: e.target.value }))}
-                                                    placeholder={paymentConfig.commission_type === "percent" ? "e.g. 7.5" : "e.g. 1.00"} style={inp()} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                        <button onClick={savePaymentConfig} disabled={paymentSaving}
-                                            style={{ padding: "12px 28px", backgroundColor: paymentSaving ? d.muted : "#8b5cf6", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: paymentSaving ? "not-allowed" : "pointer" }}>
-                                            {paymentSaving ? "Saving..." : "Save Commission"}
-                                        </button>
-                                        {paymentMsg && <span style={{ fontSize: "13px", color: paymentMsg.startsWith("Could not") ? "#ef4444" : "#22c55e", fontWeight: "600" }}>{paymentMsg}</span>}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ── BOT CONFIG ── */}
-                    {activePage === "botconfig" && selectedBiz && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", animation: "slideDown 0.2s ease", maxWidth: "600px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                <button onClick={() => setActivePage("businesses")} style={{ background: "none", border: `1px solid ${d.border}`, borderRadius: "8px", padding: "6px 12px", color: d.muted, fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>← Back</button>
-                                <div>
-                                    <h1 style={{ fontSize: "18px", fontWeight: "700", color: d.text, marginBottom: "2px" }}>Bot Config — {selectedBiz.name}</h1>
-                                    <p style={{ fontSize: "12px", color: d.muted }}>Customize how the WhatsApp bot behaves for this business.</p>
-                                </div>
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Type</p>
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "2px" }}>What kind of business is this?</p>
-                                </div>
-                                <div style={{ padding: "18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                    {[
-                                        { id: "food", label: "Food & Restaurant", icon: "🍽️", desc: "Menu ordering, delivery/pickup, meal customizations" },
-                                        { id: "food_fast", label: "Fast Food", icon: "🍔", desc: "Quick orders, combos, simple menu" },
-                                        { id: "chop_bar", label: "Chop Bar / Canteen", icon: "🍲", desc: "Local Ghanaian food, daily specials" },
-                                        { id: "bakery", label: "Bakery & Pastry", icon: "🥐", desc: "Baked goods, custom cakes, pre-orders" },
-                                        { id: "grocery", label: "Grocery & Provisions", icon: "🛒", desc: "Shopping lists, sizes, out-of-stock choice" },
-                                        { id: "retail", label: "Shop / Retail", icon: "🛍️", desc: "Products such as clothes, phones, beauty" },
-                                    ].map(type => {
-                                        const selected = (botConfig.bot_type || "food") === type.id;
-                                        return (
-                                            <div key={type.id} onClick={() => setBotConfig(p => ({ ...p, bot_type: type.id }))}
-                                                style={{ padding: "14px", borderRadius: "10px", border: `1px solid ${selected ? accent : d.border}`, backgroundColor: selected ? accentSoft : d.bg3, cursor: "pointer", transition: "all 0.15s" }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
-                                                    <span style={{ fontSize: "18px" }}>{type.icon}</span>
-                                                    <span style={{ fontSize: "12px", fontWeight: "700", color: selected ? accent : d.text }}>{type.label}</span>
-                                                </div>
-                                                <p style={{ fontSize: "11px", color: d.muted, margin: 0, lineHeight: "1.4" }}>{type.desc}</p>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Bot Identity</p>
-                                    <p style={{ fontSize: "11px", color: d.muted, marginTop: "2px" }}>Define the AI personality for this business.</p>
-                                </div>
-                                <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Bot Name</label>
-                                        <input value={botConfig.bot_name || ""} onChange={e => setBotConfig(p => ({ ...p, bot_name: e.target.value }))} placeholder="e.g. Mama's Bot" style={inp()} />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Persona & Vibe</label>
-                                        <textarea value={botConfig.bot_persona || ""} onChange={e => setBotConfig(p => ({ ...p, bot_persona: e.target.value }))}
-                                            placeholder="e.g. Warm and motherly. Speaks like a friendly Ghanaian aunty."
-                                            style={{ ...inp({ height: "80px", resize: "none" }) }} />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Location & Pickup Info</label>
-                                        <input value={botConfig.bot_location || ""} onChange={e => setBotConfig(p => ({ ...p, bot_location: e.target.value }))}
-                                            placeholder="e.g. Behind the Engineering Block, UMaT." style={inp()} />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Special Instructions</label>
-                                        <textarea value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(p => ({ ...p, bot_special_instructions: e.target.value }))}
-                                            placeholder="e.g. Closed on Sundays. Ask campus customers for their hall and room number."
-                                            style={{ ...inp({ height: "80px", resize: "none" }) }} />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Boundaries</label>
-                                        <input value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(p => ({ ...p, bot_boundaries: e.target.value }))}
-                                            placeholder="e.g. Only sell food items. Do not discuss other businesses." style={inp()} />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Custom Greeting</label>
-                                        <textarea value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(p => ({ ...p, bot_greeting: e.target.value }))}
-                                            placeholder={`e.g. Welcome to ${selectedBiz?.name}! 👋`}
-                                            style={{ ...inp({ height: "70px", resize: "none" }) }} />
-                                    </div>
-                                    <div style={{ borderTop: `1px solid ${d.border}`, paddingTop: "14px" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Extra Business Info</label>
-                                        <textarea value={botConfig.business_context || ""} onChange={e => setBotConfig(p => ({ ...p, business_context: e.target.value }))}
-                                            placeholder="Optional: anything else the bot should know, e.g. 'We cater for events. Large orders need a day's notice.' Used together with the fields above."
-                                            style={{ ...inp({ height: "120px", resize: "vertical" }) }} />
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={cardStyle}>
-                                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${d.border}` }}>
-                                    <p style={{ fontSize: "13px", fontWeight: "700", color: d.text }}>Delivery Settings</p>
-                                </div>
-                                <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: "14px" }}>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Delivery Zones</label>
-                                        <input value={botConfig.delivery_zones || ""} onChange={e => setBotConfig(p => ({ ...p, delivery_zones: e.target.value }))}
-                                            placeholder="e.g. Accra, Tema, Madina, East Legon" style={inp()} />
-                                        <p style={{ fontSize: "11px", color: d.muted, marginTop: "6px" }}>The bot tells customers these areas. For anywhere else it says the vendor will confirm.</p>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>Minimum Order Amount (GHS)</label>
-                                        <input type="number" value={botConfig.min_order_amount || ""} onChange={e => setBotConfig(p => ({ ...p, min_order_amount: e.target.value }))} placeholder="0" style={inp()} />
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                <button onClick={saveBotConfig} disabled={saving}
-                                    style={{ padding: "12px 28px", backgroundColor: saving ? d.muted : accent, color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "700", cursor: saving ? "not-allowed" : "pointer" }}>
-                                    {saving ? "Saving..." : "Save Configuration"}
-                                </button>
-                                {saveMsg && <span style={{ fontSize: "13px", color: "#22c55e", fontWeight: "600" }}>{saveMsg}</span>}
-                            </div>
-                        </div>
-                    )}
-
-
-                        {activePage === "botcontrol" && (
-                            <div style={{ maxWidth: "560px", display: "flex", flexDirection: "column", gap: "16px" }}>
-                                <div style={{ backgroundColor: d.card, border: `1px solid ${d.border}`, borderRadius: "12px", padding: "24px" }}>
-                                    <h2 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: "700", color: d.text }}>Global Bot Switch</h2>
-                                    <p style={{ margin: "0 0 20px", fontSize: "12px", color: d.muted }}>
-                                        Turn off the bot to stop it from responding to ALL customers across ALL businesses.
-                                        Customers will receive the offline message below instead.
-                                    </p>
-
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px", backgroundColor: botActive ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)", borderRadius: "10px", border: `1px solid ${botActive ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`, marginBottom: "16px" }}>
-                                        <div>
-                                            <p style={{ margin: "0 0 3px", fontSize: "14px", fontWeight: "700", color: d.text }}>
-                                                Bot is currently <span style={{ color: botActive ? "#22c55e" : "#ef4444" }}>{botActive ? "ONLINE" : "OFFLINE"}</span>
-                                            </p>
-                                            <p style={{ margin: 0, fontSize: "11px", color: d.muted }}>
-                                                {botActive ? "Responding to all customer messages" : "All messages getting offline reply"}
-                                            </p>
-                                        </div>
-                                        <div onClick={() => setBotActive(prev => !prev)}
-                                            style={{ width: "52px", height: "28px", backgroundColor: botActive ? "#22c55e" : "#ef4444", borderRadius: "14px", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                                            <div style={{ position: "absolute", width: "20px", height: "20px", backgroundColor: "white", borderRadius: "50%", top: "4px", left: botActive ? "28px" : "4px", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
-                                        </div>
-                                    </div>
-
-                                    <div style={{ marginBottom: "16px" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: d.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "6px" }}>
-                                            Offline Message (sent to customers when bot is off)
-                                        </label>
-                                        <textarea
-                                            value={botOfflineMessage}
-                                            onChange={e => setBotOfflineMessage(e.target.value)}
-                                            rows={3}
-                                            style={{ width: "100%", padding: "10px 12px", backgroundColor: d.input, border: `1px solid ${d.inputBorder}`, borderRadius: "8px", fontSize: "13px", color: d.text, outline: "none", resize: "vertical", boxSizing: "border-box" }}
-                                        />
-                                    </div>
-
-                                    <button onClick={saveBotSwitch} disabled={botSwitchLoading}
-                                        style={{ width: "100%", padding: "12px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "9px", fontWeight: "600", fontSize: "13px", cursor: botSwitchLoading ? "not-allowed" : "pointer", letterSpacing: "0.01em" }}>
-                                        {botSwitchLoading ? "Saving..." : botSwitchSaved ? "Saved!" : "Save Bot Settings"}
-                                    </button>
+                                    </section>
                                 </div>
                             </div>
                         )}
 
+                        {/* APPROVALS */}
+                        {activePage === "approvals" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Approvals</h1>
+                                        <p className="dx-sub">New shops can't take orders until you approve them. Approving adds the shop to the bot.</p>
+                                    </div>
+                                </div>
+                                {pending.length === 0 ? (
+                                    <div className="dx-panel dx-empty"><h3>Nothing to review</h3><p>New sign-ups show up here.</p></div>
+                                ) : (
+                                    <div className="dx-stack">
+                                        {pending.map(biz => (
+                                            <article key={biz.id} className="dx-panel">
+                                                <div className="dx-panel-body dx-spread" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+                                                    <div className="dx-row" style={{ alignItems: "flex-start", gap: 14, flexWrap: "nowrap" }}>
+                                                        <div className="dx-avatar" style={{ width: 44, height: 44, borderRadius: 12, fontSize: 18 }}>{shopInitial(biz.name)}</div>
+                                                        <div>
+                                                            <h2 className="dx-panel-title" style={{ fontSize: 16 }}>{biz.name}</h2>
+                                                            <p className="dx-hint">Signed up {new Date(biz.created_at).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                                                            <dl className="dx-dl" style={{ marginTop: 12, gridTemplateColumns: "80px minmax(0,1fr)" }}>
+                                                                {biz.owner_name && <><dt>Owner</dt><dd>{biz.owner_name}</dd></>}
+                                                                <dt>Phone</dt><dd className="num">{biz.phone || "Not given"}</dd>
+                                                                <dt>Email</dt><dd>{String(biz.email || "").includes("@") ? biz.email : "Not loaded"}</dd>
+                                                                {biz.bot_type && <><dt>Type</dt><dd style={{ textTransform: "capitalize" }}>{String(biz.bot_type).replace("_", " ")}</dd></>}
+                                                            </dl>
+                                                        </div>
+                                                    </div>
+                                                    <div className="dx-row">
+                                                        <button type="button" className="dx-btn is-ghost" onClick={() => openBotConfig(biz)}>Bot settings</button>
+                                                        <button type="button" className="dx-btn is-danger" onClick={() => rejectBusiness(biz.id)} disabled={!!actionLoading[biz.id]}>{actionLoading[biz.id] === "rejecting" ? "Rejecting…" : "Reject"}</button>
+                                                        <button type="button" className="dx-btn is-primary" onClick={() => approveBusiness(biz.id)} disabled={!!actionLoading[biz.id]}>{actionLoading[biz.id] === "approving" ? "Approving…" : "Approve"}</button>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* SHOPS */}
+                        {activePage === "businesses" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Shops</h1>
+                                        <p className="dx-sub">Every shop on Delivagh, its bot settings and payouts.</p>
+                                    </div>
+                                    <button type="button" className="dx-btn is-primary" onClick={openCreateVendorModal}><Icon name="plus" size={16} />Add shop</button>
+                                </div>
+                                <div className="dx-seg" role="group" aria-label="Filter shops" style={{ marginBottom: 14 }}>
+                                    {[["all", "All"], ["active", "Active"], ["pending", "Waiting"], ["suspended", "Suspended"], ["rejected", "Rejected"]].map(([id, label]) => (
+                                        <button key={id} type="button" aria-pressed={bizFilter === id} onClick={() => setBizFilter(id)}>
+                                            {label}<span className="num">{id === "all" ? businesses.length : businesses.filter(b => (b.status || "pending") === id).length}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="dx-panel">
+                                    {shopsShown.length === 0 ? <div className="dx-empty"><p>No shops here.</p></div> : (
+                                        <>
+                                            <div className="dx-table-wrap dx-hide-phone">
+                                                <table className="dx-table">
+                                                    <thead><tr><th>Shop</th><th>Status</th><th className="is-right">Orders</th><th className="is-right">Paid (GHS)</th><th>Commission</th><th>Joined</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                                                    <tbody>
+                                                        {shopsShown.map(biz => (
+                                                            <tr key={biz.id}>
+                                                                <td>
+                                                                    <div className="dx-row" style={{ flexWrap: "nowrap", gap: 10 }}>
+                                                                        <div className="dx-avatar">{shopInitial(biz.name)}</div>
+                                                                        <div style={{ minWidth: 0 }}><div className="dx-cell-main truncate">{biz.name}</div><div className="dx-cell-sub truncate">{String(biz.email || "").includes("@") ? biz.email : phoneOf(biz.phone)}</div></div>
+                                                                    </div>
+                                                                </td>
+                                                                <td>{statusTag(biz.status || "pending")}</td>
+                                                                <td className="is-right num">{bizOrders(biz.name).length}</td>
+                                                                <td className="is-right dx-price">{money(bizRevenue(biz.name))}</td>
+                                                                <td className="num">{commissionText(biz)}</td>
+                                                                <td className="muted num nowrap">{dateOf(biz.created_at)}</td>
+                                                                <td className="is-right">
+                                                                    <div className="dx-row" style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 4 }}>
+                                                                        <button type="button" className="dx-btn is-sm is-ghost" onClick={() => openBotConfig(biz)}>Bot</button>
+                                                                        <button type="button" className="dx-btn is-sm is-ghost" onClick={() => openPaymentConfig(biz)}>Payouts</button>
+                                                                        {biz.status === "pending" && <button type="button" className="dx-btn is-sm is-primary" disabled={!!actionLoading[biz.id]} onClick={() => approveBusiness(biz.id)}>{actionLoading[biz.id] ? "…" : "Approve"}</button>}
+                                                                        {biz.status === "active" && <button type="button" className="dx-btn is-sm" disabled={!!actionLoading[biz.id]} onClick={() => { if (window.confirm(`Suspend ${biz.name}? Customers won't be able to order from it.`)) suspendBusiness(biz.id, biz.status); }}>{actionLoading[biz.id] ? "…" : "Suspend"}</button>}
+                                                                        {biz.status === "suspended" && <button type="button" className="dx-btn is-sm" disabled={!!actionLoading[biz.id]} onClick={() => suspendBusiness(biz.id, biz.status)}>{actionLoading[biz.id] ? "…" : "Reactivate"}</button>}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div className="dx-list dx-show-phone">
+                                                {shopsShown.map(biz => (
+                                                    <div key={biz.id} className="dx-list-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+                                                        <div className="dx-spread">
+                                                            <div className="dx-row" style={{ flexWrap: "nowrap", gap: 10, minWidth: 0 }}>
+                                                                <div className="dx-avatar">{shopInitial(biz.name)}</div>
+                                                                <div style={{ minWidth: 0 }}><div className="dx-cell-main truncate">{biz.name}</div><div className="dx-cell-sub">{bizOrders(biz.name).length} orders · GHS {money(bizRevenue(biz.name))}</div></div>
+                                                            </div>
+                                                            {statusTag(biz.status || "pending")}
+                                                        </div>
+                                                        <div className="dx-row" style={{ gap: 6 }}>
+                                                            <button type="button" className="dx-btn is-sm" onClick={() => openBotConfig(biz)}>Bot</button>
+                                                            <button type="button" className="dx-btn is-sm" onClick={() => openPaymentConfig(biz)}>Payouts</button>
+                                                            {biz.status === "pending" && <button type="button" className="dx-btn is-sm is-primary" onClick={() => approveBusiness(biz.id)}>Approve</button>}
+                                                            {biz.status === "active" && <button type="button" className="dx-btn is-sm" onClick={() => { if (window.confirm(`Suspend ${biz.name}?`)) suspendBusiness(biz.id, biz.status); }}>Suspend</button>}
+                                                            {biz.status === "suspended" && <button type="button" className="dx-btn is-sm" onClick={() => suspendBusiness(biz.id, biz.status)}>Reactivate</button>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CUSTOMERS */}
+                        {activePage === "customers" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Customers</h1>
+                                        <p className="dx-sub">{registeredCustomers.length} people who signed up through the WhatsApp form.</p>
+                                    </div>
+                                </div>
+                                <div className="dx-panel">
+                                    {registeredCustomers.length === 0 ? (
+                                        <div className="dx-empty"><h3>No sign-ups yet</h3><p>Customers appear here after they finish the WhatsApp sign-up form.</p></div>
+                                    ) : (
+                                        <div className="dx-table-wrap">
+                                            <table className="dx-table" style={{ minWidth: 560 }}>
+                                                <thead><tr><th>Name</th><th>WhatsApp</th><th>Email</th><th>Signed up</th></tr></thead>
+                                                <tbody>
+                                                    {registeredCustomers.map(c => (
+                                                        <tr key={c.id || c.phone}>
+                                                            <td className="dx-cell-main">{c.full_name || c.first_name || "—"}</td>
+                                                            <td className="num">{phoneOf(c.phone)}</td>
+                                                            <td className="muted">{c.email || "—"}</td>
+                                                            <td className="muted num nowrap">{dateOf(c.registered_at)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MESSAGE LOG */}
+                        {activePage === "webhooks" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Message log</h1>
+                                        <p className="dx-sub">Live feed of messages customers send the bot, and what the bot did with each.</p>
+                                    </div>
+                                </div>
+                                {webhookLogsError && <p className="dx-msg is-error" role="alert" style={{ marginBottom: 14 }}>{webhookLogsError}</p>}
+                                <div className="dx-row" style={{ marginBottom: 14 }}>
+                                    <input className="dx-input" style={{ maxWidth: 420 }} type="search" value={webhookFilter} onChange={e => setWebhookFilter(e.target.value)}
+                                        placeholder="Search phone, shop, message or outcome" aria-label="Search the message log" />
+                                    <span className="dx-hint num">{filteredWebhookLogs.length} {filteredWebhookLogs.length === 1 ? "message" : "messages"}</span>
+                                </div>
+                                <div className="dx-panel dx-table-wrap" style={{ maxHeight: "70vh" }}>
+                                    <table className="dx-table" style={{ minWidth: 920 }}>
+                                        <thead style={{ position: "sticky", top: 0, zIndex: 1 }}><tr><th>Time</th><th>Customer</th><th>Shop</th><th>Message</th><th>Outcome</th><th>Note or reply</th></tr></thead>
+                                        <tbody>
+                                            {filteredWebhookLogs.length === 0 && !webhookLogsError && (
+                                                <tr><td colSpan={6}><div className="dx-empty" style={{ padding: 24 }}><p>No messages yet.</p></div></td></tr>
+                                            )}
+                                            {filteredWebhookLogs.map(row => {
+                                                const note = row.skip_reason || row.error_message || row.reply_preview || "—";
+                                                return (
+                                                    <tr key={row.id} style={{ verticalAlign: "top" }}>
+                                                        <td className="muted num nowrap">{row.created_at ? new Date(row.created_at).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "—"}</td>
+                                                        <td className="num nowrap">{phoneOf(row.customer_phone) || "—"}{row.source && <div className="dx-cell-sub">{row.source}</div>}</td>
+                                                        <td className="muted">{row.business_name || "—"}</td>
+                                                        <td style={{ maxWidth: 280 }} title={row.body || ""}><div style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{row.body || "—"}</div></td>
+                                                        <td>{outcomeTag(row.outcome)}</td>
+                                                        <td className="muted" style={{ maxWidth: 320 }} title={note}><div style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{note}</div></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SYSTEM HEALTH */}
+                        {activePage === "health" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">System health</h1>
+                                        <p className="dx-sub">Checked every 30 seconds while this page is open.</p>
+                                    </div>
+                                    <button type="button" className="dx-btn" onClick={checkHealth}><Icon name="refresh" size={16} />Check now</button>
+                                </div>
+                                <div className="dx-stack" style={{ gap: 20 }}>
+                                    <section className="dx-panel dx-list">
+                                        {[
+                                            { label: "Backend API", sub: "api.delivagh.app", status: health.backend, detail: health.backend === "ok" ? "Responding" : "Not reachable" },
+                                            { label: "Database", sub: "Supabase", status: health.supabase, detail: health.supabase === "ok" ? "Queries working" : "Connection failed" },
+                                            { label: "WhatsApp bot", sub: "Webhook route and Meta settings", status: health.groq, detail: health.groq === "ok" ? "Responding, Meta settings present" : "Unreachable, or Meta settings missing" },
+                                        ].map(s => (
+                                            <div key={s.label} className="dx-list-row" style={{ padding: "16px 18px" }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.label}</div><div className="dx-cell-sub">{s.sub} · {s.detail}</div></div>
+                                                {health_(s.status)}
+                                            </div>
+                                        ))}
+                                        <div className="dx-list-row" style={{ padding: "16px 18px" }}>
+                                            <div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>WhatsApp delivery</div><div className="dx-cell-sub">Meta's own status isn't visible from here. Check Meta Business Manager if messages stop arriving.</div></div>
+                                            <a className="dx-btn is-sm is-ghost" href="https://business.facebook.com/" target="_blank" rel="noopener noreferrer"><Icon name="external" size={15} />Open</a>
+                                        </div>
+                                    </section>
+                                    <section className="dx-panel">
+                                        <div className="dx-panel-head"><h2 className="dx-panel-title">Latest orders</h2><span className="dx-hint num">{orders.length} loaded · {businesses.length} shops</span></div>
+                                        <div className="dx-table-wrap">
+                                            <table className="dx-table">
+                                                <thead><tr><th>Order</th><th>Shop</th><th>Customer</th><th className="is-right">GHS</th><th>Status</th><th>Time</th></tr></thead>
+                                                <tbody>
+                                                    {orders.slice(0, 10).map(o => (
+                                                        <tr key={o.id}>
+                                                            <td className="mono">{shortId(o.id)}</td>
+                                                            <td className="dx-cell-main">{o.business_name}</td>
+                                                            <td className="muted num">{phoneOf(o.customer_phone)}</td>
+                                                            <td className="is-right dx-price">{money(o.total_amount)}</td>
+                                                            <td>{orderTag(o)}</td>
+                                                            <td className="muted num nowrap">{new Date(o.created_at).toLocaleString("en-GH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ANALYTICS */}
+                        {activePage === "analytics" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Analytics</h1>
+                                        <p className="dx-sub">Based on the latest 500 orders.</p>
+                                    </div>
+                                </div>
+                                <div className="dx-kpis" style={{ "--cols": 3, marginBottom: 20 }}>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Paid order value</p><p className="dx-kpi-value"><small>GHS</small>{money(paidTotal)}</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Platform earnings</p><p className="dx-kpi-value"><small>GHS</small>{money(platformRevenueByRules)}</p><p className="dx-kpi-note">From each shop's commission</p></div>
+                                    <div className="dx-kpi"><p className="dx-kpi-label">Average order</p><p className="dx-kpi-value"><small>GHS</small>{money(orders.filter(o => o.total_amount).length ? orders.filter(o => o.total_amount).reduce((s, o) => s + parseFloat(o.total_amount || 0), 0) / orders.filter(o => o.total_amount).length : 0)}</p></div>
+                                </div>
+                                <section className="dx-panel">
+                                    <div className="dx-panel-head"><h2 className="dx-panel-title">By shop</h2></div>
+                                    <div className="dx-table-wrap">
+                                        <table className="dx-table" style={{ minWidth: 760 }}>
+                                            <thead><tr><th>Shop</th><th className="is-right">Orders</th><th className="is-right">Today</th><th className="is-right">Delivered</th><th className="is-right">Waiting</th><th className="is-right">Paid (GHS)</th><th className="is-right">Earnings (GHS)</th></tr></thead>
+                                            <tbody>
+                                                {businesses.map(biz => {
+                                                    const bo = bizOrders(biz.name);
+                                                    return (
+                                                        <tr key={biz.id}>
+                                                            <td><div className="dx-cell-main">{biz.name}</div><div className="dx-cell-sub">{statusTag(biz.status || "pending")}</div></td>
+                                                            <td className="is-right num">{bo.length}</td>
+                                                            <td className="is-right num">{bo.filter(o => new Date(o.created_at).toDateString() === today).length}</td>
+                                                            <td className="is-right num">{bo.filter(o => o.status === "delivered").length}</td>
+                                                            <td className={"is-right num" + (bo.some(o => o.status === "pending") ? " attn-text" : "")}>{bo.filter(o => o.status === "pending").length}</td>
+                                                            <td className="is-right dx-price">{money(bizRevenue(biz.name))}</td>
+                                                            <td className="is-right dx-price">{money(bizPlatformEarnings(biz.name))}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            </div>
+                        )}
+
+                        {/* PAYOUTS */}
+                        {activePage === "payments" && (
+                            <div>
+                                {!selectedBiz ? (
+                                    <>
+                                        <div className="dx-page-head">
+                                            <div>
+                                                <h1 className="dx-title">Payouts</h1>
+                                                <p className="dx-sub">MoMo payments land in the Delivagh Kora account. Pay each shop its share yourself, using these figures.</p>
+                                            </div>
+                                        </div>
+                                        <div className="dx-panel dx-table-wrap">
+                                            <table className="dx-table" style={{ minWidth: 640 }}>
+                                                <thead><tr><th>Shop</th><th className="is-right">MoMo held</th><th className="is-right">Commission</th><th className="is-right">To pay the shop</th><th><span className="sr-only">Open</span></th></tr></thead>
+                                                <tbody>
+                                                    {businesses.filter(b => b.status !== "rejected").map(b => {
+                                                        const p = bizPayout(b.name);
+                                                        return (
+                                                            <tr key={b.id} className="is-clickable" onClick={() => openPaymentConfig(b)}>
+                                                                <td className="dx-cell-main">{b.name}</td>
+                                                                <td className="is-right dx-price">{money(p.momo)}</td>
+                                                                <td className="is-right num muted">{money(p.commission)}</td>
+                                                                <td className={"is-right dx-price" + (p.owed < 0 ? " danger-text" : "")}>{p.owed < 0 ? "−" : ""}{money(Math.abs(p.owed))}</td>
+                                                                <td className="is-right faint"><Icon name="chevronRight" size={16} /></td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                ) : (() => {
+                                    const p = bizPayout(selectedBiz.name);
+                                    return (
+                                        <>
+                                            <div className="dx-page-head">
+                                                <div>
+                                                    <button type="button" className="dx-link dx-row" style={{ gap: 4, marginBottom: 8 }} onClick={() => { setSelectedBiz(null); setPaymentMsg(""); }}><Icon name="chevronLeft" size={15} />All payouts</button>
+                                                    <h1 className="dx-title">{selectedBiz.name}</h1>
+                                                    <p className="dx-sub">All paid orders so far.</p>
+                                                </div>
+                                            </div>
+                                            <div className="dx-kpis" style={{ marginBottom: 24 }}>
+                                                <div className="dx-kpi"><p className="dx-kpi-label">MoMo held by Delivagh</p><p className="dx-kpi-value"><small>GHS</small>{money(p.momo)}</p><p className="dx-kpi-note">In the Kora account</p></div>
+                                                <div className="dx-kpi"><p className="dx-kpi-label">Cash taken by the shop</p><p className="dx-kpi-value"><small>GHS</small>{money(p.cash)}</p><p className="dx-kpi-note">Already with them</p></div>
+                                                <div className="dx-kpi"><p className="dx-kpi-label">Commission</p><p className="dx-kpi-value"><small>GHS</small>{money(p.commission)}</p><p className="dx-kpi-note">{commissionText(selectedBiz)} per paid order</p></div>
+                                                <div className={"dx-kpi" + (p.owed < 0 ? " is-attn" : "")}><p className="dx-kpi-label">{p.owed >= 0 ? "To pay the shop" : "Shop owes Delivagh"}</p><p className="dx-kpi-value"><small>GHS</small>{money(Math.abs(p.owed))}</p><p className="dx-kpi-note">MoMo held minus commission</p></div>
+                                            </div>
+                                            <section className="dx-setting-group" style={{ paddingTop: 0, borderTop: 0 }}>
+                                                <div><h2>Commission</h2><p>What Delivagh keeps from each paid order of this shop.</p></div>
+                                                <form className="dx-setting-fields" onSubmit={e => { e.preventDefault(); savePaymentConfig(); }}>
+                                                    <div className="dx-form-grid">
+                                                        <label className="dx-field"><span className="dx-label">Type</span>
+                                                            <select className="dx-select" value={paymentConfig.commission_type || "flat"} onChange={e => setPaymentConfig(c => ({ ...c, commission_type: e.target.value }))}>
+                                                                <option value="flat">Fixed amount per order (GHS)</option>
+                                                                <option value="percent">Percentage of the order</option>
+                                                                <option value="none">No commission</option>
+                                                            </select></label>
+                                                        <label className="dx-field"><span className="dx-label">{paymentConfig.commission_type === "percent" ? "Percent" : "Amount (GHS)"}</span>
+                                                            <input className="dx-input num" type="number" min="0" step="0.01" disabled={paymentConfig.commission_type === "none"} value={paymentConfig.commission_value ?? 0}
+                                                                onChange={e => setPaymentConfig(c => ({ ...c, commission_value: e.target.value }))} /></label>
+                                                    </div>
+                                                    {paymentMsg && <p className={"dx-msg " + (paymentMsg.startsWith("Could not") ? "is-error" : "is-ok")} role="status">{paymentMsg}</p>}
+                                                    <button type="submit" className="dx-btn is-primary" style={{ alignSelf: "flex-start" }} disabled={paymentSaving}>{paymentSaving ? "Saving…" : "Save commission"}</button>
+                                                </form>
+                                            </section>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* BOT SETTINGS (per shop) */}
+                        {activePage === "botconfig" && selectedBiz && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <button type="button" className="dx-link dx-row" style={{ gap: 4, marginBottom: 8 }} onClick={() => go("businesses")}><Icon name="chevronLeft" size={15} />Shops</button>
+                                        <h1 className="dx-title">{selectedBiz.name}</h1>
+                                        <p className="dx-sub">What this shop's WhatsApp bot knows and how it talks.</p>
+                                    </div>
+                                </div>
+                                <form className="dx-settings" onSubmit={e => { e.preventDefault(); saveBotConfig(); }}>
+                                    <section className="dx-setting-group">
+                                        <div><h2>Kind of shop</h2><p>Changes how the bot words things, e.g. "being prepared" or "being packed".</p></div>
+                                        <div className="dx-setting-fields">
+                                            <div role="radiogroup" aria-label="Kind of shop" className="dx-choice-grid">
+                                                {[
+                                                    { id: "food", label: "Restaurant", desc: "Meals, delivery or pickup" },
+                                                    { id: "food_fast", label: "Fast food", desc: "Quick orders, combos" },
+                                                    { id: "chop_bar", label: "Chop bar", desc: "Local dishes, daily specials" },
+                                                    { id: "bakery", label: "Bakery", desc: "Bread, cakes, pre-orders" },
+                                                    { id: "grocery", label: "Groceries", desc: "Shopping lists, sizes" },
+                                                    { id: "retail", label: "Shop", desc: "Clothes, phones, beauty" },
+                                                ].map(type => (
+                                                    <button key={type.id} type="button" role="radio" aria-checked={(botConfig.bot_type || "food") === type.id} className="dx-choice"
+                                                        onClick={() => setBotConfig(c => ({ ...c, bot_type: type.id }))}>
+                                                        <strong>{type.label}</strong><span>{type.desc}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </section>
+                                    <section className="dx-setting-group">
+                                        <div><h2>Voice</h2><p>How the bot introduces itself and sounds.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <label className="dx-field"><span className="dx-label">Bot name</span>
+                                                <input className="dx-input" value={botConfig.bot_name || ""} onChange={e => setBotConfig(c => ({ ...c, bot_name: e.target.value }))} placeholder="e.g. Esi" /></label>
+                                            <label className="dx-field"><span className="dx-label">Tone</span>
+                                                <textarea className="dx-textarea" rows={2} value={botConfig.bot_persona || ""} onChange={e => setBotConfig(c => ({ ...c, bot_persona: e.target.value }))} placeholder="e.g. Warm and motherly, like a friendly Ghanaian auntie." /></label>
+                                            <label className="dx-field"><span className="dx-label">Welcome message</span>
+                                                <textarea className="dx-textarea" rows={2} value={botConfig.bot_greeting || ""} onChange={e => setBotConfig(c => ({ ...c, bot_greeting: e.target.value }))} placeholder={`e.g. Welcome to ${selectedBiz?.name}! What can I get you?`} /></label>
+                                        </div>
+                                    </section>
+                                    <section className="dx-setting-group">
+                                        <div><h2>What the bot knows</h2><p>The bot only states facts written here or on the menu. Anything else, it tells the customer the shop will confirm.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <label className="dx-field"><span className="dx-label">Location and pickup</span>
+                                                <input className="dx-input" value={botConfig.bot_location || ""} onChange={e => setBotConfig(c => ({ ...c, bot_location: e.target.value }))} placeholder="e.g. Behind the Engineering Block, UMaT" /></label>
+                                            <label className="dx-field"><span className="dx-label">Delivery areas</span>
+                                                <input className="dx-input" value={botConfig.delivery_zones || ""} onChange={e => setBotConfig(c => ({ ...c, delivery_zones: e.target.value }))} placeholder="e.g. East Legon, Madina, Osu" />
+                                                <span className="dx-hint">For anywhere not listed, the bot says the shop will confirm.</span></label>
+                                            <label className="dx-field"><span className="dx-label">Special instructions</span>
+                                                <textarea className="dx-textarea" rows={3} value={botConfig.bot_special_instructions || ""} onChange={e => setBotConfig(c => ({ ...c, bot_special_instructions: e.target.value }))} placeholder="e.g. Closed on Sundays. Ask campus customers for their hall and room number." /></label>
+                                            <label className="dx-field"><span className="dx-label">Rules the bot must follow</span>
+                                                <input className="dx-input" value={botConfig.bot_boundaries || ""} onChange={e => setBotConfig(c => ({ ...c, bot_boundaries: e.target.value }))} placeholder="e.g. Only talk about our food. Never mention other shops." /></label>
+                                            <label className="dx-field"><span className="dx-label">Extra information <span className="faint" style={{ fontWeight: 400 }}>(optional)</span></span>
+                                                <textarea className="dx-textarea" rows={4} value={botConfig.business_context || ""} onChange={e => setBotConfig(c => ({ ...c, business_context: e.target.value }))} placeholder="Anything else, e.g. 'We cater for events. Large orders need a day's notice.'" /></label>
+                                        </div>
+                                    </section>
+                                    <section className="dx-setting-group">
+                                        <div><h2>Orders</h2><p>Limits the bot checks at checkout.</p></div>
+                                        <div className="dx-setting-fields">
+                                            <label className="dx-field" style={{ maxWidth: 220 }}><span className="dx-label">Minimum order (GHS)</span>
+                                                <input className="dx-input num" type="number" min="0" step="1" value={botConfig.min_order_amount || ""} onChange={e => setBotConfig(c => ({ ...c, min_order_amount: e.target.value }))} placeholder="0" />
+                                                <span className="dx-hint">0 means no minimum.</span></label>
+                                        </div>
+                                    </section>
+                                    <div className="dx-savebar">
+                                        <span className={saveMsg ? (flashIsError ? "danger-text" : "accent-text") : "dx-hint"} role="status" style={{ fontSize: 13, fontWeight: saveMsg ? 550 : 400 }}>
+                                            {saveMsg ? saveMsg.replace("Saved!", "Saved. The bot uses the new settings from the next message.") : "Changes apply to the bot's next reply."}
+                                        </span>
+                                        <button type="submit" className="dx-btn is-primary" disabled={saving}>{saving ? "Saving…" : "Save bot settings"}</button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
+
+                        {/* BOT SWITCH */}
+                        {activePage === "botcontrol" && (
+                            <div>
+                                <div className="dx-page-head">
+                                    <div>
+                                        <h1 className="dx-title">Bot switch</h1>
+                                        <p className="dx-sub">Turns the bot off for every shop at once. Use it for maintenance or an emergency.</p>
+                                    </div>
+                                </div>
+                                <form className="dx-stack" style={{ maxWidth: 640, gap: 18 }} onSubmit={e => {
+                                    e.preventDefault();
+                                    if (!botActive && !window.confirm("Turn the bot off for every shop? Customers will only get the offline message.")) return;
+                                    saveBotSwitch();
+                                }}>
+                                    <div className={"dx-panel dx-panel-body dx-spread"} style={botActive ? undefined : { background: "var(--danger-soft)", borderColor: "var(--danger-line)" }}>
+                                        <div>
+                                            <strong style={{ fontSize: 16 }}>{botActive ? "The bot is replying to customers" : "The bot is off for everyone"}</strong>
+                                            <p className="dx-hint" style={{ marginTop: 2 }}>{botActive ? "Switch off and save to send the offline message instead." : "Customers get the offline message below."}</p>
+                                        </div>
+                                        <button type="button" role="switch" aria-checked={botActive} aria-label="Bot replies" className="dx-switch" onClick={() => setBotActive(v => !v)} />
+                                    </div>
+                                    <label className="dx-field"><span className="dx-label">Offline message</span>
+                                        <textarea className="dx-textarea" rows={3} value={botOfflineMessage} onChange={e => setBotOfflineMessage(e.target.value)} /></label>
+                                    <div className="dx-chat" aria-label="Preview"><div className="dx-bubble">{botOfflineMessage || <span className="faint">Offline message</span>}<small>now</small></div></div>
+                                    <div className="dx-row">
+                                        <button type="submit" className="dx-btn is-primary" disabled={botSwitchLoading}>{botSwitchLoading ? "Saving…" : "Save"}</button>
+                                        {botSwitchSaved && <span className="accent-text dx-row" style={{ gap: 4, fontSize: 13, fontWeight: 550 }}><Icon name="check" size={15} />Saved</span>}
+                                    </div>
+                                </form>
+                            </div>
+                        )}
+                    </div>
                 </main>
             </div>
 
             {showCreateVendorModal && (
-                <div onClick={closeCreateVendorModal}
-                    style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-                    <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: "520px", ...cardStyle, boxShadow: d.shadow }}>
-                        <div style={{ padding: "16px 18px", borderBottom: `1px solid ${d.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="dx-overlay" onClick={closeCreateVendorModal}>
+                    <form className="dx-sheet" role="dialog" aria-modal="true" aria-label="Add a shop" onClick={e => e.stopPropagation()} onSubmit={createVendor}>
+                        <div className="dx-sheet-head">
                             <div>
-                                <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: d.text }}>Add Vendor</h2>
-                                <p style={{ margin: "4px 0 0", fontSize: "12px", color: d.muted }}>Create auth user + vendor records in one step</p>
+                                <h2 className="dx-title-sm">Add a shop</h2>
+                                <p className="dx-sub" style={{ marginTop: 4 }}>Creates the owner's login and the shop together.</p>
                             </div>
-                            <button onClick={closeCreateVendorModal} style={{ background: "transparent", border: `1px solid ${d.border}`, borderRadius: "7px", color: d.muted, cursor: "pointer", fontSize: "12px", padding: "5px 10px" }}>Close</button>
+                            <button type="button" className="dx-icon-btn" aria-label="Close" onClick={closeCreateVendorModal}><Icon name="close" /></button>
                         </div>
-
-                        <form onSubmit={createVendor} style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                            <div>
-                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Business Name</label>
-                                <input value={vendorForm.businessName} onChange={(e) => setVendorForm((p) => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Ama's Kitchen" style={inp()} required />
+                        <div className="dx-sheet-body">
+                            <label className="dx-field"><span className="dx-label">Shop name</span>
+                                <input className="dx-input" required value={vendorForm.businessName} onChange={e => setVendorForm(p => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Auntie Esi's Kitchen" /></label>
+                            <label className="dx-field"><span className="dx-label">Owner's full name</span>
+                                <input className="dx-input" required value={vendorForm.ownerName} onChange={e => setVendorForm(p => ({ ...p, ownerName: e.target.value }))} placeholder="e.g. Esi Quansah" /></label>
+                            <div className="dx-form-grid">
+                                <label className="dx-field"><span className="dx-label">Email</span>
+                                    <input className="dx-input" type="email" required value={vendorForm.email} onChange={e => setVendorForm(p => ({ ...p, email: e.target.value }))} placeholder="owner@example.com" /></label>
+                                <label className="dx-field"><span className="dx-label">WhatsApp number</span>
+                                    <input className="dx-input num" type="tel" required value={vendorForm.phone} onChange={e => setVendorForm(p => ({ ...p, phone: e.target.value }))} placeholder="024 123 4567" /></label>
                             </div>
-                            <div>
-                                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Owner Full Name</label>
-                                <input value={vendorForm.ownerName} onChange={(e) => setVendorForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="e.g. Ama Mensah" style={inp()} required />
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Email Address</label>
-                                    <input type="email" value={vendorForm.email} onChange={(e) => setVendorForm((p) => ({ ...p, email: e.target.value }))} placeholder="owner@business.com" style={inp()} required />
+                            <div className="dx-field">
+                                <label className="dx-label" htmlFor="vendor-pw">Temporary password</label>
+                                <div className="dx-row" style={{ flexWrap: "nowrap" }}>
+                                    <input id="vendor-pw" className="dx-input mono" value={vendorForm.password} onChange={e => setVendorForm(p => ({ ...p, password: e.target.value }))} />
+                                    <button type="button" className="dx-btn" onClick={() => setVendorForm(p => ({ ...p, password: randomPassword() }))}>New</button>
                                 </div>
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Phone Number</label>
-                                    <input value={vendorForm.phone} onChange={(e) => setVendorForm((p) => ({ ...p, phone: e.target.value }))} placeholder="WhatsApp number" style={inp()} required />
-                                </div>
+                                <span className="dx-hint">Send it to the owner privately. They can change it in Settings.</span>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", alignItems: "end" }}>
-                                <div>
-                                    <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: d.muted, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.06em" }}>Password</label>
-                                    <input value={vendorForm.password} onChange={(e) => setVendorForm((p) => ({ ...p, password: e.target.value }))} placeholder="Set or auto-generate password" style={inp()} />
-                                </div>
-                                <button type="button" onClick={() => setVendorForm((p) => ({ ...p, password: randomPassword() }))}
-                                    style={{ height: "40px", padding: "0 12px", backgroundColor: accentSoft, border: `1px solid ${isDark ? "rgba(34,197,94,0.35)" : "#86efac"}`, borderRadius: "8px", color: accent, fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                    Generate
-                                </button>
-                            </div>
-                            {createVendorErr && <p style={{ margin: 0, fontSize: "12px", color: "#ef4444", fontWeight: "700" }}>{createVendorErr}</p>}
-                            {createVendorMsg && <p style={{ margin: 0, fontSize: "12px", color: "#22c55e", fontWeight: "700" }}>{createVendorMsg}</p>}
-
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "6px" }}>
-                                <button type="button" onClick={closeCreateVendorModal}
-                                    style={{ padding: "9px 14px", backgroundColor: "transparent", border: `1px solid ${d.border}`, borderRadius: "8px", color: d.muted, fontSize: "12px", fontWeight: "700", cursor: creatingVendor ? "not-allowed" : "pointer" }} disabled={creatingVendor}>
-                                    Cancel
-                                </button>
-                                <button type="submit"
-                                    style={{ padding: "9px 14px", backgroundColor: creatingVendor ? d.muted : accent, border: "none", borderRadius: "8px", color: "white", fontSize: "12px", fontWeight: "700", cursor: creatingVendor ? "not-allowed" : "pointer" }} disabled={creatingVendor}>
-                                    {creatingVendor ? "Creating..." : "Create Vendor"}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                            {createVendorErr && <p className="dx-msg is-error" role="alert">{createVendorErr}</p>}
+                            {createVendorMsg && <p className="dx-msg is-ok" role="status">Shop created.</p>}
+                        </div>
+                        <div className="dx-sheet-foot">
+                            <button type="button" className="dx-btn" onClick={closeCreateVendorModal} disabled={creatingVendor}>Cancel</button>
+                            <button type="submit" className="dx-btn is-primary" disabled={creatingVendor}>{creatingVendor ? "Creating…" : "Create shop"}</button>
+                        </div>
+                    </form>
                 </div>
             )}
-        </>
+        </div>
     );
 }
