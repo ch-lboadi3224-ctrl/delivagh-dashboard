@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { supabase } from "./supabase";
 import { handleAuthError } from "./authUtils";
 import { normalizeGhanaPhone, validateBusinessName } from "./authValidators";
+import "./ui/dash.css";
 
 export default function CompleteVendorProfile({ user, onRegistered }) {
     const [businessName, setBusinessName] = useState("");
@@ -61,30 +62,30 @@ export default function CompleteVendorProfile({ user, onRegistered }) {
     const clr = (key) => setFieldErrors(p => ({ ...p, [key]: "" }));
 
     return (
-        <>
-            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
-            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#080f0a", padding: "24px", fontFamily: "'DM Sans',sans-serif" }}>
-                <div style={{ width: "100%", maxWidth: "420px", background: "#101b14", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "16px", padding: "28px" }}>
-                    <div style={{ fontSize: "22px", fontWeight: "800", color: "white", marginBottom: "4px", fontFamily: "'Playfair Display',serif" }}>Delivagh<span style={{ color: "#22c55e" }}>.</span></div>
-                    <p style={{ margin: "0 0 20px", fontSize: "12px", color: "rgba(236,253,243,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Finish setup</p>
-                    <h1 style={{ margin: "0 0 8px", fontSize: "22px", color: "#ecfdf3", fontFamily: "'Playfair Display',serif" }}>Add your business</h1>
-                    <p style={{ margin: "0 0 22px", fontSize: "14px", color: "rgba(236,253,243,0.72)", lineHeight: 1.55 }}>
-                        You signed in with Google. Enter your public business name and WhatsApp business line so we can finish your vendor profile.
-                    </p>
-                    {error && <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "12px", borderRadius: "10px", marginBottom: "16px", fontSize: "13px" }}>{error}</div>}
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: fieldErrors.businessName ? "#fca5a5" : "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Business name</label>
-                    <input value={businessName} onChange={e => { setBusinessName(e.target.value); clr("businessName"); }} placeholder="e.g. Mama's Kitchen" style={{ width: "100%", padding: "13px 16px", marginBottom: fieldErrors.businessName ? "6px" : "14px", background: "rgba(255,255,255,0.06)", border: `1px solid ${fieldErrors.businessName ? "#ef4444" : "rgba(255,255,255,0.1)"}`, borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", boxSizing: "border-box" }} />
-                    {fieldErrors.businessName && <p style={{ margin: "0 0 14px", fontSize: "12px", color: "#fca5a5" }}>{fieldErrors.businessName}</p>}
-
-                    <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: fieldErrors.phone ? "#fca5a5" : "rgba(255,255,255,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Business phone (Ghana)</label>
-                    <input value={phone} onChange={e => { setPhone(e.target.value); clr("phone"); }} placeholder="0244000000" type="tel" style={{ width: "100%", padding: "13px 16px", marginBottom: fieldErrors.phone ? "6px" : "18px", background: "rgba(255,255,255,0.06)", border: `1px solid ${fieldErrors.phone ? "#ef4444" : "rgba(255,255,255,0.1)"}`, borderRadius: "10px", fontSize: "14px", color: "white", outline: "none", boxSizing: "border-box" }} />
-                    {fieldErrors.phone && <p style={{ margin: "0 0 18px", fontSize: "12px", color: "#fca5a5" }}>{fieldErrors.phone}</p>}
-
-                    <button type="button" onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "14px", background: "#16a34a", color: "white", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.65 : 1 }}>
-                        {loading ? "Saving..." : "Submit for approval"}
+        <div className="dx dx-center" data-theme="light">
+            <div className="dx-card">
+                <div className="dx-wordmark">Delivagh<i>.</i><small>Last step</small></div>
+                <form className="dx-stack" onSubmit={e => { e.preventDefault(); if (!loading) handleSubmit(); }} noValidate>
+                    <div>
+                        <h1 className="dx-title-sm">Add your shop</h1>
+                        <p className="dx-sub">You signed in with Google. Tell us your shop's name and WhatsApp number so we can review your account.</p>
+                    </div>
+                    {error && <p className="dx-msg is-error" role="alert">{error}</p>}
+                    <label className="dx-field">
+                        <span className="dx-label">Shop name</span>
+                        <input className={`dx-input${fieldErrors.businessName ? " is-invalid" : ""}`} value={businessName} onChange={e => { setBusinessName(e.target.value); clr("businessName"); }} placeholder="e.g. Mama's Kitchen" autoComplete="organization" aria-invalid={!!fieldErrors.businessName} />
+                        {fieldErrors.businessName && <span className="dx-hint danger-text">{fieldErrors.businessName}</span>}
+                    </label>
+                    <label className="dx-field">
+                        <span className="dx-label">WhatsApp number for the shop</span>
+                        <input className={`dx-input${fieldErrors.phone ? " is-invalid" : ""}`} value={phone} onChange={e => { setPhone(e.target.value); clr("phone"); }} placeholder="024 400 0000" type="tel" inputMode="tel" autoComplete="tel" aria-invalid={!!fieldErrors.phone} />
+                        {fieldErrors.phone ? <span className="dx-hint danger-text">{fieldErrors.phone}</span> : <span className="dx-hint">A Ghana number. We'll use it to reach you about orders.</span>}
+                    </label>
+                    <button type="submit" className="dx-btn is-primary is-lg is-block" disabled={loading}>
+                        {loading ? "Saving…" : "Send for approval"}
                     </button>
-                </div>
+                </form>
             </div>
-        </>
+        </div>
     );
 }

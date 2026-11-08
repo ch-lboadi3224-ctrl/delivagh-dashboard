@@ -1,32 +1,21 @@
 import React from "react";
-import "./Terms.css";
+import { SiteFooter, SiteNav, SitePage } from "./ui/Site";
 
 export default function Terms() {
   return (
-    <div className="terms-root">
-      <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
-
-      <nav>
-        <a href="/" className="nav-logo">
-          <span className="nav-logo-text">DelivaGH</span>
-          <span className="nav-logo-dot"></span>
-        </a>
-        <a href="/" className="nav-back">
-          <svg viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Back to home
-        </a>
-      </nav>
-
-      <div className="page">
-        <div className="doc-label">Legal</div>
-        <h1 className="doc-title">Terms of Service</h1>
-        <div className="doc-meta">
-          <strong>Effective date:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
-          <strong>Last updated:</strong> 21 May 2026 &nbsp;&nbsp;|&nbsp;&nbsp;
-          <strong>Governing law:</strong> Republic of Ghana
+    <SitePage>
+      <SiteNav back />
+      <main className="st-wrap st-doc">
+        <div className="st-doc-head">
+          <p className="st-eyebrow">Legal</p>
+          <h1 className="st-h1">Terms of Service</h1>
+          <p className="st-doc-meta">
+            <span><strong>Effective date:</strong> 21 May 2026</span>
+            <span><strong>Last updated:</strong> 21 May 2026</span>
+            <span><strong>Governing law:</strong> Republic of Ghana</span>
+          </p>
         </div>
-
-        <div className="toc">
+        <nav className="st-toc" aria-label="Contents">
           <div className="toc-title">Contents</div>
           <ol>
             <li><a href="#about">About DelivaGH</a></li>
@@ -44,8 +33,8 @@ export default function Terms() {
             <li><a href="#changes">Changes to these terms</a></li>
             <li><a href="#contact">Contact</a></li>
           </ol>
-        </div>
-
+        </nav>
+        <article className="st-prose">
         <div className="highlight">
           <p>These Terms of Service are a legally binding agreement between you and Awochad Ventures, governed by the laws of Ghana including the <strong>Electronic Transactions Act, 2008 (Act 772)</strong> and the <strong>Electronic Communications Act, 2008 (Act 775)</strong>. Please read them carefully before using DelivaGH.</p>
         </div>
@@ -184,20 +173,9 @@ export default function Terms() {
           <li><strong>WhatsApp:</strong> +233 20 916 7883</li>
           <li><strong>Address:</strong> Awochad Ventures, 4750 Street 1, Dansoman, Accra, Ghana</li>
         </ul>
-      </div>
-
-      <footer>
-        <div className="footer-logo">
-          <span className="footer-logo-text">DelivaGH</span>
-          <span className="footer-logo-dot"></span>
-        </div>
-        <p className="footer-text">DelivaGH is a product of Awochad Ventures<br />Dansoman, Accra, Ghana &nbsp;·&nbsp; delivagh.app</p>
-        <div className="footer-links">
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
-          <a href="#">Contact</a>
-        </div>
-      </footer>
-    </div>
+        </article>
+      </main>
+      <SiteFooter />
+    </SitePage>
   );
 }

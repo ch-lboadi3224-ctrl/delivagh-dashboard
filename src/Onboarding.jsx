@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { handleAuthError } from "./authUtils";
+import Icon from "./ui/Icon";
+import "./ui/dash.css";
 
 const DELIVAGH_WA_NUMBER = "233276295769";
 const DELIVAGH_WA_LINK = `https://wa.me/${DELIVAGH_WA_NUMBER}?text=Hi`;
@@ -140,252 +142,135 @@ export default function Onboarding({ user, businessName, menuItems, onComplete }
         setTimeout(() => setCopied(false), 2000);
     }
 
-    const stepDot = (n) => {
-        const active = step === n;
-        const done = step > n;
-        return (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: done || active ? "#22c55e" : "rgba(255,255,255,0.06)", border: `2px solid ${done || active ? "#22c55e" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "700", color: done || active ? "white" : "rgba(255,255,255,0.45)", transition: "all 0.3s" }}>
-                    {done ? "✓" : n}
-                </div>
-                <span style={{ fontSize: "10px", color: active ? "#22c55e" : "rgba(255,255,255,0.45)", fontWeight: "600" }}>
-                    {n === 1 ? "Profile" : n === 2 ? "Menu" : n === 3 ? "Share" : "Go Live"}
-                </span>
-            </div>
-        );
-    };
+    const STEP_NAMES = ["Shop details", "First item", "Share link", "Done"];
 
     return (
-        <>
-            <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-            <style>{`
-                * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'DM Sans', sans-serif; }
-                body { background: #080f0a; }
-                .ob-input { width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 14px; color: #ecfdf3; outline: none; transition: border-color 0.2s; font-family: 'DM Sans', sans-serif; }
-                .ob-input::placeholder { color: rgba(236,253,243,0.4); }
-                .ob-input:focus { border-color: #22c55e; background: rgba(34,197,94,0.08); }
-                .ob-btn { width: 100%; padding: 14px; background: #16a34a; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
-                .ob-btn:hover:not(:disabled) { background: #22c55e; transform: translateY(-1px); }
-                .ob-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            `}</style>
+        <div className="dx dx-center" data-theme="light">
+            <div className="dx-ob">
+                <div className="dx-ob-head">
+                    <span className="dx-wordmark">Delivagh<i>.</i></span>
+                    <button type="button" className="dx-link" onClick={finish}>Skip setup</button>
+                </div>
 
-            <div style={{ minHeight: "100vh", backgroundColor: "#080f0a", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-                <div style={{ width: "100%", maxWidth: "560px" }}>
+                <ol className="dx-ob-steps" aria-label="Setup steps">
+                    {STEP_NAMES.map((name, i) => {
+                        const n = i + 1;
+                        const state = step > n ? "is-done" : step === n ? "is-on" : "";
+                        return (
+                            <li key={name} className={state} aria-current={step === n ? "step" : undefined}>
+                                <span>{name}</span>
+                            </li>
+                        );
+                    })}
+                </ol>
 
-                    {/* Header */}
-                    <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "white", marginBottom: "6px", fontFamily: "'Playfair Display', serif" }}>
-                            Delivagh<span style={{ color: "#22c55e" }}>.</span>
+                <div className="dx-card is-wide dx-ob-card" key={step}>
+                    {step === 1 && (
+                        <form className="dx-stack" onSubmit={e => { e.preventDefault(); if (!profileSaving) saveBusinessProfile(); }}>
+                            <div>
+                                <h1 className="dx-title-sm">Set up {businessName}</h1>
+                                <p className="dx-sub">The bot uses these to answer customers. You can change them later in Settings.</p>
+                            </div>
+                            {error && <p className="dx-msg is-error" role="alert">{error}</p>}
+                            <label className="dx-field">
+                                <span className="dx-label">Where do you deliver?</span>
+                                <input className="dx-input" type="text" value={deliveryZones} onChange={e => setDeliveryZones(e.target.value)} placeholder="e.g. UMaT, Tarkwa Station, New Atuabo" />
+                                <span className="dx-hint">The bot checks a customer's area against this list.</span>
+                            </label>
+                            <label className="dx-field">
+                                <span className="dx-label">Smallest order you'll take <span className="faint">(GHS, optional)</span></span>
+                                <input className="dx-input num" type="number" inputMode="decimal" min="0" step="0.01" value={minOrderAmount} onChange={e => setMinOrderAmount(e.target.value)} placeholder="0" />
+                                <span className="dx-hint">Customers are told if their order is below this amount.</span>
+                            </label>
+                            <label className="dx-field">
+                                <span className="dx-label">Welcome message <span className="faint">(optional)</span></span>
+                                <textarea className="dx-textarea" rows={3} value={botGreeting} onChange={e => setBotGreeting(e.target.value)} placeholder={`e.g. Welcome to ${businessName}. What can I get for you today?`} />
+                                <span className="dx-hint">Sent when a customer first opens your shop in the chat.</span>
+                            </label>
+                            <button type="submit" className="dx-btn is-primary is-lg is-block" disabled={profileSaving}>
+                                {profileSaving ? "Saving…" : hasExistingMenu ? "Save and continue" : "Save and add your menu"}
+                            </button>
+                        </form>
+                    )}
+
+                    {step === 2 && (
+                        <form className="dx-stack" onSubmit={e => { e.preventDefault(); if (!saving && itemName.trim() && itemPrice) addItem(); }}>
+                            <div>
+                                <h1 className="dx-title-sm">Add your first item</h1>
+                                <p className="dx-sub">One item is enough for customers to start ordering. You can add the rest from Menu.</p>
+                            </div>
+                            {error && <p className="dx-msg is-error" role="alert">{error}</p>}
+                            <label className="dx-field">
+                                <span className="dx-label">Item name</span>
+                                <input className="dx-input" type="text" value={itemName} onChange={e => setItemName(e.target.value)} placeholder="e.g. Jollof Rice with Chicken" />
+                            </label>
+                            <div className="dx-form-grid">
+                                <label className="dx-field">
+                                    <span className="dx-label">Price (GHS)</span>
+                                    <input className="dx-input num" type="number" inputMode="decimal" min="0" step="0.01" value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="45.00" />
+                                </label>
+                                <label className="dx-field">
+                                    <span className="dx-label">Section</span>
+                                    <select className="dx-select" value={itemCategory} onChange={e => setItemCategory(e.target.value)}>
+                                        <option value="Main">Main</option>
+                                        <option value="Sides">Sides</option>
+                                        <option value="Extras">Extras</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <label className="dx-field">
+                                <span className="dx-label">Description <span className="faint">(optional)</span></span>
+                                <textarea className="dx-textarea" rows={3} value={itemDesc} onChange={e => setItemDesc(e.target.value)} placeholder="What comes with it, portion size, spice level" />
+                            </label>
+                            <div className="dx-stack" style={{ gap: 8 }}>
+                                <button type="submit" className="dx-btn is-primary is-lg is-block" disabled={saving || !itemName.trim() || !itemPrice}>
+                                    {saving ? "Saving…" : "Add item and continue"}
+                                </button>
+                                <button type="button" className="dx-btn is-ghost is-block" onClick={() => { setError(""); setStep(3); }}>Skip for now</button>
+                            </div>
+                        </form>
+                    )}
+
+                    {step === 3 && (
+                        <div className="dx-stack">
+                            <div>
+                                <h1 className="dx-title-sm">Share your WhatsApp link</h1>
+                                <p className="dx-sub">Customers tap it, WhatsApp opens, they say hi and the bot takes it from there.</p>
+                            </div>
+                            <div className="dx-share">
+                                <code>{DELIVAGH_WA_LINK}</code>
+                                <div className="dx-row" style={{ gap: 8 }}>
+                                    <button type="button" className="dx-btn is-primary" onClick={copyLink}><Icon name={copied ? "check" : "copy"} size={16} />{copied ? "Copied" : "Copy link"}</button>
+                                    <button type="button" className="dx-btn" onClick={() => {
+                                        if (navigator.share) navigator.share({ title: "Order from us on WhatsApp", url: DELIVAGH_WA_LINK }).catch(() => {});
+                                        else copyLink();
+                                    }}><Icon name="external" size={16} />Share</button>
+                                    <a className="dx-btn is-ghost" href={DELIVAGH_WA_LINK} target="_blank" rel="noopener noreferrer">Try it</a>
+                                </div>
+                            </div>
+                            <p className="dx-hint">Good places for it: your WhatsApp status, Instagram bio, flyers and the sign at your counter.</p>
+                            <button type="button" className="dx-btn is-primary is-lg is-block" onClick={() => setStep(4)}>Continue</button>
                         </div>
-                        <p style={{ color: "rgba(236,253,243,0.55)", fontSize: "13px" }}>Let's get {businessName} set up 🚀</p>
-                    </div>
+                    )}
 
-                    {/* Progress */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "40px" }}>
-                        {stepDot(1)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 1 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
-                        {stepDot(2)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 2 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
-                        {stepDot(3)}
-                        <div style={{ width: "68px", height: "2px", backgroundColor: step > 3 ? "#22c55e" : "rgba(255,255,255,0.12)", marginBottom: "22px", transition: "background 0.3s" }} />
-                        {stepDot(4)}
-                    </div>
-
-                    {/* Step Card */}
-                    <div style={{ backgroundColor: "#101b14", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.10)", padding: "32px", marginBottom: "20px" }}>
-
-                        {/* STEP 1 — Business Profile */}
-                        {step === 1 && (
+                    {step === 4 && (
+                        <div className="dx-stack">
                             <div>
-                                <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", marginBottom: "16px" }}>🏪</div>
-                                <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Set up your business profile</h2>
-                                <p style={{ margin: "0 0 24px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>These settings improve delivery checks and customer experience in chat.</p>
-
-                                {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px" }}>{error}</div>}
-
-                                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                    <div style={{ display: "flex", flexDirection: "column" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>DELIVERY ZONES</label>
-                                        <input
-                                            className="ob-input"
-                                            type="text"
-                                            value={deliveryZones}
-                                            onChange={e => setDeliveryZones(e.target.value)}
-                                            placeholder="Delivery zones (e.g. UMaT, Tarkwa Station, New Atuabo)"
-                                        />
-                                        <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Areas you deliver to - the bot uses this to check if a customer is in range</p>
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>MINIMUM ORDER AMOUNT (GHS) <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>— optional</span></label>
-                                        <input
-                                            className="ob-input"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={minOrderAmount}
-                                            onChange={e => setMinOrderAmount(e.target.value)}
-                                            placeholder="0"
-                                        />
-                                        <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>Customers will be told if their order is below this amount</p>
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column" }}>
-                                        <label style={{ display: "block", fontSize: "11px", fontWeight: "600", color: "rgba(236,253,243,0.5)", marginBottom: "7px", textTransform: "uppercase", letterSpacing: "0.07em" }}>WELCOME GREETING <span style={{ fontWeight: "400", textTransform: "none", letterSpacing: 0, color: "rgba(236,253,243,0.3)" }}>optional</span></label>
-                                        <textarea
-                                            className="ob-input"
-                                            rows={3}
-                                            value={botGreeting}
-                                        onChange={e => setBotGreeting(e.target.value)}
-        placeholder={`e.g. Welcome to ${businessName}! What can I get for you today?`}
-        style={{ resize: "vertical" }}
-    />
-    <p style={{ fontSize: "11px", color: "rgba(236,253,243,0.35)", marginTop: "5px" }}>The bot sends this when a customer first selects your business</p>
-</div>
-                                    <button className="ob-btn" onClick={saveBusinessProfile} disabled={profileSaving}>
-                                        {profileSaving ? "Saving..." : hasExistingMenu ? "Save & Continue →" : "Save & Add Menu →"}
-                                    </button>
-                                </div>
+                                <h1 className="dx-title-sm">{businessName} is ready</h1>
+                                <p className="dx-sub">The bot is answering customers on WhatsApp now. Here's what happens with each order.</p>
                             </div>
-                        )}
-
-                        {/* STEP 2 — Add Menu Item */}
-                        {step === 2 && (
-                            <div>
-                                <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", marginBottom: "16px" }}>🍽️</div>
-                                <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Add your first menu item</h2>
-                                <p style={{ margin: "0 0 24px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>Add at least one item so customers can place orders immediately.</p>
-
-                                {error && <div style={{ backgroundColor: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5", padding: "10px 14px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px" }}>{error}</div>}
-
-                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                    <input
-                                        className="ob-input"
-                                        type="text"
-                                        value={itemName}
-                                        onChange={e => setItemName(e.target.value)}
-                                        placeholder="Item name (e.g. Jollof Rice)"
-                                    />
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                                        <input
-                                            className="ob-input"
-                                            type="number"
-                                            value={itemPrice}
-                                            onChange={e => setItemPrice(e.target.value)}
-                                            placeholder="Price (GHS)"
-                                        />
-                                        <select
-                                            className="ob-input"
-                                            value={itemCategory}
-                                            onChange={e => setItemCategory(e.target.value)}
-                                        >
-                                            <option value="Main">Main</option>
-                                            <option value="Sides">Sides</option>
-                                            <option value="Extras">Extras</option>
-                                        </select>
-                                    </div>
-                                    <textarea
-                                        className="ob-input"
-                                        value={itemDesc}
-                                        onChange={e => setItemDesc(e.target.value)}
-                                        placeholder="Brief description (optional)"
-                                        style={{ height: "80px", resize: "none" }}
-                                    />
-                                    <button className="ob-btn" onClick={addItem} disabled={saving || !itemName.trim() || !itemPrice}>
-                                        {saving ? "Saving..." : "Add Item & Continue →"}
-                                    </button>
-                                    <button onClick={() => setStep(3)} style={{ width: "100%", padding: "11px", backgroundColor: "transparent", color: "rgba(236,253,243,0.65)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "10px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                                        Skip for now
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* STEP 3 — Share Link */}
-                        {step === 3 && (
-                            <div>
-                                <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", marginBottom: "16px" }}>📱</div>
-                                <h2 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "800", color: "white" }}>Share your WhatsApp link</h2>
-                                <p style={{ margin: "0 0 24px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>
-                                    Share this link with your customers to start receiving orders on WhatsApp.
-                                </p>
-
-                                <div style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "20px", border: "1px solid rgba(255,255,255,0.10)", marginBottom: "20px" }}>
-                                    <p style={{ margin: "0 0 10px", fontSize: "10px", fontWeight: "700", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Your DelivaGH WhatsApp Link</p>
-                                    <a
-                                        href={DELIVAGH_WA_LINK}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{ display: "block", margin: "0 0 16px", fontSize: "14px", fontWeight: "700", color: "#22c55e", wordBreak: "break-all", textDecoration: "underline" }}
-                                    >
-                                        {DELIVAGH_WA_LINK}
-                                    </a>
-                                    <div style={{ display: "flex", gap: "10px" }}>
-                                        <button
-                                            onClick={copyLink}
-                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
-                                        >
-                                            {copied ? "Copied! ✓" : "Copy Link"}
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (navigator.share) {
-                                                    navigator.share({ title: "Order from us on WhatsApp", url: DELIVAGH_WA_LINK });
-                                                } else {
-                                                    copyLink();
-                                                }
-                                            }}
-                                            style={{ flex: 1, padding: "9px 14px", backgroundColor: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.35)", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}
-                                        >
-                                            Share Link
-                                        </button>
-                                    </div>
-                                    <p style={{ margin: "14px 0 0", fontSize: "12px", color: "rgba(236,253,243,0.55)", lineHeight: "1.6" }}>
-                                        Customers tap this link → WhatsApp opens → they send Hi → ordering starts 🚀
-                                    </p>
-                                </div>
-
-                                <button className="ob-btn" onClick={() => setStep(4)}>
-                                    I've shared it → Continue
-                                </button>
-                            </div>
-                        )}
-
-                        {/* STEP 3 — Done */}
-                        {step === 4 && (
-                            <div style={{ textAlign: "center" }}>
-                                <div style={{ fontSize: "56px", marginBottom: "20px" }}>🎉</div>
-                                <h2 style={{ margin: "0 0 12px", fontSize: "22px", fontWeight: "800", color: "white" }}>You're live!</h2>
-                                <p style={{ margin: "0 0 28px", fontSize: "14px", color: "rgba(236,253,243,0.55)", lineHeight: "1.7" }}>
-                                    <strong style={{ color: "white" }}>{businessName}</strong> is now on DelivaGH. Your AI bot is active 24/7.
-                                </p>
-
-                                <div style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(255,255,255,0.10)", marginBottom: "24px", textAlign: "left" }}>
-                                    <p style={{ margin: "0 0 12px", fontSize: "11px", fontWeight: "700", color: "rgba(236,253,243,0.55)", textTransform: "uppercase", letterSpacing: "0.06em" }}>What happens next</p>
-                                    {[
-                                        "Customer taps your WhatsApp link",
-                                        "Bot shows your menu & takes order",
-                                        "You get a notification on your dashboard",
-                                        "Accept order → customer gets payment link",
-                                        "Customer pays → order confirmed"
-                                    ].map((s, i) => (
-                                        <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                                            <span style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "#22c55e", color: "white", fontSize: "10px", fontWeight: "800", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
-                                            <span style={{ fontSize: "13px", color: "#ecfdf3" }}>{s}</span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <button className="ob-btn" onClick={finish}>
-                                    Go to Dashboard →
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    <p style={{ textAlign: "center", fontSize: "12px", color: "rgba(236,253,243,0.55)" }}>
-                        <span onClick={finish} style={{ cursor: "pointer", textDecoration: "underline" }}>Skip setup, go to dashboard</span>
-                    </p>
+                            <ol className="dx-ob-flow">
+                                <li>A customer taps your link and says hi.</li>
+                                <li>The bot shows your menu and takes the order.</li>
+                                <li>The order appears on your dashboard.</li>
+                                <li>You accept it and the customer is told how to pay.</li>
+                                <li>Once they've paid, you prepare and send it out.</li>
+                            </ol>
+                            <button type="button" className="dx-btn is-primary is-lg is-block" onClick={finish}>Open my dashboard</button>
+                        </div>
+                    )}
                 </div>
             </div>
-        </>
+        </div>
     );
 }
